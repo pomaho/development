@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\Internal\DashboardApiController;
 use App\Http\Controllers\Web\AmoAccountController;
 use App\Http\Controllers\Web\AmoAccountIntegrationsController;
 use App\Http\Controllers\Web\AmoAccountWidgetsController;
+use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoRolesController;
 use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
@@ -33,6 +34,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/dashboard', DashboardController::class)->name('amo-accounts.dashboard');
     Route::get('/amo-accounts/{amo_account}/integrations', AmoAccountIntegrationsController::class)->name('amo-accounts.integrations');
     Route::get('/amo-accounts/{amo_account}/widgets', AmoAccountWidgetsController::class)->name('amo-accounts.widgets');
+    Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
+    Route::get('/amo-accounts/{amo_account}/pipelines/create', [AmoPipelinesController::class, 'create'])->name('amo-accounts.pipelines.create');
+    Route::post('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'store'])->name('amo-accounts.pipelines.store');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
     Route::get('/amo-accounts/{amo_account}/roles', AmoRolesController::class)->name('amo-accounts.roles');
     Route::get('/logs/api', ApiLogController::class)->name('logs.api');

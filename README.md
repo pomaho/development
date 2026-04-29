@@ -74,11 +74,22 @@ php artisan amo:refresh-tokens
 /amo-accounts/{id}/dashboard
 /amo-accounts/{id}/users
 /amo-accounts/{id}/roles
+/amo-accounts/{id}/pipelines
 /amo-accounts/{id}/integrations
 /amo-accounts/{id}/widgets
 ```
 
-В шапке есть selector клиента. В режиме конкретного клиента dashboard, users audit, интеграции и dashboard-блоки работают в рамках выбранного `amo_account_id`. Dashboard-блоки — это внутренние блоки интерфейса сервиса, а не установленные amoCRM-виджеты клиента.
+В шапке есть selector клиента. В режиме конкретного клиента dashboard, users audit, воронки, интеграции и dashboard-блоки работают в рамках выбранного `amo_account_id`. Dashboard-блоки — это внутренние блоки интерфейса сервиса, а не установленные amoCRM-виджеты клиента.
+
+Модуль воронок использует amoCRM API:
+
+```text
+GET  /api/v4/leads/pipelines
+POST /api/v4/leads/pipelines
+POST /api/v4/leads/pipelines/{pipeline_id}/statuses
+```
+
+Создание доступно только admin-пользователям сервиса и требует admin-прав в самом amoCRM аккаунте.
 
 ## Production
 

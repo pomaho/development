@@ -29,6 +29,7 @@
     <a class="text-blue-700" href="{{ route('amo-accounts.dashboard', $account) }}">Dashboard клиента</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.users', $account) }}">Пользователи</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.roles', $account) }}">Роли</a>
+    <a class="text-blue-700" href="{{ route('amo-accounts.pipelines.index', $account) }}">Воронки</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.integrations', $account) }}">Интеграции</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.widgets', $account) }}">Dashboard-блоки</a>
 </div>

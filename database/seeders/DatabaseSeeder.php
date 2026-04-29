@@ -21,15 +21,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        IntegrationModule::query()->updateOrCreate(
-            ['code' => 'users_audit'],
-            [
-                'name' => 'Users Audit',
-                'description' => 'Синхронизация пользователей, ролей и прав amoCRM.',
-                'is_enabled' => true,
-                'config' => [],
-            ]
-        );
+        foreach ($this->modules() as $module) {
+            IntegrationModule::query()->updateOrCreate(['code' => $module['code']], $module);
+        }
 
         foreach ($this->widgets() as $widget) {
             DashboardWidget::query()->updateOrCreate(['code' => $widget['code']], $widget);
@@ -45,6 +39,26 @@ class DatabaseSeeder extends Seeder
             ['code' => 'admins_count', 'name' => 'Admins count', 'component_key' => 'metric', 'sort_order' => 40, 'is_enabled' => true],
             ['code' => 'last_sync_status', 'name' => 'Last sync status', 'component_key' => 'metric', 'sort_order' => 50, 'is_enabled' => true],
             ['code' => 'recent_api_errors', 'name' => 'Recent API errors', 'component_key' => 'table', 'sort_order' => 60, 'is_enabled' => true],
+        ];
+    }
+
+    private function modules(): array
+    {
+        return [
+            [
+                'code' => 'users_audit',
+                'name' => 'Users Audit',
+                'description' => 'Синхронизация пользователей, ролей и прав amoCRM.',
+                'is_enabled' => true,
+                'config' => [],
+            ],
+            [
+                'code' => 'pipelines_builder',
+                'name' => 'Pipelines Builder',
+                'description' => 'Создание воронок amoCRM и нужных этапов из интерфейса.',
+                'is_enabled' => true,
+                'config' => [],
+            ],
         ];
     }
 }

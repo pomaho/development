@@ -25,6 +25,14 @@
                     <a class="rounded border border-slate-300 px-3 py-2" href="{{ route('amo-accounts.roles', $account) }}">Роли</a>
                 </div>
             @endif
+            @if ($module->code === 'pipelines_builder')
+                <div class="mt-4 flex flex-wrap gap-2 text-sm">
+                    <a class="rounded border border-slate-300 px-3 py-2" href="{{ route('amo-accounts.pipelines.index', $account) }}">Список воронок</a>
+                    @can('sync', $account)
+                        <a class="rounded border border-slate-300 px-3 py-2" href="{{ route('amo-accounts.pipelines.create', $account) }}">Создать воронку</a>
+                    @endcan
+                </div>
+            @endif
         </x-dashboard.card>
     @endforeach
 </div>

@@ -3,6 +3,7 @@
 MVP module:
 
 - `UsersAudit`: sync users and roles, show rights, admin summary, active/inactive summary.
+- `PipelinesBuilder`: create amoCRM lead pipelines and statuses from account-scoped UI.
 
 Reserved future modules:
 

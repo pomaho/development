@@ -31,6 +31,7 @@
                         <a class="hover:text-blue-700" href="{{ route('amo-accounts.index') }}">Клиенты</a>
                         @if ($layoutCurrentAmoAccount)
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.users', $layoutCurrentAmoAccount) }}">Users audit</a>
+                            <a class="hover:text-blue-700" href="{{ route('amo-accounts.pipelines.index', $layoutCurrentAmoAccount) }}">Воронки</a>
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.integrations', $layoutCurrentAmoAccount) }}">Интеграции</a>
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.widgets', $layoutCurrentAmoAccount) }}">Dashboard-блоки</a>
                         @endif

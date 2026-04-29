@@ -127,4 +127,27 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertSee('Пользователи')
             ->assertSee('Администраторы');
     }
+
+    public function test_admin_can_open_pipeline_create_form_and_viewer_cannot_create_pipeline(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/pipelines/create")
+            ->assertOk()
+            ->assertSee('Создать воронку');
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/pipelines", [
+                'name' => 'Pipeline',
+                'sort' => 20,
+                'is_unsorted_on' => '1',
+                'statuses' => [
+                    ['name' => 'Первичный контакт', 'sort' => 10, 'color' => '#99ccff'],
+                ],
+            ])
+            ->assertForbidden();
+    }
 }

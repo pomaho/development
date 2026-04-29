@@ -23,6 +23,7 @@
         <a class="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href="{{ route('amo-accounts.show', $currentAccount) }}">Карточка клиента</a>
         <a class="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href="{{ route('amo-accounts.users', $currentAccount) }}">Пользователи</a>
         <a class="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href="{{ route('amo-accounts.roles', $currentAccount) }}">Роли</a>
+        <a class="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href="{{ route('amo-accounts.pipelines.index', $currentAccount) }}">Воронки</a>
         <a class="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href="{{ route('amo-accounts.integrations', $currentAccount) }}">Интеграции</a>
         <a class="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href="{{ route('amo-accounts.widgets', $currentAccount) }}">Dashboard-блоки</a>
     </div>
