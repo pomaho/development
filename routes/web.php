@@ -1,0 +1,48 @@
+<?php
+
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\RegisteredUserController;
+use App\Http\Controllers\Api\Internal\AmoAccountApiController;
+use App\Http\Controllers\Api\Internal\DashboardApiController;
+use App\Http\Controllers\Web\AmoAccountController;
+use App\Http\Controllers\Web\AmoAccountIntegrationsController;
+use App\Http\Controllers\Web\AmoAccountWidgetsController;
+use App\Http\Controllers\Web\AmoRolesController;
+use App\Http\Controllers\Web\AmoUsersController;
+use App\Http\Controllers\Web\ApiLogController;
+use App\Http\Controllers\Web\DashboardController;
+use Illuminate\Support\Facades\Route;
+
+Route::redirect('/', '/dashboard');
+
+Route::middleware('guest')->group(function (): void {
+    Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
+    Route::post('/login', [AuthenticatedSessionController::class, 'store']);
+    Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
+    Route::post('/register', [RegisteredUserController::class, 'store']);
+});
+
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth')->name('logout');
+
+Route::middleware('auth')->group(function (): void {
+    Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::resource('amo-accounts', AmoAccountController::class);
+    Route::post('/amo-accounts/{amo_account}/test', [AmoAccountController::class, 'test'])->name('amo-accounts.test');
+    Route::post('/amo-accounts/{amo_account}/sync', [AmoAccountController::class, 'sync'])->name('amo-accounts.sync');
+    Route::post('/amo-accounts/{amo_account}/deactivate', [AmoAccountController::class, 'deactivate'])->name('amo-accounts.deactivate');
+    Route::get('/amo-accounts/{amo_account}/dashboard', DashboardController::class)->name('amo-accounts.dashboard');
+    Route::get('/amo-accounts/{amo_account}/integrations', AmoAccountIntegrationsController::class)->name('amo-accounts.integrations');
+    Route::get('/amo-accounts/{amo_account}/widgets', AmoAccountWidgetsController::class)->name('amo-accounts.widgets');
+    Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
+    Route::get('/amo-accounts/{amo_account}/roles', AmoRolesController::class)->name('amo-accounts.roles');
+    Route::get('/logs/api', ApiLogController::class)->name('logs.api');
+
+    Route::prefix('/api/internal')->group(function (): void {
+        Route::get('/amo-accounts', [AmoAccountApiController::class, 'index']);
+        Route::get('/amo-accounts/{amo_account}/users', [AmoAccountApiController::class, 'users']);
+        Route::get('/amo-accounts/{amo_account}/roles', [AmoAccountApiController::class, 'roles']);
+        Route::post('/amo-accounts/{amo_account}/sync-users', [AmoAccountApiController::class, 'syncUsers']);
+        Route::post('/amo-accounts/{amo_account}/test-connection', [AmoAccountApiController::class, 'testConnection']);
+        Route::get('/dashboard/summary', [DashboardApiController::class, 'summary']);
+    });
+});
