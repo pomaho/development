@@ -57,6 +57,34 @@ php artisan amo:sync-users
 php artisan amo:refresh-tokens
 ```
 
+## OAuth-подключение без приватной интеграции
+
+Для подключения клиента без ручного создания приватной интеграции используйте страницу:
+
+```text
+/amo-oauth/external
+```
+
+Сервис создает одноразовое pending-подключение, показывает кнопку amoCRM и принимает:
+
+```text
+POST /amo-oauth/external/secrets
+GET  /amo-oauth/callback
+```
+
+amoCRM отправляет `client_id` и `client_secret` на Secrets URI, затем возвращает пользователя на Redirect URI с `code`, `referer` и `state`. Код обменивается на OAuth-токены через официальную библиотеку `amocrm/amocrm-api-library`, после чего аккаунт и секреты сохраняются в БД.
+
+Для локальной проверки через amoCRM нужен публичный HTTPS URL, например HTTPS-туннель:
+
+```env
+APP_URL=https://your-public-tunnel.example
+AMO_EXTERNAL_REDIRECT_URI=https://your-public-tunnel.example/amo-oauth/callback
+AMO_EXTERNAL_SECRETS_URI=https://your-public-tunnel.example/amo-oauth/external/secrets
+AMO_EXTERNAL_INTEGRATION_SCOPES="crm,notifications"
+```
+
+Без публичного HTTPS amoCRM не сможет отправить `secrets_uri` и открыть `redirect_uri`.
+
 ## Архитектура
 
 - Каждый клиент amoCRM хранится в `amo_accounts`.

@@ -29,6 +29,9 @@
                     <nav class="flex flex-wrap items-center gap-4 text-sm">
                         <a class="hover:text-blue-700" href="{{ $layoutCurrentAmoAccount ? route('amo-accounts.dashboard', $layoutCurrentAmoAccount) : route('dashboard') }}">Dashboard</a>
                         <a class="hover:text-blue-700" href="{{ route('amo-accounts.index') }}">Клиенты</a>
+                        @if (auth()->user()->isAdmin())
+                            <a class="hover:text-blue-700" href="{{ route('amo-oauth.external.index') }}">OAuth amoCRM</a>
+                        @endif
                         @if ($layoutCurrentAmoAccount)
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.users', $layoutCurrentAmoAccount) }}">Users audit</a>
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.pipelines.index', $layoutCurrentAmoAccount) }}">Воронки</a>

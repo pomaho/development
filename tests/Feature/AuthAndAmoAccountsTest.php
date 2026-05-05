@@ -4,10 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
+use App\Models\AmoOAuthConnection;
 use App\Models\AmoUsersSnapshot;
 use App\Models\ApiRequestLog;
 use App\Models\User;
+use App\Services\Amo\AmoOAuthTokenExchanger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use League\OAuth2\Client\Token\AccessToken;
+use Mockery;
 use Tests\TestCase;
 
 class AuthAndAmoAccountsTest extends TestCase
@@ -168,5 +172,74 @@ class AuthAndAmoAccountsTest extends TestCase
                 'to' => '2026-05-05',
             ])
             ->assertForbidden();
+    }
+
+    public function test_admin_can_create_external_oauth_connection_and_viewer_cannot(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+
+        $this->actingAs($admin)
+            ->post('/amo-oauth/external', ['name' => 'Client OAuth'])
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('amo_oauth_connections', [
+            'owner_user_id' => $admin->id,
+            'name' => 'Client OAuth',
+            'status' => AmoOAuthConnection::STATUS_PENDING,
+        ]);
+
+        $this->actingAs($viewer)
+            ->post('/amo-oauth/external', ['name' => 'Blocked'])
+            ->assertForbidden();
+    }
+
+    public function test_external_oauth_secrets_and_callback_create_oauth_account(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $connection = AmoOAuthConnection::query()->create([
+            'owner_user_id' => $admin->id,
+            'state' => 'state-token',
+            'name' => 'OAuth Client',
+            'redirect_uri' => 'https://app.example.test/amo-oauth/callback',
+            'secrets_uri' => 'https://app.example.test/amo-oauth/external/secrets',
+            'scopes' => ['crm', 'notifications'],
+            'expires_at' => now()->addMinutes(30),
+        ]);
+
+        $exchanger = Mockery::mock(AmoOAuthTokenExchanger::class);
+        $exchanger->shouldReceive('exchangeCode')
+            ->once()
+            ->with('client.amocrm.ru', 'client-id', 'client-secret', $connection->redirect_uri, 'auth-code')
+            ->andReturn(new AccessToken([
+                'access_token' => 'access-token',
+                'refresh_token' => 'refresh-token',
+                'expires' => now()->addHour()->timestamp,
+            ]));
+        $this->app->instance(AmoOAuthTokenExchanger::class, $exchanger);
+
+        $this->postJson('/amo-oauth/external/secrets', [
+            'state' => 'state-token',
+            'client_id' => 'client-id',
+            'client_secret' => 'client-secret',
+        ])->assertOk();
+
+        $this->get('/amo-oauth/callback?state=state-token&code=auth-code&referer=client.amocrm.ru')
+            ->assertOk()
+            ->assertSee('amoCRM подключена');
+
+        $account = AmoAccount::query()->where('base_domain', 'client.amocrm.ru')->firstOrFail();
+        $credential = $account->credentials()->firstOrFail();
+
+        $this->assertSame(AmoCredential::AUTH_OAUTH, $credential->auth_type);
+        $this->assertSame('access-token', $credential->access_token);
+        $this->assertSame('refresh-token', $credential->refresh_token);
+        $this->assertSame('client-id', $credential->client_id);
+        $this->assertSame('client-secret', $credential->client_secret);
+        $this->assertDatabaseHas('amo_oauth_connections', [
+            'id' => $connection->id,
+            'amo_account_id' => $account->id,
+            'status' => AmoOAuthConnection::STATUS_CONNECTED,
+        ]);
     }
 }

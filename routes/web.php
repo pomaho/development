@@ -7,12 +7,14 @@ use App\Http\Controllers\Api\Internal\DashboardApiController;
 use App\Http\Controllers\Web\AmoAccountController;
 use App\Http\Controllers\Web\AmoAccountIntegrationsController;
 use App\Http\Controllers\Web\AmoAccountWidgetsController;
+use App\Http\Controllers\Web\AmoExternalOAuthController;
 use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoRolesController;
 use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
 use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -26,8 +28,16 @@ Route::middleware('guest')->group(function (): void {
 
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth')->name('logout');
 
+Route::post('/amo-oauth/external/secrets', [AmoExternalOAuthController::class, 'secrets'])
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('amo-oauth.external.secrets');
+Route::get('/amo-oauth/callback', [AmoExternalOAuthController::class, 'callback'])->name('amo-oauth.callback');
+
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/amo-oauth/external', [AmoExternalOAuthController::class, 'index'])->name('amo-oauth.external.index');
+    Route::post('/amo-oauth/external', [AmoExternalOAuthController::class, 'store'])->name('amo-oauth.external.store');
+    Route::get('/amo-oauth/external/{connection}', [AmoExternalOAuthController::class, 'show'])->name('amo-oauth.external.show');
     Route::resource('amo-accounts', AmoAccountController::class);
     Route::post('/amo-accounts/{amo_account}/test', [AmoAccountController::class, 'test'])->name('amo-accounts.test');
     Route::post('/amo-accounts/{amo_account}/sync', [AmoAccountController::class, 'sync'])->name('amo-accounts.sync');
