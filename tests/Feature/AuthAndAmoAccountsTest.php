@@ -150,4 +150,23 @@ class AuthAndAmoAccountsTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_admin_can_open_crm_audit_and_viewer_cannot_run_it(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/crm-audit")
+            ->assertOk()
+            ->assertSee('CRM-аудит');
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/crm-audit/sync", [
+                'from' => '2026-01-01',
+                'to' => '2026-05-05',
+            ])
+            ->assertForbidden();
+    }
 }

@@ -59,6 +59,13 @@ class DatabaseSeeder extends Seeder
                 'is_enabled' => true,
                 'config' => [],
             ],
+            [
+                'code' => 'crm_audit',
+                'name' => 'CRM Audit',
+                'description' => 'Выгрузка структуры CRM, сделок, контактов, событий, задач и справочников для диагностики процессов.',
+                'is_enabled' => true,
+                'config' => [],
+            ],
         ];
     }
 }

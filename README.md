@@ -75,11 +75,12 @@ php artisan amo:refresh-tokens
 /amo-accounts/{id}/users
 /amo-accounts/{id}/roles
 /amo-accounts/{id}/pipelines
+/amo-accounts/{id}/crm-audit
 /amo-accounts/{id}/integrations
 /amo-accounts/{id}/widgets
 ```
 
-В шапке есть selector клиента. В режиме конкретного клиента dashboard, users audit, воронки, интеграции и dashboard-блоки работают в рамках выбранного `amo_account_id`. Dashboard-блоки — это внутренние блоки интерфейса сервиса, а не установленные amoCRM-виджеты клиента.
+В шапке есть selector клиента. В режиме конкретного клиента dashboard, users audit, воронки, CRM-аудит, интеграции и dashboard-блоки работают в рамках выбранного `amo_account_id`. Dashboard-блоки — это внутренние блоки интерфейса сервиса, а не установленные amoCRM-виджеты клиента.
 
 Модуль воронок использует amoCRM API:
 
@@ -90,6 +91,32 @@ POST /api/v4/leads/pipelines/{pipeline_id}/statuses
 ```
 
 Создание доступно только admin-пользователям сервиса и требует admin-прав в самом amoCRM аккаунте.
+
+CRM-аудит выгружает:
+
+```text
+GET /api/v4/leads/pipelines
+GET /api/v4/leads/pipelines/{pipeline_id}/statuses
+GET /api/v4/leads/custom_fields
+GET /api/v4/contacts/custom_fields
+GET /api/v4/companies/custom_fields
+GET /api/v4/leads?with=contacts,loss_reason,source
+GET /api/v4/contacts?with=leads,companies
+GET /api/v4/companies?with=contacts,leads
+GET /api/v4/events
+GET /api/v4/tasks
+GET /api/v4/leads/unsorted
+GET /api/v4/leads/loss_reasons
+GET /api/v4/sources
+GET /api/v4/catalogs
+```
+
+Команда:
+
+```bash
+php artisan amo:crm-audit {accountId} --from=2026-01-01 --to=2026-05-05
+php artisan amo:crm-audit {accountId} --structure-only
+```
 
 ## Production
 

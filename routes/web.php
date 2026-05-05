@@ -11,6 +11,7 @@ use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoRolesController;
 use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
+use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use Illuminate\Support\Facades\Route;
 
@@ -37,6 +38,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
     Route::get('/amo-accounts/{amo_account}/pipelines/create', [AmoPipelinesController::class, 'create'])->name('amo-accounts.pipelines.create');
     Route::post('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'store'])->name('amo-accounts.pipelines.store');
+    Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
+    Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
     Route::get('/amo-accounts/{amo_account}/roles', AmoRolesController::class)->name('amo-accounts.roles');
     Route::get('/logs/api', ApiLogController::class)->name('logs.api');

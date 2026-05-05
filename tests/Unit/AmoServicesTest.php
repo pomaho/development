@@ -11,6 +11,7 @@ use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoTokenManager;
 use App\Services\Amo\AmoUsersService;
+use App\Services\Amo\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -89,6 +90,53 @@ class AmoServicesTest extends TestCase
         ]);
 
         $this->assertSame(123, $result['_embedded']['pipelines'][0]['id']);
+    }
+
+    public function test_crm_audit_service_saves_structure_and_entities(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/pipelines', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['pipelines' => [[
+                'id' => 10,
+                'name' => 'Sales',
+                'sort' => 1,
+                'is_main' => true,
+                'is_unsorted_on' => true,
+                '_embedded' => ['statuses' => [['id' => 20, 'name' => 'New', 'sort' => 10]]],
+            ]]],
+        ]);
+        foreach (['leads', 'contacts', 'companies'] as $entityType) {
+            $http->shouldReceive('get')->with($account, "/api/v4/{$entityType}/custom_fields", Mockery::any())->andReturn([
+                '_page' => 1,
+                '_embedded' => ['custom_fields' => [['id' => 100, 'name' => "{$entityType} field", 'type' => 'text']]],
+            ]);
+        }
+        foreach ([
+            ['/api/v4/leads/loss_reasons', 'loss_reasons'],
+            ['/api/v4/sources', 'sources'],
+            ['/api/v4/catalogs', 'catalogs'],
+            ['/api/v4/leads', 'leads'],
+            ['/api/v4/contacts', 'contacts'],
+            ['/api/v4/companies', 'companies'],
+            ['/api/v4/events', 'events'],
+            ['/api/v4/tasks', 'tasks'],
+            ['/api/v4/leads/unsorted', 'unsorted'],
+        ] as [$path, $key]) {
+            $http->shouldReceive('get')->with($account, $path, Mockery::any())->andReturn([
+                '_page' => 1,
+                '_embedded' => [$key => [['id' => 1, 'name' => $key]]],
+            ]);
+        }
+
+        $counts = (new CrmAuditService($http))->syncAll($account);
+
+        $this->assertSame(1, $counts['pipelines']);
+        $this->assertDatabaseHas('crm_pipelines_snapshots', ['amo_pipeline_id' => 10, 'name' => 'Sales']);
+        $this->assertDatabaseHas('crm_custom_fields_snapshots', ['entity_type' => 'leads', 'amo_field_id' => 100]);
+        $this->assertDatabaseHas('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '1']);
     }
 
     public function test_oauth_refresh_saves_new_refresh_token(): void

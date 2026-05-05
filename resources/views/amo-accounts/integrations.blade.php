@@ -33,6 +33,11 @@
                     @endcan
                 </div>
             @endif
+            @if ($module->code === 'crm_audit')
+                <div class="mt-4 flex flex-wrap gap-2 text-sm">
+                    <a class="rounded border border-slate-300 px-3 py-2" href="{{ route('amo-accounts.crm-audit.index', $account) }}">Открыть аудит</a>
+                </div>
+            @endif
         </x-dashboard.card>
     @endforeach
 </div>

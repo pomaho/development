@@ -1,0 +1,241 @@
+<?php
+
+namespace App\Services\Amo;
+
+use App\Models\AmoAccount;
+use App\Models\CrmCustomFieldSnapshot;
+use App\Models\CrmEntitySnapshot;
+use App\Models\CrmPipelineSnapshot;
+use App\Models\CrmPipelineStatusSnapshot;
+use Illuminate\Support\Carbon;
+
+class CrmAuditService
+{
+    public function __construct(private readonly AmoFallbackHttpClient $http)
+    {
+    }
+
+    public function syncAll(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $structure = $this->syncStructure($account);
+        $data = $this->syncOperationalData($account, $from, $to);
+
+        return array_merge($structure, $data);
+    }
+
+    public function syncStructure(AmoAccount $account): array
+    {
+        $syncedAt = now();
+        $counts = [
+            'pipelines' => 0,
+            'statuses' => 0,
+            'custom_fields' => 0,
+            'loss_reasons' => 0,
+            'sources' => 0,
+            'catalogs' => 0,
+        ];
+
+        foreach ($this->fetchPipelines($account) as $pipeline) {
+            CrmPipelineSnapshot::query()->updateOrCreate(
+                ['amo_account_id' => $account->id, 'amo_pipeline_id' => $pipeline['id']],
+                [
+                    'name' => $pipeline['name'] ?? '',
+                    'sort' => $pipeline['sort'] ?? null,
+                    'is_main' => (bool) ($pipeline['is_main'] ?? false),
+                    'is_unsorted_on' => (bool) ($pipeline['is_unsorted_on'] ?? false),
+                    'is_archive' => (bool) ($pipeline['is_archive'] ?? false),
+                    'raw' => $pipeline,
+                    'synced_at' => $syncedAt,
+                ]
+            );
+            $counts['pipelines']++;
+
+            foreach (($pipeline['_embedded']['statuses'] ?? []) as $status) {
+                $this->savePipelineStatus($account, (int) $pipeline['id'], $status, $syncedAt);
+                $counts['statuses']++;
+            }
+        }
+
+        foreach (['leads', 'contacts', 'companies'] as $entityType) {
+            foreach ($this->fetchPaginated($account, "/api/v4/{$entityType}/custom_fields", 'custom_fields') as $field) {
+                $this->saveCustomField($account, $entityType, $field, $syncedAt);
+                $counts['custom_fields']++;
+            }
+        }
+
+        $counts['loss_reasons'] = $this->syncSimpleEntity($account, 'loss_reasons', '/api/v4/leads/loss_reasons', 'loss_reasons', $syncedAt);
+        $counts['sources'] = $this->syncSimpleEntity($account, 'sources', '/api/v4/sources', 'sources', $syncedAt);
+        $counts['catalogs'] = $this->syncSimpleEntity($account, 'catalogs', '/api/v4/catalogs', 'catalogs', $syncedAt);
+
+        return $counts;
+    }
+
+    public function syncOperationalData(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $syncedAt = now();
+        $periodQuery = $this->periodQuery($from, $to);
+
+        return [
+            'leads' => $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, [
+                'with' => 'contacts,loss_reason,source',
+                ...$periodQuery,
+            ]),
+            'contacts' => $this->syncSimpleEntity($account, 'contacts', '/api/v4/contacts', 'contacts', $syncedAt, [
+                'with' => 'leads,companies',
+                ...$periodQuery,
+            ]),
+            'companies' => $this->syncSimpleEntity($account, 'companies', '/api/v4/companies', 'companies', $syncedAt, [
+                'with' => 'contacts,leads',
+                ...$periodQuery,
+            ]),
+            'events' => $this->syncSimpleEntity($account, 'events', '/api/v4/events', 'events', $syncedAt, $periodQuery),
+            'tasks' => $this->syncSimpleEntity($account, 'tasks', '/api/v4/tasks', 'tasks', $syncedAt, $periodQuery),
+            'unsorted' => $this->syncSimpleEntity($account, 'unsorted', '/api/v4/leads/unsorted', 'unsorted', $syncedAt, $periodQuery),
+        ];
+    }
+
+    public function auditSummary(AmoAccount $account): array
+    {
+        return [
+            'pipelines' => CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->count(),
+            'statuses' => CrmPipelineStatusSnapshot::query()->where('amo_account_id', $account->id)->count(),
+            'custom_fields' => CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->count(),
+            'leads' => $this->entityCount($account, 'leads'),
+            'contacts' => $this->entityCount($account, 'contacts'),
+            'companies' => $this->entityCount($account, 'companies'),
+            'events' => $this->entityCount($account, 'events'),
+            'tasks' => $this->entityCount($account, 'tasks'),
+            'unsorted' => $this->entityCount($account, 'unsorted'),
+            'last_sync' => CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->max('synced_at') ?: CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->max('synced_at'),
+        ];
+    }
+
+    private function fetchPipelines(AmoAccount $account): array
+    {
+        $pipelines = $this->fetchPaginated($account, '/api/v4/leads/pipelines', 'pipelines');
+
+        return collect($pipelines)->map(function (array $pipeline) use ($account): array {
+            if (isset($pipeline['_embedded']['statuses'])) {
+                return $pipeline;
+            }
+
+            $statuses = $this->fetchPaginated($account, "/api/v4/leads/pipelines/{$pipeline['id']}/statuses", 'statuses');
+            $pipeline['_embedded']['statuses'] = $statuses;
+
+            return $pipeline;
+        })->all();
+    }
+
+    private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array
+    {
+        $page = 1;
+        $items = [];
+
+        do {
+            $payload = $this->http->get($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
+            $items = array_merge($items, $payload['_embedded'][$embeddedKey] ?? []);
+
+            $currentPage = (int) ($payload['_page'] ?? $page);
+            $pageCount = (int) ($payload['_page_count'] ?? $currentPage);
+            $hasNext = isset($payload['_links']['next']);
+            $page++;
+
+            if ($hasNext) {
+                usleep(160000);
+            }
+        } while ($hasNext || $currentPage < $pageCount);
+
+        return $items;
+    }
+
+    private function savePipelineStatus(AmoAccount $account, int $pipelineId, array $status, Carbon $syncedAt): void
+    {
+        CrmPipelineStatusSnapshot::query()->updateOrCreate(
+            ['amo_account_id' => $account->id, 'amo_pipeline_id' => $pipelineId, 'amo_status_id' => $status['id']],
+            [
+                'name' => $status['name'] ?? '',
+                'sort' => $status['sort'] ?? null,
+                'color' => $status['color'] ?? null,
+                'type' => $status['type'] ?? null,
+                'raw' => $status,
+                'synced_at' => $syncedAt,
+            ]
+        );
+    }
+
+    private function saveCustomField(AmoAccount $account, string $entityType, array $field, Carbon $syncedAt): void
+    {
+        CrmCustomFieldSnapshot::query()->updateOrCreate(
+            ['amo_account_id' => $account->id, 'entity_type' => $entityType, 'amo_field_id' => $field['id']],
+            [
+                'name' => $field['name'] ?? '',
+                'field_type' => $field['type'] ?? null,
+                'code' => $field['code'] ?? null,
+                'group_id' => $field['group_id'] ?? null,
+                'sort' => $field['sort'] ?? null,
+                'is_required' => $field['is_required'] ?? null,
+                'is_api_only' => $field['is_api_only'] ?? null,
+                'enums' => $field['enums'] ?? null,
+                'required_statuses' => $field['required_statuses'] ?? null,
+                'raw' => $field,
+                'synced_at' => $syncedAt,
+            ]
+        );
+    }
+
+    private function syncSimpleEntity(
+        AmoAccount $account,
+        string $entityType,
+        string $path,
+        string $embeddedKey,
+        Carbon $syncedAt,
+        array $query = []
+    ): int {
+        $count = 0;
+
+        foreach ($this->fetchPaginated($account, $path, $embeddedKey, $query) as $entity) {
+            CrmEntitySnapshot::query()->updateOrCreate(
+                ['amo_account_id' => $account->id, 'entity_type' => $entityType, 'external_id' => (string) ($entity['id'] ?? md5(json_encode($entity)))],
+                [
+                    'name' => $entity['name'] ?? $entity['text'] ?? $entity['type'] ?? null,
+                    'pipeline_id' => $entity['pipeline_id'] ?? null,
+                    'status_id' => $entity['status_id'] ?? null,
+                    'responsible_user_id' => $entity['responsible_user_id'] ?? null,
+                    'entity_created_at' => $this->timestamp($entity['created_at'] ?? null),
+                    'entity_updated_at' => $this->timestamp($entity['updated_at'] ?? null),
+                    'entity_closed_at' => $this->timestamp($entity['closed_at'] ?? null),
+                    'custom_fields_values' => $entity['custom_fields_values'] ?? null,
+                    'embedded' => $entity['_embedded'] ?? null,
+                    'raw' => $entity,
+                    'synced_at' => $syncedAt,
+                ]
+            );
+            $count++;
+        }
+
+        return $count;
+    }
+
+    private function periodQuery(?Carbon $from, ?Carbon $to): array
+    {
+        return array_filter([
+            'filter[created_at][from]' => $from?->timestamp,
+            'filter[created_at][to]' => $to?->timestamp,
+        ], fn ($value) => $value !== null);
+    }
+
+    private function timestamp(mixed $timestamp): ?Carbon
+    {
+        return $timestamp ? Carbon::createFromTimestamp((int) $timestamp) : null;
+    }
+
+    private function entityCount(AmoAccount $account, string $entityType): int
+    {
+        return CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', $entityType)
+            ->count();
+    }
+}
