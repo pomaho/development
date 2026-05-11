@@ -78,7 +78,63 @@ docker compose --env-file .env.docker down -v
 
 ### Docker на VPS с Nginx и SSL
 
-DNS-запись `develop.sonic.expert` должна указывать на IP VPS. На сервере в `.env.docker` укажите:
+Ниже пример для поддомена `develop.sonic.expert`, который работает на отдельном VPS, пока основной сайт `sonic.expert` может оставаться на другом хостинге.
+
+1. В DNS панели домена создайте A-запись:
+
+```text
+develop.sonic.expert -> IP_ВАШЕГО_VPS
+```
+
+Дождитесь применения DNS. Проверить можно так:
+
+```bash
+dig +short develop.sonic.expert
+```
+
+2. Подключитесь к VPS и установите базовые пакеты:
+
+```bash
+ssh root@IP_ВАШЕГО_VPS
+apt update
+apt upgrade -y
+apt install -y git curl ca-certificates
+```
+
+Если при обновлении появится вопрос по `/etc/ssh/sshd_config`, обычно безопаснее выбрать `сохранить установленную локальную версию`, чтобы не потерять текущий SSH-доступ.
+
+3. Установите Docker и Docker Compose plugin:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+docker --version
+docker compose version
+```
+
+4. Склонируйте проект:
+
+```bash
+mkdir -p /var/www
+cd /var/www
+git clone https://github.com/pomaho/development.git amo-integrator
+cd /var/www/amo-integrator
+```
+
+5. Создайте production env для Docker:
+
+```bash
+cp .env.docker.example .env.docker
+```
+
+Сгенерируйте `APP_KEY`:
+
+```bash
+docker compose --env-file .env.docker run --rm app php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
+```
+
+Скопируйте полученное значение в `.env.docker`.
+
+6. На сервере в `.env.docker` укажите production-настройки:
 
 ```env
 APP_ENV=production
@@ -92,39 +148,76 @@ AMO_EXTERNAL_REDIRECT_URI=https://develop.sonic.expert/amo-oauth/callback
 AMO_EXTERNAL_SECRETS_URI=https://develop.sonic.expert/amo-oauth/external/secrets
 ```
 
-Для первого выпуска SSL-сертификата запустите production stack во временном HTTP-режиме:
+Также замените дефолтные пароли MySQL, email администратора и пароль администратора:
+
+```env
+DB_PASSWORD=strong_database_password
+MYSQL_ROOT_PASSWORD=strong_root_password
+MYSQL_PASSWORD=strong_database_password
+
+ADMIN_EMAIL=your_admin_email
+ADMIN_PASSWORD=strong_admin_password
+```
+
+7. Для первого выпуска SSL-сертификата запустите production stack во временном HTTP-режиме:
 
 ```bash
 docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ssl-init.yml up -d --build
 ```
 
-Выпустите сертификат Let's Encrypt:
+8. Выпустите сертификат Let's Encrypt. Важно использовать исправленный вариант команды с `--entrypoint certbot`:
 
 ```bash
-docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ssl-init.yml run --rm certbot certonly \
+docker compose \
+  --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.ssl-init.yml \
+  run --rm --entrypoint certbot certbot certonly \
   --webroot \
   -w /var/www/certbot \
   -d develop.sonic.expert \
-  --email admin@sonic.expert \
+  --email your_email@example.com \
   --agree-tos \
   --no-eff-email
 ```
 
-После успешного выпуска перезапустите stack в HTTPS-режиме:
+9. После успешного выпуска перезапустите stack в HTTPS-режиме:
 
 ```bash
 docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ssl-init.yml down
 docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
-Проверка:
+10. Проверьте, что сервис поднялся:
 
 ```bash
 curl -I https://develop.sonic.expert
 docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-В production замените дефолтные пароли MySQL в `.env.docker` и храните этот файл вне git. Сервис `certbot` в `docker-compose.prod.yml` будет периодически обновлять сертификат через webroot challenge, а контейнер `web` будет периодически делать `nginx -s reload`, чтобы подхватывать обновленные сертификаты без ручного рестарта.
+11. Создайте/проверьте первого администратора и миграции:
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml exec app php artisan migrate --force
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml exec app php artisan db:seed --force
+```
+
+12. Для обновления проекта на сервере после нового push:
+
+```bash
+cd /var/www/amo-integrator && git pull origin main && docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+Проверка логов:
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml logs -f app
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml logs -f web
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml logs -f worker
+```
+
+В production храните `.env.docker` вне git и делайте его безопасный backup. Сервис `certbot` в `docker-compose.prod.yml` будет периодически обновлять сертификат через webroot challenge, а контейнер `web` будет периодически делать `nginx -s reload`, чтобы подхватывать обновленные сертификаты без ручного рестарта.
 
 Первый администратор создается seeder-ом из env:
 
