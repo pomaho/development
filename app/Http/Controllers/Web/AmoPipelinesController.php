@@ -39,6 +39,38 @@ class AmoPipelinesController extends Controller
         ]);
     }
 
+    public function show(AmoAccount $amoAccount, int $pipelineId, AmoPipelinesService $pipelinesService): View
+    {
+        $details = [
+            'pipeline' => [],
+            'statuses' => [],
+            'stage_rows' => [],
+            'lead_custom_fields' => [],
+            'sources' => [],
+            'all_sources' => [],
+            'widgets' => [],
+            'website_buttons' => [],
+            'all_website_buttons' => [],
+            'loss_reasons' => [],
+            'errors' => [],
+            'limitations' => [],
+        ];
+        $error = null;
+
+        try {
+            $details = $pipelinesService->fetchPipelineDetails($amoAccount, $pipelineId);
+        } catch (\Throwable $exception) {
+            $error = $exception->getMessage();
+        }
+
+        return view('amo-accounts.pipelines.show', [
+            'account' => $amoAccount,
+            'pipelineId' => $pipelineId,
+            'details' => $details,
+            'error' => $error,
+        ]);
+    }
+
     public function store(
         StoreAmoPipelineRequest $request,
         AmoAccount $amoAccount,

@@ -10,6 +10,7 @@ use App\Models\ApiRequestLog;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoOAuthTokenExchanger;
+use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use League\OAuth2\Client\Token\AccessToken;
@@ -142,6 +143,45 @@ class AuthAndAmoAccountsTest extends TestCase
                 ],
             ])
             ->assertForbidden();
+    }
+
+    public function test_viewer_can_open_pipeline_settings_page(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $pipelinesService = Mockery::mock(AmoPipelinesService::class);
+        $pipelinesService->shouldReceive('fetchPipelineDetails')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), 10)
+            ->andReturn([
+                'pipeline' => ['id' => 10, 'name' => 'Sales', 'is_main' => true],
+                'statuses' => [['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff']],
+                'stage_rows' => [[
+                    'status' => ['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff'],
+                    'description' => null,
+                    'required_fields' => [['id' => 100, 'name' => 'Project', 'type' => 'select']],
+                    'sources' => [['id' => 200, 'name' => 'Website']],
+                ]],
+                'lead_custom_fields' => [],
+                'sources' => [['id' => 200, 'name' => 'Website']],
+                'all_sources' => [['id' => 200, 'name' => 'Website']],
+                'widgets' => [],
+                'website_buttons' => [],
+                'all_website_buttons' => [],
+                'loss_reasons' => [],
+                'errors' => [],
+                'limitations' => [],
+            ]);
+        $this->app->instance(AmoPipelinesService::class, $pipelinesService);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/pipelines/10")
+            ->assertOk()
+            ->assertSee('Sales')
+            ->assertSee('Настройки этапов')
+            ->assertSee('Project')
+            ->assertSee('Website');
     }
 
     public function test_admin_can_open_crm_audit_and_viewer_cannot_run_it(): void

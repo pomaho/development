@@ -20,13 +20,21 @@
 <x-dashboard.table>
     <table class="w-full text-left text-sm">
         <thead class="text-slate-500">
-            <tr><th class="py-2">ID</th><th>Название</th><th>Главная</th><th>Неразобранное</th><th>Архив</th><th>Этапов</th><th>Этапы</th></tr>
+            <tr><th class="py-2">ID</th><th>Название</th><th>Главная</th><th>Неразобранное</th><th>Архив</th><th>Этапов</th><th>Этапы</th><th></th></tr>
         </thead>
         <tbody>
             @forelse ($pipelines as $pipeline)
                 <tr class="border-t border-slate-100 align-top">
                     <td class="py-2">{{ $pipeline['id'] ?? '-' }}</td>
-                    <td class="font-medium">{{ $pipeline['name'] ?? '-' }}</td>
+                    <td class="font-medium">
+                        @if (isset($pipeline['id']))
+                            <a class="text-blue-700 hover:text-blue-900" href="{{ route('amo-accounts.pipelines.show', [$account, $pipeline['id']]) }}">
+                                {{ $pipeline['name'] ?? '-' }}
+                            </a>
+                        @else
+                            {{ $pipeline['name'] ?? '-' }}
+                        @endif
+                    </td>
                     <td>{{ ($pipeline['is_main'] ?? false) ? 'да' : 'нет' }}</td>
                     <td>{{ ($pipeline['is_unsorted_on'] ?? false) ? 'да' : 'нет' }}</td>
                     <td>{{ ($pipeline['is_archive'] ?? false) ? 'да' : 'нет' }}</td>
@@ -40,9 +48,14 @@
                             @endforeach
                         </div>
                     </td>
+                    <td>
+                        @if (isset($pipeline['id']))
+                            <a class="text-sm text-blue-700 hover:text-blue-900" href="{{ route('amo-accounts.pipelines.show', [$account, $pipeline['id']]) }}">Настройки</a>
+                        @endif
+                    </td>
                 </tr>
             @empty
-                <tr><td colspan="7" class="py-4 text-slate-500">Воронки не загружены или пока отсутствуют.</td></tr>
+                <tr><td colspan="8" class="py-4 text-slate-500">Воронки не загружены или пока отсутствуют.</td></tr>
             @endforelse
         </tbody>
     </table>

@@ -92,6 +92,64 @@ class AmoServicesTest extends TestCase
         $this->assertSame(123, $result['_embedded']['pipelines'][0]['id']);
     }
 
+    public function test_pipelines_service_collects_pipeline_details(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/pipelines/10', Mockery::any())->andReturn([
+            'id' => 10,
+            'name' => 'Sales',
+            'is_main' => true,
+            'is_unsorted_on' => true,
+        ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/pipelines/10/statuses', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['statuses' => [
+                ['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff'],
+                ['id' => 30, 'name' => 'Work', 'sort' => 20, 'color' => '#ffcc66'],
+            ]],
+        ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/custom_fields', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['custom_fields' => [[
+                'id' => 100,
+                'name' => 'Project',
+                'type' => 'select',
+                'required_statuses' => [['pipeline_id' => 10, 'status_id' => 20]],
+            ]]],
+        ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/sources', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['sources' => [[
+                'id' => 200,
+                'name' => 'Website',
+                'pipeline_id' => 10,
+                'status_id' => 20,
+            ]]],
+        ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/widgets', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['widgets' => [['code' => 'sonic', 'name' => 'Sonic Expert']]],
+        ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/website_buttons', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['website_buttons' => [['id' => 300, 'name' => 'Lead button', 'pipeline_id' => 10]]],
+        ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/loss_reasons', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['loss_reasons' => [['id' => 400, 'name' => 'No answer']]],
+        ]);
+
+        $details = (new AmoPipelinesService($http))->fetchPipelineDetails($account, 10);
+
+        $this->assertSame('Sales', $details['pipeline']['name']);
+        $this->assertSame('Project', $details['stage_rows'][0]['required_fields'][0]['name']);
+        $this->assertSame('Website', $details['stage_rows'][0]['sources'][0]['name']);
+        $this->assertSame('Sonic Expert', $details['widgets'][0]['name']);
+        $this->assertSame('No answer', $details['loss_reasons'][0]['name']);
+    }
+
     public function test_crm_audit_service_saves_structure_and_entities(): void
     {
         $account = $this->accountWithToken('abcdef123456');

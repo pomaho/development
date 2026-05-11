@@ -47,6 +47,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/widgets', AmoAccountWidgetsController::class)->name('amo-accounts.widgets');
     Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
     Route::get('/amo-accounts/{amo_account}/pipelines/create', [AmoPipelinesController::class, 'create'])->name('amo-accounts.pipelines.create');
+    Route::get('/amo-accounts/{amo_account}/pipelines/{pipelineId}', [AmoPipelinesController::class, 'show'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.show');
     Route::post('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'store'])->name('amo-accounts.pipelines.store');
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');

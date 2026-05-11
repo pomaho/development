@@ -3,6 +3,7 @@
 namespace App\Services\Amo;
 
 use App\Models\AmoAccount;
+use Throwable;
 
 class AmoPipelinesService
 {
@@ -12,9 +13,74 @@ class AmoPipelinesService
 
     public function fetchPipelines(AmoAccount $account): array
     {
-        $payload = $this->http->get($account, '/api/v4/leads/pipelines');
+        $pipelines = $this->fetchPaginated($account, '/api/v4/leads/pipelines', 'pipelines', ['with' => 'statuses']);
 
-        return $payload['_embedded']['pipelines'] ?? [];
+        return collect($pipelines)
+            ->map(function (array $pipeline) use ($account): array {
+                if (isset($pipeline['_embedded']['statuses'])) {
+                    return $pipeline;
+                }
+
+                $pipeline['_embedded']['statuses'] = $this->fetchPaginated(
+                    $account,
+                    "/api/v4/leads/pipelines/{$pipeline['id']}/statuses",
+                    'statuses'
+                );
+
+                return $pipeline;
+            })
+            ->all();
+    }
+
+    public function fetchPipelineDetails(AmoAccount $account, int $pipelineId): array
+    {
+        $errors = [];
+        $pipeline = $this->optionalGet($account, "/api/v4/leads/pipelines/{$pipelineId}", ['with' => 'statuses'], 'pipeline', $errors);
+
+        if ($pipeline === []) {
+            $pipeline = collect($this->fetchPipelines($account))
+                ->first(fn (array $item): bool => (int) ($item['id'] ?? 0) === $pipelineId) ?? [];
+        }
+
+        $statuses = $this->optionalPaginated(
+            $account,
+            "/api/v4/leads/pipelines/{$pipelineId}/statuses",
+            'statuses',
+            ['with' => 'descriptions'],
+            'statuses',
+            $errors
+        );
+
+        if ($statuses === []) {
+            $statuses = $pipeline['_embedded']['statuses'] ?? [];
+        }
+
+        $statuses = collect($statuses)->sortBy(fn (array $status) => (int) ($status['sort'] ?? 0))->values()->all();
+        $pipeline['_embedded']['statuses'] = $statuses;
+
+        $leadFields = $this->optionalPaginated($account, '/api/v4/leads/custom_fields', 'custom_fields', [], 'lead_custom_fields', $errors);
+        $sources = $this->optionalPaginated($account, '/api/v4/sources', 'sources', [], 'sources', $errors);
+        $widgets = $this->optionalPaginated($account, '/api/v4/widgets', 'widgets', [], 'widgets', $errors);
+        $websiteButtons = $this->optionalPaginated($account, '/api/v4/website_buttons', 'website_buttons', [], 'website_buttons', $errors);
+        $lossReasons = $this->optionalPaginated($account, '/api/v4/leads/loss_reasons', 'loss_reasons', [], 'loss_reasons', $errors);
+
+        return [
+            'pipeline' => $pipeline,
+            'statuses' => $statuses,
+            'stage_rows' => $this->stageRows($statuses, $leadFields, $sources, $pipelineId),
+            'lead_custom_fields' => $leadFields,
+            'sources' => $this->pipelineRelatedItems($sources, $pipelineId),
+            'all_sources' => $sources,
+            'widgets' => $widgets,
+            'website_buttons' => $this->pipelineRelatedItems($websiteButtons, $pipelineId),
+            'all_website_buttons' => $websiteButtons,
+            'loss_reasons' => $lossReasons,
+            'errors' => $errors,
+            'limitations' => [
+                'Сохраненные пользовательские фильтры amoCRM и их порядок не отдаются публичным REST API. Их можно воспроизводить в нашем сервисе как отдельные сохраненные представления, когда появится своя аналитика.',
+                'Полная конфигурация штатных триггеров, роботов и Salesbot из Digital Pipeline не отдается публичным REST API. На этой странице показываются доступные через API источники, виджеты, кнопки/CRM Plugin и сырые ответы amoCRM.',
+            ],
+        ];
     }
 
     public function createPipeline(AmoAccount $account, array $data): array
@@ -73,6 +139,135 @@ class AmoPipelinesService
                 }
 
                 return $payload;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array
+    {
+        $page = 1;
+        $items = [];
+
+        do {
+            $payload = $this->http->get($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
+            $items = array_merge($items, $payload['_embedded'][$embeddedKey] ?? []);
+
+            $currentPage = (int) ($payload['_page'] ?? $page);
+            $pageCount = (int) ($payload['_page_count'] ?? $currentPage);
+            $hasNext = isset($payload['_links']['next']);
+            $page++;
+
+            if ($hasNext) {
+                usleep(160000);
+            }
+        } while ($hasNext || $currentPage < $pageCount);
+
+        return $items;
+    }
+
+    private function optionalGet(AmoAccount $account, string $path, array $query, string $label, array &$errors): array
+    {
+        try {
+            return $this->http->get($account, $path, $query);
+        } catch (Throwable $exception) {
+            $errors[$label] = $exception->getMessage();
+
+            return [];
+        }
+    }
+
+    private function optionalPaginated(
+        AmoAccount $account,
+        string $path,
+        string $embeddedKey,
+        array $query,
+        string $label,
+        array &$errors
+    ): array {
+        try {
+            return $this->fetchPaginated($account, $path, $embeddedKey, $query);
+        } catch (Throwable $exception) {
+            $errors[$label] = $exception->getMessage();
+
+            return [];
+        }
+    }
+
+    private function stageRows(array $statuses, array $leadFields, array $sources, int $pipelineId): array
+    {
+        return collect($statuses)
+            ->map(fn (array $status): array => [
+                'status' => $status,
+                'description' => $this->statusDescription($status),
+                'required_fields' => $this->requiredFieldsForStatus($leadFields, $pipelineId, (int) ($status['id'] ?? 0)),
+                'sources' => $this->sourcesForStatus($sources, $pipelineId, (int) ($status['id'] ?? 0)),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function statusDescription(array $status): ?string
+    {
+        $descriptions = $status['_embedded']['descriptions'] ?? $status['descriptions'] ?? [];
+
+        if (is_array($descriptions)) {
+            $first = collect($descriptions)->first();
+
+            if (is_array($first)) {
+                return $first['description'] ?? $first['name'] ?? $first['text'] ?? null;
+            }
+
+            if (is_string($first)) {
+                return $first;
+            }
+        }
+
+        return $status['description'] ?? null;
+    }
+
+    private function requiredFieldsForStatus(array $fields, int $pipelineId, int $statusId): array
+    {
+        return collect($fields)
+            ->filter(function (array $field) use ($pipelineId, $statusId): bool {
+                foreach (($field['required_statuses'] ?? []) as $requiredStatus) {
+                    if ((int) ($requiredStatus['pipeline_id'] ?? 0) === $pipelineId
+                        && (int) ($requiredStatus['status_id'] ?? 0) === $statusId) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })
+            ->sortBy(fn (array $field) => (int) ($field['sort'] ?? 0))
+            ->values()
+            ->all();
+    }
+
+    private function sourcesForStatus(array $sources, int $pipelineId, int $statusId): array
+    {
+        return collect($sources)
+            ->filter(function (array $source) use ($pipelineId, $statusId): bool {
+                $sourcePipelineId = $source['pipeline_id'] ?? $source['default_pipeline_id'] ?? null;
+                $sourceStatusId = $source['status_id'] ?? $source['default_status_id'] ?? null;
+
+                return (int) $sourcePipelineId === $pipelineId && (int) $sourceStatusId === $statusId;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function pipelineRelatedItems(array $items, int $pipelineId): array
+    {
+        return collect($items)
+            ->filter(function (array $item) use ($pipelineId): bool {
+                if ((int) ($item['pipeline_id'] ?? $item['default_pipeline_id'] ?? 0) === $pipelineId) {
+                    return true;
+                }
+
+                $encoded = json_encode($item, JSON_UNESCAPED_UNICODE);
+
+                return is_string($encoded) && str_contains($encoded, (string) $pipelineId);
             })
             ->values()
             ->all();
