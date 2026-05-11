@@ -122,6 +122,25 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertSee('Администраторы');
     }
 
+    public function test_can_open_second_amo_account_page(): void
+    {
+        $viewer = User::factory()->create();
+        AmoAccount::query()->create(['name' => 'First', 'base_domain' => 'first.amocrm.ru']);
+        $second = AmoAccount::query()->create([
+            'name' => 'Second',
+            'base_domain' => 'second.amocrm.ru',
+            'settings' => ['company_name' => 'Second Company', 'timezone' => 'Europe/Moscow', 'currency' => 'RUB'],
+        ]);
+        $second->credentials()->create(['auth_type' => AmoCredential::AUTH_OAUTH]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$second->id}")
+            ->assertOk()
+            ->assertSee('Second')
+            ->assertSee('second.amocrm.ru')
+            ->assertSee('Second Company');
+    }
+
     public function test_admin_can_open_pipeline_create_form_and_viewer_cannot_create_pipeline(): void
     {
         $admin = User::factory()->admin()->create();

@@ -16,9 +16,9 @@
                     <div class="flex flex-wrap items-center gap-3 text-sm">
                         <select class="rounded border-slate-300 text-sm" onchange="if (this.value) window.location.href = this.value">
                             <option value="{{ route('dashboard') }}" @selected(! $layoutCurrentAmoAccount)>Все аккаунты</option>
-                            @foreach ($layoutAmoAccounts as $account)
-                                <option value="{{ route('amo-accounts.dashboard', $account) }}" @selected($layoutCurrentAmoAccount?->is($account))>
-                                    {{ $account->name }}
+                            @foreach ($layoutAmoAccounts as $layoutAccount)
+                                <option value="{{ route('amo-accounts.dashboard', $layoutAccount) }}" @selected($layoutCurrentAmoAccount?->is($layoutAccount))>
+                                    {{ $layoutAccount->name }}
                                 </option>
                             @endforeach
                         </select>
