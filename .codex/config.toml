@@ -1,0 +1,7 @@
+# Codex adapter.
+# AGENTS.md remains the shared source of truth for repository behavior.
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+network_access = false
+hooks_enabled = false
