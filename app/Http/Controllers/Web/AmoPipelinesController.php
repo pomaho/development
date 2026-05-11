@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CloneAmoPipelineRequest;
 use App\Http\Requests\StoreAmoPipelineRequest;
 use App\Models\AmoAccount;
 use App\Services\Amo\AmoPipelinesService;
@@ -71,6 +72,31 @@ class AmoPipelinesController extends Controller
         ]);
     }
 
+    public function cloneForm(AmoAccount $amoAccount, int $pipelineId, AmoPipelinesService $pipelinesService): View
+    {
+        $this->authorize('sync', $amoAccount);
+
+        $details = [
+            'pipeline' => [],
+            'statuses' => [],
+        ];
+        $error = null;
+
+        try {
+            $details = $pipelinesService->fetchPipelineDetails($amoAccount, $pipelineId);
+        } catch (\Throwable $exception) {
+            $error = $exception->getMessage();
+        }
+
+        return view('amo-accounts.pipelines.clone', [
+            'account' => $amoAccount,
+            'pipelineId' => $pipelineId,
+            'pipeline' => $details['pipeline'] ?? [],
+            'statuses' => $details['statuses'] ?? [],
+            'error' => $error,
+        ]);
+    }
+
     public function store(
         StoreAmoPipelineRequest $request,
         AmoAccount $amoAccount,
@@ -83,5 +109,20 @@ class AmoPipelinesController extends Controller
         return redirect()
             ->route('amo-accounts.pipelines.index', $amoAccount)
             ->with('status', 'Воронка отправлена в amoCRM.');
+    }
+
+    public function clone(
+        CloneAmoPipelineRequest $request,
+        AmoAccount $amoAccount,
+        int $pipelineId,
+        AmoPipelinesService $pipelinesService
+    ): RedirectResponse {
+        $this->authorize('sync', $amoAccount);
+
+        $pipelinesService->clonePipeline($amoAccount, $pipelineId, $request->validated('name'));
+
+        return redirect()
+            ->route('amo-accounts.pipelines.index', $amoAccount)
+            ->with('status', 'Копия воронки отправлена в amoCRM.');
     }
 }

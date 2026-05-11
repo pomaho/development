@@ -21,7 +21,10 @@
         <div class="text-sm text-slate-500">{{ $account->name }} · {{ $account->base_domain }}</div>
     </div>
     @can('sync', $account)
-        <a href="{{ route('amo-accounts.pipelines.create', $account) }}" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Создать воронку</a>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route('amo-accounts.pipelines.clone-form', [$account, $pipelineId]) }}" class="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400">Клонировать</a>
+            <a href="{{ route('amo-accounts.pipelines.create', $account) }}" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Создать воронку</a>
+        </div>
     @endcan
 </div>
 

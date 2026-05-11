@@ -20,7 +20,7 @@
 <x-dashboard.table>
     <table class="w-full text-left text-sm">
         <thead class="text-slate-500">
-            <tr><th class="py-2">ID</th><th>Название</th><th>Главная</th><th>Неразобранное</th><th>Архив</th><th>Этапов</th><th>Этапы</th><th></th></tr>
+            <tr><th class="py-2">ID</th><th>Название</th><th>Главная</th><th>Неразобранное</th><th>Архив</th><th>Этапов</th><th>Этапы</th><th>Действия</th></tr>
         </thead>
         <tbody>
             @forelse ($pipelines as $pipeline)
@@ -50,7 +50,12 @@
                     </td>
                     <td>
                         @if (isset($pipeline['id']))
-                            <a class="text-sm text-blue-700 hover:text-blue-900" href="{{ route('amo-accounts.pipelines.show', [$account, $pipeline['id']]) }}">Настройки</a>
+                            <div class="flex flex-wrap gap-2 text-sm">
+                                <a class="text-blue-700 hover:text-blue-900" href="{{ route('amo-accounts.pipelines.show', [$account, $pipeline['id']]) }}">Настройки</a>
+                                @can('sync', $account)
+                                    <a class="text-blue-700 hover:text-blue-900" href="{{ route('amo-accounts.pipelines.clone-form', [$account, $pipeline['id']]) }}">Клонировать</a>
+                                @endcan
+                            </div>
                         @endif
                     </td>
                 </tr>

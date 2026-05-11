@@ -55,12 +55,12 @@ class AmoPipelinesService
             $statuses = $pipeline['_embedded']['statuses'] ?? [];
         }
 
-        $statuses = collect($statuses)->sortBy(fn (array $status) => (int) ($status['sort'] ?? 0))->values()->all();
+        $statuses = collect($statuses)->sortBy(fn (array $status) => $this->statusSortValue($status))->values()->all();
         $pipeline['_embedded']['statuses'] = $statuses;
 
         $leadFields = $this->optionalPaginated($account, '/api/v4/leads/custom_fields', 'custom_fields', [], 'lead_custom_fields', $errors);
         $sources = $this->optionalPaginated($account, '/api/v4/sources', 'sources', [], 'sources', $errors);
-        $widgets = $this->optionalPaginated($account, '/api/v4/widgets', 'widgets', [], 'widgets', $errors);
+        $widgets = $this->installedWidgets($this->optionalPaginated($account, '/api/v4/widgets', 'widgets', [], 'widgets', $errors));
         $websiteButtons = $this->optionalPaginated($account, '/api/v4/website_buttons', 'website_buttons', [], 'website_buttons', $errors);
         $lossReasons = $this->optionalPaginated($account, '/api/v4/leads/loss_reasons', 'loss_reasons', [], 'loss_reasons', $errors);
 
@@ -108,6 +108,20 @@ class AmoPipelinesService
         );
     }
 
+    public function clonePipeline(AmoAccount $account, int $pipelineId, string $name): array
+    {
+        $details = $this->fetchPipelineDetails($account, $pipelineId);
+        $pipeline = $details['pipeline'];
+
+        return $this->createPipeline($account, [
+            'name' => $name,
+            'sort' => ((int) ($pipeline['sort'] ?? 10)) + 10,
+            'is_main' => false,
+            'is_unsorted_on' => (bool) ($pipeline['is_unsorted_on'] ?? true),
+            'statuses' => $this->cloneStatuses($details['statuses']),
+        ]);
+    }
+
     public function defaultStatuses(): array
     {
         return [
@@ -142,6 +156,42 @@ class AmoPipelinesService
             })
             ->values()
             ->all();
+    }
+
+    private function cloneStatuses(array $statuses): array
+    {
+        return collect($statuses)
+            ->filter(fn (array $status): bool => filled($status['name'] ?? null))
+            ->map(function (array $status): array {
+                $payload = ['name' => $status['name']];
+                $statusId = (int) ($status['id'] ?? 0);
+
+                if (in_array($statusId, [142, 143], true)) {
+                    $payload['id'] = $statusId;
+
+                    return $payload;
+                }
+
+                $payload['sort'] = (int) ($status['sort'] ?? 10);
+                $payload['color'] = $status['color'] ?? '#99ccff';
+
+                return $payload;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function statusSortValue(array $status): int
+    {
+        if (isset($status['sort'])) {
+            return (int) $status['sort'];
+        }
+
+        return match ((int) ($status['id'] ?? 0)) {
+            142 => 10000,
+            143 => 10010,
+            default => 0,
+        };
     }
 
     private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array
@@ -268,6 +318,32 @@ class AmoPipelinesService
                 $encoded = json_encode($item, JSON_UNESCAPED_UNICODE);
 
                 return is_string($encoded) && str_contains($encoded, (string) $pipelineId);
+            })
+            ->values()
+            ->all();
+    }
+
+    private function installedWidgets(array $widgets): array
+    {
+        return collect($widgets)
+            ->filter(function (array $widget): bool {
+                if (array_key_exists('is_installed', $widget)) {
+                    return (bool) $widget['is_installed'];
+                }
+
+                if (array_key_exists('installed', $widget)) {
+                    return (bool) $widget['installed'];
+                }
+
+                if (isset($widget['status'])) {
+                    return in_array($widget['status'], ['installed', 'active', 'enabled'], true);
+                }
+
+                if (array_key_exists('is_active', $widget) || array_key_exists('is_enabled', $widget)) {
+                    return (bool) ($widget['is_active'] ?? $widget['is_enabled'] ?? false);
+                }
+
+                return false;
             })
             ->values()
             ->all();

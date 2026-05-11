@@ -184,6 +184,41 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertSee('Website');
     }
 
+    public function test_admin_can_clone_pipeline_and_viewer_cannot_clone_pipeline(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $pipelinesService = Mockery::mock(AmoPipelinesService::class);
+        $pipelinesService->shouldReceive('fetchPipelineDetails')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), 10)
+            ->andReturn([
+                'pipeline' => ['id' => 10, 'name' => 'Sales'],
+                'statuses' => [['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff']],
+            ]);
+        $pipelinesService->shouldReceive('clonePipeline')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), 10, 'Sales Copy')
+            ->andReturn(['_embedded' => ['pipelines' => [['id' => 123]]]]);
+        $this->app->instance(AmoPipelinesService::class, $pipelinesService);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/pipelines/10/clone")
+            ->assertOk()
+            ->assertSee('Клонировать воронку')
+            ->assertSee('Sales');
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/pipelines/10/clone", ['name' => 'Sales Copy'])
+            ->assertRedirect(route('amo-accounts.pipelines.index', $account));
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/pipelines/10/clone", ['name' => 'Viewer Copy'])
+            ->assertForbidden();
+    }
+
     public function test_admin_can_open_crm_audit_and_viewer_cannot_run_it(): void
     {
         $admin = User::factory()->admin()->create();
