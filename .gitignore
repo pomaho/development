@@ -18,6 +18,7 @@
 /vendor
 /database/*.sqlite
 .env
+.env.docker
 .env.backup
 .env.production
 Homestead.json

@@ -21,6 +21,111 @@ npm install
 npm run dev
 ```
 
+## Запуск через Docker
+
+Docker-вариант поднимает PHP-FPM, Nginx, MySQL, queue worker и scheduler.
+
+Первый запуск локально:
+
+```bash
+cp .env.docker.example .env.docker
+docker compose --env-file .env.docker build
+docker compose --env-file .env.docker run --rm app php -r "echo 'base64:'.base64_encode(random_bytes(32)).PHP_EOL;"
+```
+
+Скопируйте полученный ключ в `.env.docker`:
+
+```env
+APP_KEY=base64:generated_key_here
+```
+
+Затем запустите сервис:
+
+```bash
+docker compose --env-file .env.docker up -d
+```
+
+Открыть в браузере:
+
+```text
+http://localhost:8080
+```
+
+По умолчанию seeder создаст администратора:
+
+```env
+ADMIN_EMAIL="admin@example.com"
+ADMIN_PASSWORD="password"
+```
+
+Полезные команды:
+
+```bash
+docker compose --env-file .env.docker ps
+docker compose --env-file .env.docker logs -f app
+docker compose --env-file .env.docker logs -f worker
+docker compose --env-file .env.docker exec app php artisan amo:bootstrap-account
+docker compose --env-file .env.docker exec app php artisan amo:test-connection {accountId}
+docker compose --env-file .env.docker exec app php artisan amo:sync-users {accountId}
+docker compose --env-file .env.docker down
+```
+
+Для полной остановки с удалением MySQL-данных:
+
+```bash
+docker compose --env-file .env.docker down -v
+```
+
+### Docker на VPS с Nginx и SSL
+
+DNS-запись `develop.sonic.expert` должна указывать на IP VPS. На сервере в `.env.docker` укажите:
+
+```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://develop.sonic.expert
+SESSION_SECURE_COOKIE=true
+
+APP_PORT=127.0.0.1:8080
+
+AMO_EXTERNAL_REDIRECT_URI=https://develop.sonic.expert/amo-oauth/callback
+AMO_EXTERNAL_SECRETS_URI=https://develop.sonic.expert/amo-oauth/external/secrets
+```
+
+Для первого выпуска SSL-сертификата запустите production stack во временном HTTP-режиме:
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ssl-init.yml up -d --build
+```
+
+Выпустите сертификат Let's Encrypt:
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ssl-init.yml run --rm certbot certonly \
+  --webroot \
+  -w /var/www/certbot \
+  -d develop.sonic.expert \
+  --email admin@sonic.expert \
+  --agree-tos \
+  --no-eff-email
+```
+
+После успешного выпуска перезапустите stack в HTTPS-режиме:
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.ssl-init.yml down
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Проверка:
+
+```bash
+curl -I https://develop.sonic.expert
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml ps
+```
+
+В production замените дефолтные пароли MySQL в `.env.docker` и храните этот файл вне git. Сервис `certbot` в `docker-compose.prod.yml` будет периодически обновлять сертификат через webroot challenge.
+
 Первый администратор создается seeder-ом из env:
 
 ```env

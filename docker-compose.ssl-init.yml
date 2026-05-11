@@ -1,0 +1,4 @@
+services:
+  web:
+    volumes:
+      - ./docker/nginx/http-certbot.conf:/etc/nginx/conf.d/default.conf:ro

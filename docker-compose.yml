@@ -1,0 +1,74 @@
+services:
+  app:
+    build:
+      context: .
+      target: app
+    env_file:
+      - .env.docker
+    environment:
+      APP_RUN_MIGRATIONS: "true"
+      APP_RUN_SEEDERS: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_storage:/var/www/html/storage
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      target: web
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - app
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      target: app
+    env_file:
+      - .env.docker
+    command: php artisan queue:work --tries=3 --timeout=120
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_storage:/var/www/html/storage
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+      target: app
+    env_file:
+      - .env.docker
+    command: sh -c "while true; do php artisan schedule:run --no-interaction; sleep 60; done"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - app_storage:/var/www/html/storage
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-amo_integrator}"
+      MYSQL_USER: "${MYSQL_USER:-amo}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-secret}"
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root_secret}"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  app_storage:
+  db_data:
