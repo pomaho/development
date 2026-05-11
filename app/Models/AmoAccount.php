@@ -18,6 +18,7 @@ class AmoAccount extends Model
         'is_active',
         'auth_status',
         'notes',
+        'settings',
         'last_successful_sync_at',
     ];
 
@@ -25,6 +26,7 @@ class AmoAccount extends Model
     {
         return [
             'is_active' => 'boolean',
+            'settings' => 'array',
             'last_successful_sync_at' => 'datetime',
         ];
     }

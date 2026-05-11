@@ -25,6 +25,15 @@
     <x-dashboard.metric label="Администраторы" :value="$adminsCount" />
 </div>
 
+@if ($account->settings)
+    <div class="mt-6 grid gap-4 md:grid-cols-4">
+        <x-dashboard.metric label="Компания" :value="$account->settings['company_name'] ?? $account->name" />
+        <x-dashboard.metric label="Часовой пояс" :value="$account->settings['timezone'] ?? '-'" />
+        <x-dashboard.metric label="Валюта" :value="$account->settings['currency'] ?? '-'" />
+        <x-dashboard.metric label="amoCRM ID" :value="$account->account_id ?? '-'" />
+    </div>
+@endif
+
 <div class="mt-6 flex gap-3 text-sm">
     <a class="text-blue-700" href="{{ route('amo-accounts.dashboard', $account) }}">Dashboard клиента</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.users', $account) }}">Пользователи</a>

@@ -6,13 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Models\AmoOAuthConnection;
 use App\Services\Amo\AmoExternalOAuthService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Throwable;
 
 class AmoExternalOAuthController extends Controller
 {
+    public function install(AmoExternalOAuthService $service): View
+    {
+        return view('amo-oauth.external.install', [
+            'connection' => $service->createPending(),
+            'external' => config('amo.external'),
+        ]);
+    }
+
     public function index(Request $request): View
     {
         abort_unless($request->user()->isAdmin(), 403);
@@ -20,24 +27,14 @@ class AmoExternalOAuthController extends Controller
         return view('amo-oauth.external.index', [
             'connections' => AmoOAuthConnection::query()
                 ->with('account')
-                ->where('owner_user_id', $request->user()->id)
                 ->latest()
                 ->paginate(20),
         ]);
     }
 
-    public function store(Request $request, AmoExternalOAuthService $service): RedirectResponse
-    {
-        abort_unless($request->user()->isAdmin(), 403);
-
-        $connection = $service->createPending($request->user(), $request->string('name')->toString() ?: null);
-
-        return redirect()->route('amo-oauth.external.show', $connection);
-    }
-
     public function show(Request $request, AmoOAuthConnection $connection): View
     {
-        abort_unless($request->user()->isAdmin() && $connection->owner_user_id === $request->user()->id, 403);
+        abort_unless($request->user()->isAdmin() && (! $connection->owner_user_id || $connection->owner_user_id === $request->user()->id), 403);
 
         return view('amo-oauth.external.show', [
             'connection' => $connection,

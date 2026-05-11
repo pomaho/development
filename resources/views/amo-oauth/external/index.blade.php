@@ -4,13 +4,9 @@
 <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
     <div>
         <h1 class="text-2xl font-semibold">OAuth-подключение amoCRM</h1>
-        <p class="mt-1 text-sm text-slate-600">Вариант без ручного создания приватной интеграции в аккаунте клиента.</p>
+        <p class="mt-1 text-sm text-slate-600">История установок через публичную кнопку интеграции.</p>
     </div>
-    <form method="post" action="{{ route('amo-oauth.external.store') }}" class="flex gap-2">
-        @csrf
-        <input name="name" class="rounded border-slate-300 text-sm" placeholder="Название клиента">
-        <button class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Создать подключение</button>
-    </form>
+    <a href="{{ route('amo-oauth.install') }}" target="_blank" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Открыть публичную страницу установки</a>
 </div>
 
 <x-dashboard.table>

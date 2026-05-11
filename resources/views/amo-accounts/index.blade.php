@@ -5,8 +5,8 @@
     <h1 class="text-2xl font-semibold">amoCRM аккаунты</h1>
     @can('create', App\Models\AmoAccount::class)
         <div class="flex gap-2">
-            <a href="{{ route('amo-oauth.external.index') }}" class="rounded border border-blue-700 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">Подключить через OAuth</a>
-            <a href="{{ route('amo-accounts.create') }}" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Добавить вручную</a>
+            <a href="{{ route('amo-oauth.install') }}" target="_blank" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Публичная ссылка установки</a>
+            <a href="{{ route('amo-oauth.external.index') }}" class="rounded border border-blue-700 px-4 py-2 text-sm text-blue-700 hover:bg-blue-50">История OAuth</a>
         </div>
     @endcan
 </div>

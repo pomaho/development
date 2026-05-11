@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAmoAccountRequest;
 use App\Jobs\SyncAmoUsersAndRolesJob;
 use App\Models\AmoAccount;
-use App\Models\AmoCredential;
 use App\Services\Amo\AmoFallbackHttpClient;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,29 +18,6 @@ class AmoAccountController extends Controller
         return view('amo-accounts.index', [
             'accounts' => AmoAccount::query()->with('credentials')->latest()->paginate(20),
         ]);
-    }
-
-    public function create(): View
-    {
-        $this->authorize('create', AmoAccount::class);
-
-        return view('amo-accounts.create', ['account' => new AmoAccount(), 'credential' => new AmoCredential()]);
-    }
-
-    public function store(StoreAmoAccountRequest $request): RedirectResponse
-    {
-        $account = AmoAccount::query()->create([
-            'owner_user_id' => $request->user()->id,
-            'name' => $request->string('name'),
-            'base_domain' => $request->string('base_domain'),
-            'is_active' => $request->boolean('is_active'),
-            'auth_status' => 'not_checked',
-            'notes' => $request->input('notes'),
-        ]);
-
-        $this->saveCredentials($account, $request);
-
-        return redirect()->route('amo-accounts.show', $account)->with('status', 'Аккаунт amoCRM добавлен.');
     }
 
     public function show(AmoAccount $amoAccount): View

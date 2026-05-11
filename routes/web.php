@@ -32,13 +32,13 @@ Route::post('/amo-oauth/external/secrets', [AmoExternalOAuthController::class, '
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('amo-oauth.external.secrets');
 Route::get('/amo-oauth/callback', [AmoExternalOAuthController::class, 'callback'])->name('amo-oauth.callback');
+Route::get('/install', [AmoExternalOAuthController::class, 'install'])->name('amo-oauth.install');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/amo-oauth/external', [AmoExternalOAuthController::class, 'index'])->name('amo-oauth.external.index');
-    Route::post('/amo-oauth/external', [AmoExternalOAuthController::class, 'store'])->name('amo-oauth.external.store');
     Route::get('/amo-oauth/external/{connection}', [AmoExternalOAuthController::class, 'show'])->name('amo-oauth.external.show');
-    Route::resource('amo-accounts', AmoAccountController::class);
+    Route::resource('amo-accounts', AmoAccountController::class)->except(['create', 'store']);
     Route::post('/amo-accounts/{amo_account}/test', [AmoAccountController::class, 'test'])->name('amo-accounts.test');
     Route::post('/amo-accounts/{amo_account}/sync', [AmoAccountController::class, 'sync'])->name('amo-accounts.sync');
     Route::post('/amo-accounts/{amo_account}/deactivate', [AmoAccountController::class, 'deactivate'])->name('amo-accounts.deactivate');

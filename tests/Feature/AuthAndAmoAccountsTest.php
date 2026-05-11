@@ -8,7 +8,9 @@ use App\Models\AmoOAuthConnection;
 use App\Models\AmoUsersSnapshot;
 use App\Models\ApiRequestLog;
 use App\Models\User;
+use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoOAuthTokenExchanger;
+use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use League\OAuth2\Client\Token\AccessToken;
 use Mockery;
@@ -23,33 +25,20 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->get('/dashboard')->assertRedirect('/login');
     }
 
-    public function test_admin_can_create_amo_account(): void
+    public function test_manual_amo_account_creation_is_not_available(): void
     {
         $admin = User::factory()->admin()->create();
 
-        $this->actingAs($admin)->post('/amo-accounts', [
-            'name' => 'Client',
-            'base_domain' => 'client.amocrm.ru',
-            'auth_type' => AmoCredential::AUTH_LONG_LIVED,
-            'access_token' => 'abcdef1234567890',
-            'is_active' => '1',
-        ])->assertRedirect();
-
-        $this->assertDatabaseHas('amo_accounts', ['base_domain' => 'client.amocrm.ru']);
-        $this->assertDatabaseHas('amo_credentials', ['auth_type' => AmoCredential::AUTH_LONG_LIVED]);
+        $this->actingAs($admin)->get('/amo-accounts/create')->assertNotFound();
+        $this->actingAs($admin)->get('/amo-accounts')
+            ->assertOk()
+            ->assertDontSee('Добавить вручную');
     }
 
-    public function test_viewer_cannot_create_or_edit_amo_account(): void
+    public function test_viewer_cannot_edit_amo_account(): void
     {
         $viewer = User::factory()->create();
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
-
-        $this->actingAs($viewer)->post('/amo-accounts', [
-            'name' => 'Other',
-            'base_domain' => 'other.amocrm.ru',
-            'auth_type' => AmoCredential::AUTH_LONG_LIVED,
-            'access_token' => 'token',
-        ])->assertForbidden();
 
         $this->actingAs($viewer)->put("/amo-accounts/{$account->id}", [
             'name' => 'Changed',
@@ -174,24 +163,17 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_admin_can_create_external_oauth_connection_and_viewer_cannot(): void
+    public function test_public_install_page_creates_pending_oauth_connection(): void
     {
-        $admin = User::factory()->admin()->create();
-        $viewer = User::factory()->create();
-
-        $this->actingAs($admin)
-            ->post('/amo-oauth/external', ['name' => 'Client OAuth'])
-            ->assertRedirect();
+        $this->get('/install')
+            ->assertOk()
+            ->assertSee('Установить интеграцию')
+            ->assertSee('Интеграция Sonic Expert');
 
         $this->assertDatabaseHas('amo_oauth_connections', [
-            'owner_user_id' => $admin->id,
-            'name' => 'Client OAuth',
+            'owner_user_id' => null,
             'status' => AmoOAuthConnection::STATUS_PENDING,
         ]);
-
-        $this->actingAs($viewer)
-            ->post('/amo-oauth/external', ['name' => 'Blocked'])
-            ->assertForbidden();
     }
 
     public function test_external_oauth_secrets_and_callback_create_oauth_account(): void
@@ -218,6 +200,26 @@ class AuthAndAmoAccountsTest extends TestCase
             ]));
         $this->app->instance(AmoOAuthTokenExchanger::class, $exchanger);
 
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), '/api/v4/account')
+            ->andReturn([
+                'id' => 12345,
+                'name' => 'Client Company',
+                'subdomain' => 'client',
+                'timezone' => 'Europe/Moscow',
+                'currency' => 'RUB',
+                'country' => 'RU',
+            ]);
+        $this->app->instance(AmoFallbackHttpClient::class, $http);
+
+        $usersService = Mockery::mock(AmoUsersService::class);
+        $usersService->shouldReceive('syncUsersAndRoles')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class));
+        $this->app->instance(AmoUsersService::class, $usersService);
+
         $this->postJson('/amo-oauth/external/secrets', [
             'state' => 'state-token',
             'client_id' => 'client-id',
@@ -226,11 +228,15 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->get('/amo-oauth/callback?state=state-token&code=auth-code&referer=client.amocrm.ru')
             ->assertOk()
-            ->assertSee('amoCRM подключена');
+            ->assertSee('Интеграция Sonic Expert установлена');
 
         $account = AmoAccount::query()->where('base_domain', 'client.amocrm.ru')->firstOrFail();
         $credential = $account->credentials()->firstOrFail();
 
+        $this->assertSame('Client Company', $account->name);
+        $this->assertSame(12345, $account->account_id);
+        $this->assertSame('Europe/Moscow', $account->settings['timezone']);
+        $this->assertSame('RUB', $account->settings['currency']);
         $this->assertSame(AmoCredential::AUTH_OAUTH, $credential->auth_type);
         $this->assertSame('access-token', $credential->access_token);
         $this->assertSame('refresh-token', $credential->refresh_token);

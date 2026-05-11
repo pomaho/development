@@ -5,3 +5,23 @@
 body {
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+.amo-install-button,
+.amo-install-button-wrap a,
+.amo-install-button-wrap button {
+    width: 100% !important;
+    min-height: 54px !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: linear-gradient(135deg, #00c2a8, #00a7d7) !important;
+    color: #ffffff !important;
+    box-shadow: 0 16px 34px rgb(0 167 215 / 24%) !important;
+    font-weight: 700 !important;
+    letter-spacing: 0 !important;
+}
+
+.amo-install-button:hover,
+.amo-install-button-wrap a:hover,
+.amo-install-button-wrap button:hover {
+    filter: brightness(0.98);
+}

@@ -13,14 +13,16 @@ use Throwable;
 
 class AmoExternalOAuthService
 {
-    public function __construct(private readonly AmoOAuthTokenExchanger $tokenExchanger)
-    {
+    public function __construct(
+        private readonly AmoOAuthTokenExchanger $tokenExchanger,
+        private readonly AmoAccountProfileService $accountProfileService,
+    ) {
     }
 
-    public function createPending(User $owner, ?string $name = null): AmoOAuthConnection
+    public function createPending(?User $owner = null, ?string $name = null): AmoOAuthConnection
     {
         return AmoOAuthConnection::query()->create([
-            'owner_user_id' => $owner->id,
+            'owner_user_id' => $owner?->id,
             'state' => Str::random(64),
             'name' => $name ?: config('amo.external.name'),
             'redirect_uri' => config('amo.external.redirect_uri') ?: route('amo-oauth.callback'),
@@ -119,6 +121,9 @@ class AmoExternalOAuthService
                     'scopes' => $connection->scopes,
                 ],
             );
+
+            $this->accountProfileService->refreshAfterInstall($account->refresh());
+            $account->refresh();
 
             $connection->forceFill([
                 'amo_account_id' => $account->id,
