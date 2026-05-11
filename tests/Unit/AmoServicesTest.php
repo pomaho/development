@@ -74,6 +74,7 @@ class AmoServicesTest extends TestCase
                 return $payload[0]['name'] === 'Продажи B2B'
                     && $payload[0]['is_unsorted_on'] === true
                     && $payload[0]['_embedded']['statuses'][0]['name'] === 'Первичный контакт'
+                    && $payload[0]['_embedded']['statuses'][0]['color'] === '#98cbff'
                     && $payload[0]['_embedded']['statuses'][1]['id'] === 142;
             }))
             ->andReturn(['_embedded' => ['pipelines' => [['id' => 123]]]]);
@@ -203,7 +204,7 @@ class AmoServicesTest extends TestCase
         $this->assertFalse($capturedPayload[0]['is_main']);
         $this->assertTrue($capturedPayload[0]['is_unsorted_on']);
         $this->assertSame('New', $capturedPayload[0]['_embedded']['statuses'][0]['name']);
-        $this->assertSame('#99ccff', $capturedPayload[0]['_embedded']['statuses'][0]['color']);
+        $this->assertSame('#98cbff', $capturedPayload[0]['_embedded']['statuses'][0]['color']);
         $this->assertSame(142, $capturedPayload[0]['_embedded']['statuses'][1]['id']);
         $this->assertSame(143, $capturedPayload[0]['_embedded']['statuses'][2]['id']);
         $this->assertCount(3, $capturedPayload[0]['_embedded']['statuses']);

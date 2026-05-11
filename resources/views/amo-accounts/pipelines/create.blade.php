@@ -70,7 +70,7 @@
                             <td class="py-2"><span class="text-slate-400">обычный</span></td>
                             <td><input name="statuses[{{ $index }}][name]" value="{{ old("statuses.$index.name") }}" placeholder="Дополнительный этап" class="w-full rounded border-slate-300"></td>
                             <td><input name="statuses[{{ $index }}][sort]" type="number" min="1" max="9999" value="{{ old("statuses.$index.sort", ($index + 1) * 10) }}" class="w-28 rounded border-slate-300"></td>
-                            <td><input name="statuses[{{ $index }}][color]" type="color" value="{{ old("statuses.$index.color", '#99ccff') }}" class="h-9 w-16 rounded border-slate-300"></td>
+                            <td><input name="statuses[{{ $index }}][color]" type="color" value="{{ old("statuses.$index.color", '#98cbff') }}" class="h-9 w-16 rounded border-slate-300"></td>
                         </tr>
                     @endfor
                 </tbody>

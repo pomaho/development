@@ -7,6 +7,32 @@ use Throwable;
 
 class AmoPipelinesService
 {
+    private const DEFAULT_STATUS_COLOR = '#98cbff';
+
+    private const ALLOWED_STATUS_COLORS = [
+        '#fffeb2',
+        '#fffd7f',
+        '#fff000',
+        '#ffeab2',
+        '#ffdc7f',
+        '#ffce5a',
+        '#ffdbdb',
+        '#ffc8c8',
+        '#ff8f92',
+        '#d6eaff',
+        '#c1e0ff',
+        '#98cbff',
+        '#ebffb1',
+        '#deff81',
+        '#87f2c0',
+        '#f9deff',
+        '#f3beff',
+        '#ccc8f9',
+        '#eb93ff',
+        '#f2f3f4',
+        '#e6e8ea',
+    ];
+
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
     }
@@ -125,9 +151,9 @@ class AmoPipelinesService
     public function defaultStatuses(): array
     {
         return [
-            ['name' => 'Первичный контакт', 'sort' => 10, 'color' => '#99ccff'],
+            ['name' => 'Первичный контакт', 'sort' => 10, 'color' => self::DEFAULT_STATUS_COLOR],
             ['name' => 'Квалификация', 'sort' => 20, 'color' => '#fffd7f'],
-            ['name' => 'Презентация', 'sort' => 30, 'color' => '#ffcc66'],
+            ['name' => 'Презентация', 'sort' => 30, 'color' => '#ffce5a'],
             ['name' => 'Согласование', 'sort' => 40, 'color' => '#deff81'],
             ['id' => 142, 'name' => 'Успешно реализовано'],
             ['id' => 143, 'name' => 'Закрыто и не реализовано'],
@@ -149,7 +175,7 @@ class AmoPipelinesService
 
                 if (! isset($payload['id'])) {
                     $payload['sort'] = (int) ($status['sort'] ?? (($index + 1) * 10));
-                    $payload['color'] = $status['color'] ?? '#99ccff';
+                    $payload['color'] = $this->normalizeStatusColor($status['color'] ?? null);
                 }
 
                 return $payload;
@@ -173,12 +199,23 @@ class AmoPipelinesService
                 }
 
                 $payload['sort'] = (int) ($status['sort'] ?? 10);
-                $payload['color'] = $status['color'] ?? '#99ccff';
+                $payload['color'] = $this->normalizeStatusColor($status['color'] ?? null);
 
                 return $payload;
             })
             ->values()
             ->all();
+    }
+
+    private function normalizeStatusColor(?string $color): string
+    {
+        $normalized = mb_strtolower((string) $color);
+
+        if (in_array($normalized, self::ALLOWED_STATUS_COLORS, true)) {
+            return $normalized;
+        }
+
+        return self::DEFAULT_STATUS_COLOR;
     }
 
     private function isCloneableStatus(array $status): bool
