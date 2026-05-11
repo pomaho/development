@@ -168,6 +168,7 @@ class AmoServicesTest extends TestCase
         $http->shouldReceive('get')->with($account, '/api/v4/leads/pipelines/10/statuses', Mockery::any())->andReturn([
             '_page' => 1,
             '_embedded' => ['statuses' => [
+                ['id' => 19, 'name' => 'Неразобранное', 'sort' => 10, 'color' => '#c1c1c1', 'type' => 1],
                 ['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff'],
                 ['id' => 142, 'name' => 'Успешно реализовано'],
                 ['id' => 143, 'name' => 'Закрыто и не реализовано'],
@@ -205,6 +206,7 @@ class AmoServicesTest extends TestCase
         $this->assertSame('#99ccff', $capturedPayload[0]['_embedded']['statuses'][0]['color']);
         $this->assertSame(142, $capturedPayload[0]['_embedded']['statuses'][1]['id']);
         $this->assertSame(143, $capturedPayload[0]['_embedded']['statuses'][2]['id']);
+        $this->assertCount(3, $capturedPayload[0]['_embedded']['statuses']);
         $this->assertSame(123, $result['_embedded']['pipelines'][0]['id']);
     }
 

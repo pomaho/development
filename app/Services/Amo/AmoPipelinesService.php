@@ -161,7 +161,7 @@ class AmoPipelinesService
     private function cloneStatuses(array $statuses): array
     {
         return collect($statuses)
-            ->filter(fn (array $status): bool => filled($status['name'] ?? null))
+            ->filter(fn (array $status): bool => filled($status['name'] ?? null) && $this->isCloneableStatus($status))
             ->map(function (array $status): array {
                 $payload = ['name' => $status['name']];
                 $statusId = (int) ($status['id'] ?? 0);
@@ -179,6 +179,17 @@ class AmoPipelinesService
             })
             ->values()
             ->all();
+    }
+
+    private function isCloneableStatus(array $status): bool
+    {
+        $statusId = (int) ($status['id'] ?? 0);
+
+        if (in_array($statusId, [142, 143], true)) {
+            return true;
+        }
+
+        return (int) ($status['type'] ?? 0) === 0;
     }
 
     private function statusSortValue(array $status): int

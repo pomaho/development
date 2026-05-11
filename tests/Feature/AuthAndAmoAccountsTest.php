@@ -219,6 +219,25 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_clone_pipeline_failure_returns_form_error(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $pipelinesService = Mockery::mock(AmoPipelinesService::class);
+        $pipelinesService->shouldReceive('clonePipeline')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), 10, 'Sales Copy')
+            ->andThrow(new \RuntimeException('amoCRM API error.'));
+        $this->app->instance(AmoPipelinesService::class, $pipelinesService);
+
+        $this->actingAs($admin)
+            ->from("/amo-accounts/{$account->id}/pipelines/10/clone")
+            ->post("/amo-accounts/{$account->id}/pipelines/10/clone", ['name' => 'Sales Copy'])
+            ->assertRedirect("/amo-accounts/{$account->id}/pipelines/10/clone")
+            ->assertSessionHasErrors('name');
+    }
+
     public function test_admin_can_open_crm_audit_and_viewer_cannot_run_it(): void
     {
         $admin = User::factory()->admin()->create();

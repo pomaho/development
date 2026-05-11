@@ -119,7 +119,15 @@ class AmoPipelinesController extends Controller
     ): RedirectResponse {
         $this->authorize('sync', $amoAccount);
 
-        $pipelinesService->clonePipeline($amoAccount, $pipelineId, $request->validated('name'));
+        try {
+            $pipelinesService->clonePipeline($amoAccount, $pipelineId, $request->validated('name'));
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()
+                ->withInput()
+                ->withErrors(['name' => 'Не удалось склонировать воронку: '.$exception->getMessage()]);
+        }
 
         return redirect()
             ->route('amo-accounts.pipelines.index', $amoAccount)
