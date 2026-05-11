@@ -3,7 +3,10 @@
 @section('content')
 <div class="mb-6">
     <h1 class="text-2xl font-semibold">Пользователи: {{ $account->name }}</h1>
-    <a href="{{ route('amo-accounts.show', $account) }}" class="text-sm text-blue-700">Назад к аккаунту</a>
+    <div class="flex flex-wrap gap-3 text-sm">
+        <a href="{{ route('amo-accounts.show', $account) }}" class="text-blue-700">Назад к аккаунту</a>
+        <a href="{{ route('amo-accounts.users.export', array_merge(['amo_account' => $account], request()->query())) }}" class="text-blue-700">Экспорт в Excel</a>
+    </div>
 </div>
 
 <form method="get" class="mb-4 flex flex-wrap gap-3 rounded border border-slate-200 bg-white p-4 text-sm">

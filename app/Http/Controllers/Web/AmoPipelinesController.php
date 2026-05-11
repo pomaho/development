@@ -7,18 +7,21 @@ use App\Http\Requests\CloneAmoPipelineRequest;
 use App\Http\Requests\StoreAmoPipelineRequest;
 use App\Models\AmoAccount;
 use App\Services\Amo\AmoPipelinesService;
+use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoPipelinesController extends Controller
 {
-    public function index(AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): View
+    public function index(Request $request, AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): View
     {
         $pipelines = [];
         $error = null;
 
         try {
-            $pipelines = $pipelinesService->fetchPipelines($amoAccount);
+            $pipelines = $this->filteredPipelines($request, $pipelinesService->fetchPipelines($amoAccount));
         } catch (\Throwable $exception) {
             $error = $exception->getMessage();
         }
@@ -28,6 +31,33 @@ class AmoPipelinesController extends Controller
             'pipelines' => $pipelines,
             'error' => $error,
         ]);
+    }
+
+    public function export(
+        Request $request,
+        AmoAccount $amoAccount,
+        AmoPipelinesService $pipelinesService,
+        TableExportService $export
+    ): StreamedResponse {
+        $pipelines = $this->filteredPipelines($request, $pipelinesService->fetchPipelines($amoAccount));
+
+        return $export->csv("amo-pipelines-{$amoAccount->id}.csv", [
+            'ID',
+            'Название',
+            'Главная',
+            'Неразобранное',
+            'Архив',
+            'Этапов',
+            'Этапы',
+        ], collect($pipelines)->map(fn (array $pipeline): array => [
+            $pipeline['id'] ?? null,
+            $pipeline['name'] ?? null,
+            (bool) ($pipeline['is_main'] ?? false),
+            (bool) ($pipeline['is_unsorted_on'] ?? false),
+            (bool) ($pipeline['is_archive'] ?? false),
+            count($pipeline['_embedded']['statuses'] ?? []),
+            collect($pipeline['_embedded']['statuses'] ?? [])->pluck('name')->implode(', '),
+        ]));
     }
 
     public function create(AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): View
@@ -138,5 +168,21 @@ class AmoPipelinesController extends Controller
         return redirect()
             ->route('amo-accounts.pipelines.index', $amoAccount)
             ->with('status', $status);
+    }
+
+    private function filteredPipelines(Request $request, array $pipelines): array
+    {
+        if (! $request->filled('activity')) {
+            return $pipelines;
+        }
+
+        return collect($pipelines)
+            ->filter(fn (array $pipeline): bool => match ($request->input('activity')) {
+                'active' => ! (bool) ($pipeline['is_archive'] ?? false),
+                'archived' => (bool) ($pipeline['is_archive'] ?? false),
+                default => true,
+            })
+            ->values()
+            ->all();
     }
 }

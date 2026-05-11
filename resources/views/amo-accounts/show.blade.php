@@ -40,6 +40,7 @@
 
 <div class="mt-6 flex gap-3 text-sm">
     <a class="text-blue-700" href="{{ route('amo-accounts.dashboard', $account) }}">Dashboard клиента</a>
+    <a class="text-blue-700" href="{{ route('amo-accounts.leads', $account) }}">Сделки</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.users', $account) }}">Пользователи</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.roles', $account) }}">Роли</a>
     <a class="text-blue-700" href="{{ route('amo-accounts.pipelines.index', $account) }}">Воронки</a>

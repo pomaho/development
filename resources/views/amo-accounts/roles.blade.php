@@ -3,7 +3,10 @@
 @section('content')
 <div class="mb-6">
     <h1 class="text-2xl font-semibold">Роли: {{ $account->name }}</h1>
-    <a href="{{ route('amo-accounts.show', $account) }}" class="text-sm text-blue-700">Назад к аккаунту</a>
+    <div class="flex flex-wrap gap-3 text-sm">
+        <a href="{{ route('amo-accounts.show', $account) }}" class="text-blue-700">Назад к аккаунту</a>
+        <a href="{{ route('amo-accounts.roles.export', $account) }}" class="text-blue-700">Экспорт в Excel</a>
+    </div>
 </div>
 
 <x-dashboard.table>

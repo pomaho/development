@@ -34,6 +34,7 @@
                         @endif
                         @if ($layoutCurrentAmoAccount)
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.users', $layoutCurrentAmoAccount) }}">Users audit</a>
+                            <a class="hover:text-blue-700" href="{{ route('amo-accounts.leads', $layoutCurrentAmoAccount) }}">Сделки</a>
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.pipelines.index', $layoutCurrentAmoAccount) }}">Воронки</a>
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.crm-audit.index', $layoutCurrentAmoAccount) }}">CRM-аудит</a>
                             <a class="hover:text-blue-700" href="{{ route('amo-accounts.integrations', $layoutCurrentAmoAccount) }}">Интеграции</a>

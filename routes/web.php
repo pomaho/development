@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\AmoAccountController;
 use App\Http\Controllers\Web\AmoAccountIntegrationsController;
 use App\Http\Controllers\Web\AmoAccountWidgetsController;
 use App\Http\Controllers\Web\AmoExternalOAuthController;
+use App\Http\Controllers\Web\AmoLeadsController;
 use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoRolesController;
 use App\Http\Controllers\Web\AmoUsersController;
@@ -39,6 +40,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-oauth/external', [AmoExternalOAuthController::class, 'index'])->name('amo-oauth.external.index');
     Route::get('/amo-oauth/external/{connection}', [AmoExternalOAuthController::class, 'show'])->name('amo-oauth.external.show');
     Route::resource('amo-accounts', AmoAccountController::class)->except(['create', 'store']);
+    Route::get('/amo-accounts-export', [AmoAccountController::class, 'export'])->name('amo-accounts.export');
     Route::post('/amo-accounts/{amo_account}/test', [AmoAccountController::class, 'test'])->name('amo-accounts.test');
     Route::post('/amo-accounts/{amo_account}/sync', [AmoAccountController::class, 'sync'])->name('amo-accounts.sync');
     Route::post('/amo-accounts/{amo_account}/deactivate', [AmoAccountController::class, 'deactivate'])->name('amo-accounts.deactivate');
@@ -46,6 +48,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/integrations', AmoAccountIntegrationsController::class)->name('amo-accounts.integrations');
     Route::get('/amo-accounts/{amo_account}/widgets', AmoAccountWidgetsController::class)->name('amo-accounts.widgets');
     Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
+    Route::get('/amo-accounts/{amo_account}/pipelines-export', [AmoPipelinesController::class, 'export'])->name('amo-accounts.pipelines.export');
     Route::get('/amo-accounts/{amo_account}/pipelines/create', [AmoPipelinesController::class, 'create'])->name('amo-accounts.pipelines.create');
     Route::get('/amo-accounts/{amo_account}/pipelines/{pipelineId}/clone', [AmoPipelinesController::class, 'cloneForm'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.clone-form');
     Route::post('/amo-accounts/{amo_account}/pipelines/{pipelineId}/clone', [AmoPipelinesController::class, 'clone'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.clone');
@@ -54,8 +57,13 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
+    Route::get('/amo-accounts/{amo_account}/users-export', [AmoUsersController::class, 'export'])->name('amo-accounts.users.export');
+    Route::get('/amo-accounts/{amo_account}/leads', AmoLeadsController::class)->name('amo-accounts.leads');
+    Route::get('/amo-accounts/{amo_account}/leads-export', [AmoLeadsController::class, 'export'])->name('amo-accounts.leads.export');
     Route::get('/amo-accounts/{amo_account}/roles', AmoRolesController::class)->name('amo-accounts.roles');
+    Route::get('/amo-accounts/{amo_account}/roles-export', [AmoRolesController::class, 'export'])->name('amo-accounts.roles.export');
     Route::get('/logs/api', ApiLogController::class)->name('logs.api');
+    Route::get('/logs/api-export', [ApiLogController::class, 'export'])->name('logs.api.export');
 
     Route::prefix('/api/internal')->group(function (): void {
         Route::get('/amo-accounts', [AmoAccountApiController::class, 'index']);

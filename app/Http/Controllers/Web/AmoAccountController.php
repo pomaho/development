@@ -7,9 +7,11 @@ use App\Http\Requests\StoreAmoAccountRequest;
 use App\Jobs\SyncAmoUsersAndRolesJob;
 use App\Models\AmoAccount;
 use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoAccountController extends Controller
 {
@@ -18,6 +20,27 @@ class AmoAccountController extends Controller
         return view('amo-accounts.index', [
             'accounts' => AmoAccount::query()->with('credentials')->latest()->paginate(20),
         ]);
+    }
+
+    public function export(TableExportService $export): StreamedResponse
+    {
+        $accounts = AmoAccount::query()->with('credentials')->latest()->get();
+
+        return $export->csv('amo-accounts.csv', [
+            'Название',
+            'Домен',
+            'Auth',
+            'Активен',
+            'Статус',
+            'Последняя синхронизация',
+        ], $accounts->map(fn (AmoAccount $account): array => [
+            $account->name,
+            $account->base_domain,
+            $account->credentials?->auth_type,
+            $account->is_active,
+            $account->auth_status,
+            $account->last_successful_sync_at,
+        ]));
     }
 
     public function show(AmoAccount $amoAccount): View

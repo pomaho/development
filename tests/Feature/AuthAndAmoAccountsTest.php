@@ -7,6 +7,9 @@ use App\Models\AmoCredential;
 use App\Models\AmoOAuthConnection;
 use App\Models\AmoUsersSnapshot;
 use App\Models\ApiRequestLog;
+use App\Models\CrmEntitySnapshot;
+use App\Models\CrmPipelineSnapshot;
+use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoOAuthTokenExchanger;
@@ -201,6 +204,139 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertSee('Настройки этапов')
             ->assertSee('Project')
             ->assertSee('Website');
+    }
+
+    public function test_pipeline_list_filters_archived_and_exports_current_filter(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $pipelinesService = Mockery::mock(AmoPipelinesService::class);
+        $pipelinesService->shouldReceive('fetchPipelines')
+            ->twice()
+            ->with(Mockery::type(AmoAccount::class))
+            ->andReturn([
+                ['id' => 10, 'name' => 'Active Pipeline', 'is_archive' => false, '_embedded' => ['statuses' => []]],
+                ['id' => 20, 'name' => 'Archived Pipeline', 'is_archive' => true, '_embedded' => ['statuses' => []]],
+            ]);
+        $this->app->instance(AmoPipelinesService::class, $pipelinesService);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/pipelines?activity=active")
+            ->assertOk()
+            ->assertSee('Active Pipeline')
+            ->assertDontSee('Archived Pipeline');
+
+        $response = $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/pipelines-export?activity=archived");
+
+        $response->assertOk();
+        $this->assertStringContainsString('amo-pipelines-', $response->headers->get('content-disposition'));
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('Archived Pipeline', $content);
+        $this->assertStringNotContainsString('Active Pipeline', $content);
+    }
+
+    public function test_users_export_respects_current_filters(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 1,
+            'name' => 'Visible Admin',
+            'email' => 'visible@example.test',
+            'rights' => ['is_admin' => true],
+            'is_admin' => true,
+            'is_active' => true,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 2,
+            'name' => 'Hidden User',
+            'email' => 'hidden@example.test',
+            'rights' => [],
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $response = $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/users-export?admins=1");
+
+        $response->assertOk();
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('Visible Admin', $content);
+        $this->assertStringNotContainsString('Hidden User', $content);
+    }
+
+    public function test_leads_page_filters_and_exports_current_filter(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Sales',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmPipelineStatusSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'amo_status_id' => 20,
+            'name' => 'New',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '100',
+            'name' => 'Visible Lead',
+            'pipeline_id' => 10,
+            'status_id' => 20,
+            'responsible_user_id' => 55,
+            'entity_created_at' => now()->subDay(),
+            'entity_updated_at' => now(),
+            'custom_fields_values' => [['field_name' => 'Project', 'values' => [['value' => 'A']]]],
+            'embedded' => [],
+            'raw' => ['id' => 100, 'price' => 5000],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '200',
+            'name' => 'Hidden Lead',
+            'pipeline_id' => 99,
+            'status_id' => 88,
+            'entity_created_at' => now()->subDay(),
+            'entity_updated_at' => now(),
+            'embedded' => [],
+            'raw' => ['id' => 200],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/leads?pipeline_id=10")
+            ->assertOk()
+            ->assertSee('Visible Lead')
+            ->assertDontSee('Hidden Lead');
+
+        $response = $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/leads-export?pipeline_id=10");
+
+        $response->assertOk();
+        $content = $response->streamedContent();
+        $this->assertStringContainsString('Visible Lead', $content);
+        $this->assertStringContainsString('5000', $content);
+        $this->assertStringNotContainsString('Hidden Lead', $content);
     }
 
     public function test_admin_can_clone_pipeline_and_viewer_cannot_clone_pipeline(): void

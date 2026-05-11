@@ -6,10 +6,23 @@
         <h1 class="text-2xl font-semibold">Воронки: {{ $account->name }}</h1>
         <div class="text-sm text-slate-500">{{ $account->base_domain }}</div>
     </div>
-    @can('sync', $account)
-        <a href="{{ route('amo-accounts.pipelines.create', $account) }}" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Создать воронку</a>
-    @endcan
+    <div class="flex flex-wrap gap-2">
+        <a href="{{ route('amo-accounts.pipelines.export', array_merge(['amo_account' => $account], request()->query())) }}" class="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400">Экспорт в Excel</a>
+        @can('sync', $account)
+            <a href="{{ route('amo-accounts.pipelines.create', $account) }}" class="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800">Создать воронку</a>
+        @endcan
+    </div>
 </div>
+
+<form method="get" class="mb-4 flex flex-wrap gap-3 rounded border border-slate-200 bg-white p-4 text-sm">
+    <select name="activity" class="rounded border-slate-300">
+        <option value="">Все воронки</option>
+        <option value="active" @selected(request('activity') === 'active')>Только активные</option>
+        <option value="archived" @selected(request('activity') === 'archived')>Только архивные</option>
+    </select>
+    <button class="rounded bg-blue-700 px-3 py-2 text-white">Фильтр</button>
+    <a href="{{ route('amo-accounts.pipelines.index', $account) }}" class="rounded border border-slate-300 px-3 py-2">Сбросить</a>
+</form>
 
 @if ($error)
     <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
