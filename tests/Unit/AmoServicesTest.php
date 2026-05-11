@@ -170,13 +170,23 @@ class AmoServicesTest extends TestCase
             '_page' => 1,
             '_embedded' => ['statuses' => [
                 ['id' => 19, 'name' => 'Неразобранное', 'sort' => 10, 'color' => '#c1c1c1', 'type' => 1],
-                ['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff'],
+                ['id' => 20, 'name' => 'New', 'sort' => 10, 'color' => '#99ccff', 'descriptions' => [
+                    ['id' => 1, 'level' => 'newbie', 'description' => 'Подсказка новичку'],
+                    ['id' => 2, 'level' => 'candidate', 'description' => 'Подсказка кандидату'],
+                ]],
                 ['id' => 142, 'name' => 'Успешно реализовано'],
                 ['id' => 143, 'name' => 'Закрыто и не реализовано'],
             ]],
         ]);
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/custom_fields', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['custom_fields' => [[
+                'id' => 100,
+                'name' => 'Project',
+                'required_statuses' => [['pipeline_id' => 10, 'status_id' => 20]],
+            ]]],
+        ]);
         foreach ([
-            ['/api/v4/leads/custom_fields', 'custom_fields'],
             ['/api/v4/sources', 'sources'],
             ['/api/v4/widgets', 'widgets'],
             ['/api/v4/website_buttons', 'website_buttons'],
@@ -195,7 +205,22 @@ class AmoServicesTest extends TestCase
 
                 return true;
             }))
-            ->andReturn(['_embedded' => ['pipelines' => [['id' => 123]]]]);
+            ->andReturn(['_embedded' => ['pipelines' => [[
+                'id' => 123,
+                '_embedded' => ['statuses' => [
+                    ['id' => 220, 'name' => 'New', 'sort' => 10, 'type' => 0],
+                    ['id' => 142, 'name' => 'Успешно реализовано'],
+                    ['id' => 143, 'name' => 'Закрыто и не реализовано'],
+                ]],
+            ]]]]);
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/leads/custom_fields/100', Mockery::on(function (array $payload): bool {
+                return $payload['name'] === 'Project'
+                    && $payload['required_statuses'][0] === ['pipeline_id' => 10, 'status_id' => 20]
+                    && $payload['required_statuses'][1] === ['pipeline_id' => 123, 'status_id' => 220];
+            }))
+            ->andReturn(['id' => 100]);
 
         $result = (new AmoPipelinesService($http))->clonePipeline($account, 10, 'Sales Copy');
 
@@ -205,10 +230,13 @@ class AmoServicesTest extends TestCase
         $this->assertTrue($capturedPayload[0]['is_unsorted_on']);
         $this->assertSame('New', $capturedPayload[0]['_embedded']['statuses'][0]['name']);
         $this->assertSame('#98cbff', $capturedPayload[0]['_embedded']['statuses'][0]['color']);
+        $this->assertSame('newbie', $capturedPayload[0]['_embedded']['statuses'][0]['descriptions'][0]['level']);
+        $this->assertSame('Подсказка новичку', $capturedPayload[0]['_embedded']['statuses'][0]['descriptions'][0]['description']);
         $this->assertSame(142, $capturedPayload[0]['_embedded']['statuses'][1]['id']);
         $this->assertSame(143, $capturedPayload[0]['_embedded']['statuses'][2]['id']);
         $this->assertCount(3, $capturedPayload[0]['_embedded']['statuses']);
         $this->assertSame(123, $result['_embedded']['pipelines'][0]['id']);
+        $this->assertArrayNotHasKey('_clone_warnings', $result);
     }
 
     public function test_crm_audit_service_saves_structure_and_entities(): void

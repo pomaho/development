@@ -138,14 +138,23 @@ class AmoPipelinesService
     {
         $details = $this->fetchPipelineDetails($account, $pipelineId);
         $pipeline = $details['pipeline'];
+        $statuses = $this->cloneableStatuses($details['statuses']);
 
-        return $this->createPipeline($account, [
+        $result = $this->createPipeline($account, [
             'name' => $name,
             'sort' => ((int) ($pipeline['sort'] ?? 10)) + 10,
             'is_main' => false,
             'is_unsorted_on' => (bool) ($pipeline['is_unsorted_on'] ?? true),
-            'statuses' => $this->cloneStatuses($details['statuses']),
+            'statuses' => $this->cloneStatuses($statuses),
         ]);
+
+        $warnings = $this->cloneRequiredStatuses($account, $details['lead_custom_fields'] ?? [], $statuses, $result, $pipelineId);
+
+        if ($warnings !== []) {
+            $result['_clone_warnings'] = $warnings;
+        }
+
+        return $result;
     }
 
     public function defaultStatuses(): array
@@ -176,6 +185,11 @@ class AmoPipelinesService
                 if (! isset($payload['id'])) {
                     $payload['sort'] = (int) ($status['sort'] ?? (($index + 1) * 10));
                     $payload['color'] = $this->normalizeStatusColor($status['color'] ?? null);
+                    $descriptions = $this->cloneDescriptions($status['descriptions'] ?? []);
+
+                    if ($descriptions !== []) {
+                        $payload['descriptions'] = $descriptions;
+                    }
                 }
 
                 return $payload;
@@ -184,10 +198,9 @@ class AmoPipelinesService
             ->all();
     }
 
-    private function cloneStatuses(array $statuses): array
+    private function cloneStatuses(iterable $statuses): array
     {
-        return collect($statuses)
-            ->filter(fn (array $status): bool => filled($status['name'] ?? null) && $this->isCloneableStatus($status))
+        return $this->cloneableStatuses($statuses)
             ->map(function (array $status): array {
                 $payload = ['name' => $status['name']];
                 $statusId = (int) ($status['id'] ?? 0);
@@ -200,9 +213,35 @@ class AmoPipelinesService
 
                 $payload['sort'] = (int) ($status['sort'] ?? 10);
                 $payload['color'] = $this->normalizeStatusColor($status['color'] ?? null);
+                $descriptions = $this->cloneDescriptions($status['descriptions'] ?? $status['_embedded']['descriptions'] ?? []);
+
+                if ($descriptions !== []) {
+                    $payload['descriptions'] = $descriptions;
+                }
 
                 return $payload;
             })
+            ->values()
+            ->all();
+    }
+
+    private function cloneableStatuses(iterable $statuses): \Illuminate\Support\Collection
+    {
+        return collect($statuses)
+            ->filter(fn (array $status): bool => filled($status['name'] ?? null) && $this->isCloneableStatus($status))
+            ->values();
+    }
+
+    private function cloneDescriptions(array $descriptions): array
+    {
+        return collect($descriptions)
+            ->filter(fn (array $description): bool => in_array($description['level'] ?? null, ['newbie', 'candidate', 'master'], true)
+                && filled($description['description'] ?? null))
+            ->map(fn (array $description): array => [
+                'level' => $description['level'],
+                'description' => $description['description'],
+            ])
+            ->unique('level')
             ->values()
             ->all();
     }
@@ -240,6 +279,105 @@ class AmoPipelinesService
             143 => 10010,
             default => 0,
         };
+    }
+
+    private function cloneRequiredStatuses(
+        AmoAccount $account,
+        array $fields,
+        \Illuminate\Support\Collection $oldStatuses,
+        array $createResult,
+        int $oldPipelineId
+    ): array {
+        $newPipeline = $createResult['_embedded']['pipelines'][0] ?? null;
+
+        if (! is_array($newPipeline) || ! isset($newPipeline['id'])) {
+            return ['amoCRM не вернула ID новой воронки, обязательные поля не перенесены.'];
+        }
+
+        $statusMap = $this->statusIdMap($oldStatuses, $newPipeline['_embedded']['statuses'] ?? []);
+
+        if ($statusMap === []) {
+            return ['amoCRM не вернула этапы новой воронки, обязательные поля не перенесены.'];
+        }
+
+        $warnings = [];
+
+        foreach ($fields as $field) {
+            $requiredStatuses = $field['required_statuses'] ?? [];
+
+            if (! is_array($requiredStatuses) || $requiredStatuses === []) {
+                continue;
+            }
+
+            $newRequiredStatuses = $this->mappedRequiredStatuses(
+                $requiredStatuses,
+                (int) ($newPipeline['id']),
+                $statusMap,
+                $oldPipelineId
+            );
+
+            if ($newRequiredStatuses === []) {
+                continue;
+            }
+
+            $mergedRequiredStatuses = collect([...$requiredStatuses, ...$newRequiredStatuses])
+                ->unique(fn (array $status): string => ($status['pipeline_id'] ?? '').':'.($status['status_id'] ?? ''))
+                ->values()
+                ->all();
+
+            try {
+                $this->http->patch($account, "/api/v4/leads/custom_fields/{$field['id']}", [
+                    'name' => $field['name'],
+                    'required_statuses' => $mergedRequiredStatuses,
+                ]);
+            } catch (Throwable $exception) {
+                $warnings[] = 'Не удалось перенести обязательность поля "'.($field['name'] ?? $field['id']).'": '.$exception->getMessage();
+            }
+        }
+
+        return $warnings;
+    }
+
+    private function statusIdMap(\Illuminate\Support\Collection $oldStatuses, array $newStatuses): array
+    {
+        $newRegularStatuses = collect($newStatuses)
+            ->filter(fn (array $status): bool => ! in_array((int) ($status['id'] ?? 0), [142, 143], true)
+                && (int) ($status['type'] ?? 0) === 0)
+            ->values();
+        $map = [
+            142 => 142,
+            143 => 143,
+        ];
+        $regularIndex = 0;
+
+        foreach ($oldStatuses as $oldStatus) {
+            $oldStatusId = (int) ($oldStatus['id'] ?? 0);
+
+            if (in_array($oldStatusId, [142, 143], true)) {
+                continue;
+            }
+
+            $newStatus = $newRegularStatuses[$regularIndex] ?? null;
+            if (is_array($newStatus) && isset($newStatus['id'])) {
+                $map[$oldStatusId] = (int) $newStatus['id'];
+            }
+            $regularIndex++;
+        }
+
+        return $map;
+    }
+
+    private function mappedRequiredStatuses(array $requiredStatuses, int $newPipelineId, array $statusMap, int $oldPipelineId): array
+    {
+        return collect($requiredStatuses)
+            ->filter(fn (array $status): bool => (int) ($status['pipeline_id'] ?? 0) === $oldPipelineId
+                && isset($statusMap[(int) ($status['status_id'] ?? 0)]))
+            ->map(fn (array $status): array => [
+                'pipeline_id' => $newPipelineId,
+                'status_id' => $statusMap[(int) $status['status_id']],
+            ])
+            ->values()
+            ->all();
     }
 
     private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array

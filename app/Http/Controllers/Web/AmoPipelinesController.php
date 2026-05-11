@@ -120,7 +120,7 @@ class AmoPipelinesController extends Controller
         $this->authorize('sync', $amoAccount);
 
         try {
-            $pipelinesService->clonePipeline($amoAccount, $pipelineId, $request->validated('name'));
+            $result = $pipelinesService->clonePipeline($amoAccount, $pipelineId, $request->validated('name'));
         } catch (\Throwable $exception) {
             report($exception);
 
@@ -129,8 +129,14 @@ class AmoPipelinesController extends Controller
                 ->withErrors(['name' => 'Не удалось склонировать воронку: '.$exception->getMessage()]);
         }
 
+        $warnings = $result['_clone_warnings'] ?? [];
+        $status = 'Копия воронки отправлена в amoCRM.';
+        if ($warnings !== []) {
+            $status .= ' '.implode(' ', $warnings);
+        }
+
         return redirect()
             ->route('amo-accounts.pipelines.index', $amoAccount)
-            ->with('status', 'Копия воронки отправлена в amoCRM.');
+            ->with('status', $status);
     }
 }
