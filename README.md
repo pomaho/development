@@ -124,7 +124,7 @@ curl -I https://develop.sonic.expert
 docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-В production замените дефолтные пароли MySQL в `.env.docker` и храните этот файл вне git. Сервис `certbot` в `docker-compose.prod.yml` будет периодически обновлять сертификат через webroot challenge.
+В production замените дефолтные пароли MySQL в `.env.docker` и храните этот файл вне git. Сервис `certbot` в `docker-compose.prod.yml` будет периодически обновлять сертификат через webroot challenge, а контейнер `web` будет периодически делать `nginx -s reload`, чтобы подхватывать обновленные сертификаты без ручного рестарта.
 
 Первый администратор создается seeder-ом из env:
 
