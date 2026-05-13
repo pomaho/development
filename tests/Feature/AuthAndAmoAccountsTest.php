@@ -201,7 +201,11 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($admin)
             ->get("/amo-accounts/{$account->id}/pipelines/create")
             ->assertOk()
-            ->assertSee('Создать воронку');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Pipelines/Create')
+                ->where('account.name', 'Client')
+                ->where('defaultStatuses.0.name', 'Первичный контакт')
+                ->has('links.store'));
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/pipelines", [
@@ -551,8 +555,11 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($admin)
             ->get("/amo-accounts/{$account->id}/pipelines/10/clone")
             ->assertOk()
-            ->assertSee('Клонировать воронку')
-            ->assertSee('Sales');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Pipelines/Clone')
+                ->where('pipeline.name', 'Sales')
+                ->where('statuses.0.name', 'New')
+                ->has('links.submit'));
 
         $this->actingAs($admin)
             ->post("/amo-accounts/{$account->id}/pipelines/10/clone", ['name' => 'Sales Copy'])

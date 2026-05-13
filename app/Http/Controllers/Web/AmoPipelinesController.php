@@ -107,13 +107,36 @@ class AmoPipelinesController extends Controller
         ]));
     }
 
-    public function create(AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): View
+    public function create(AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): Response
     {
         $this->authorize('sync', $amoAccount);
 
-        return view('amo-accounts.pipelines.create', [
-            'account' => $amoAccount,
+        return Inertia::render('AmoAccounts/Pipelines/Create', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
             'defaultStatuses' => $pipelinesService->defaultStatuses(),
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'store' => route('amo-accounts.pipelines.store', $amoAccount),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 
@@ -176,7 +199,7 @@ class AmoPipelinesController extends Controller
         ]);
     }
 
-    public function cloneForm(AmoAccount $amoAccount, int $pipelineId, AmoPipelinesService $pipelinesService): View
+    public function cloneForm(AmoAccount $amoAccount, int $pipelineId, AmoPipelinesService $pipelinesService): Response
     {
         $this->authorize('sync', $amoAccount);
 
@@ -192,12 +215,35 @@ class AmoPipelinesController extends Controller
             $error = $exception->getMessage();
         }
 
-        return view('amo-accounts.pipelines.clone', [
-            'account' => $amoAccount,
+        return Inertia::render('AmoAccounts/Pipelines/Clone', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
             'pipelineId' => $pipelineId,
             'pipeline' => $details['pipeline'] ?? [],
             'statuses' => $details['statuses'] ?? [],
             'error' => $error,
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'submit' => route('amo-accounts.pipelines.clone', [$amoAccount, $pipelineId]),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 
