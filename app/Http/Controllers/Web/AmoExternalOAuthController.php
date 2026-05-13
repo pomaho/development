@@ -7,17 +7,22 @@ use App\Models\AmoOAuthConnection;
 use App\Services\Amo\AmoExternalOAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
 
 class AmoExternalOAuthController extends Controller
 {
-    public function install(AmoExternalOAuthService $service): View
+    public function install(AmoExternalOAuthService $service): Response
     {
-        return view('amo-oauth.external.install', [
-            'connection' => $service->createPending(),
+        $connection = $service->createPending();
+
+        return Inertia::render('OAuth/Public/Install', [
+            'connection' => [
+                'state' => $connection->state,
+                'redirect_uri' => $connection->redirect_uri,
+                'secrets_uri' => $connection->secrets_uri,
+            ],
             'external' => config('amo.external'),
         ]);
     }
@@ -104,15 +109,25 @@ class AmoExternalOAuthController extends Controller
         }
     }
 
-    public function callback(Request $request, AmoExternalOAuthService $service): View
+    public function callback(Request $request, AmoExternalOAuthService $service): Response
     {
         try {
             $connection = $service->receiveCallback($request->query());
+            $connection->load('account');
         } catch (Throwable $exception) {
             report($exception);
             $connection = null;
         }
 
-        return view('amo-oauth.external.callback', ['connection' => $connection]);
+        return Inertia::render('OAuth/Public/Callback', [
+            'connection' => $connection ? [
+                'status' => $connection->status,
+                'error_message' => $connection->error_message,
+                'account' => $connection->account ? [
+                    'name' => $connection->account->name,
+                ] : null,
+            ] : null,
+            'connectedStatus' => AmoOAuthConnection::STATUS_CONNECTED,
+        ]);
     }
 }

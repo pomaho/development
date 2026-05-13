@@ -629,8 +629,10 @@ class AuthAndAmoAccountsTest extends TestCase
     {
         $this->get('/install')
             ->assertOk()
-            ->assertSee('Установить интеграцию')
-            ->assertSee('Интеграция Sonic Expert');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('OAuth/Public/Install')
+                ->where('external.name', 'Sonic Expert')
+                ->has('connection.state'));
 
         $this->assertDatabaseHas('amo_oauth_connections', [
             'owner_user_id' => null,
@@ -690,7 +692,10 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->get('/amo-oauth/callback?state=state-token&code=auth-code&referer=client.amocrm.ru')
             ->assertOk()
-            ->assertSee('Интеграция Sonic Expert установлена');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('OAuth/Public/Callback')
+                ->where('connection.status', AmoOAuthConnection::STATUS_CONNECTED)
+                ->where('connection.account.name', 'Client Company'));
 
         $account = AmoAccount::query()->where('base_domain', 'client.amocrm.ru')->firstOrFail();
         $credential = $account->credentials()->firstOrFail();
