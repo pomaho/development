@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
 use App\Models\AmoOAuthConnection;
+use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
 use App\Models\ApiRequestLog;
 use App\Models\CrmEntitySnapshot;
@@ -332,6 +333,37 @@ class AuthAndAmoAccountsTest extends TestCase
         $content = $response->streamedContent();
         $this->assertStringContainsString('Visible Admin', $content);
         $this->assertStringNotContainsString('Hidden User', $content);
+    }
+
+    public function test_roles_page_renders_inertia_and_exports_roles(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        AmoRolesSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_role_id' => 100,
+            'name' => 'Managers',
+            'rights' => ['leads' => ['view' => 'A']],
+            'users' => [['id' => 1], ['id' => 2]],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/roles")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Roles')
+                ->where('account.name', 'Client')
+                ->where('roles.data.0.name', 'Managers')
+                ->where('roles.data.0.users_count', 2)
+                ->where('roles.data.0.rights.leads.view', 'A'));
+
+        $response = $this->actingAs($viewer)->get("/amo-accounts/{$account->id}/roles-export");
+
+        $response->assertOk();
+        $this->assertStringContainsString('Managers', $response->streamedContent());
     }
 
     public function test_leads_page_filters_and_exports_current_filter(): void
