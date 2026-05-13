@@ -9,15 +9,21 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
-    public function create(): View
+    public function create(): Response
     {
         abort_unless((bool) env('ENABLE_REGISTRATION', false), 404);
 
-        return view('auth.register');
+        return Inertia::render('Auth/Register', [
+            'links' => [
+                'login' => route('login'),
+                'register' => route('register'),
+            ],
+        ]);
     }
 
     public function store(Request $request): RedirectResponse

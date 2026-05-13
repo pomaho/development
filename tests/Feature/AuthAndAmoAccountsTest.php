@@ -35,6 +35,18 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->get('/dashboard')->assertRedirect('/login');
     }
 
+    public function test_login_page_renders_inertia_and_registration_stays_disabled(): void
+    {
+        $this->get('/login')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Auth/Login')
+                ->where('registrationEnabled', false)
+                ->has('links.login'));
+
+        $this->get('/register')->assertNotFound();
+    }
+
     public function test_inertia_react_stack_returns_shared_account_context(): void
     {
         Route::middleware('web')->get('/__inertia-probe/{amo_account}', fn (AmoAccount $amo_account) => Inertia::render('System/InertiaProbe', [
