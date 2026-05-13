@@ -11,19 +11,84 @@ use App\Models\CrmPipelineStatusSnapshot;
 use App\Services\Exports\TableExportService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoLeadsController extends Controller
 {
-    public function __invoke(Request $request, AmoAccount $amoAccount): View
+    public function __invoke(Request $request, AmoAccount $amoAccount): Response
     {
-        return view('amo-accounts.leads', [
-            'account' => $amoAccount,
-            'leads' => $this->filteredQuery($request, $amoAccount)->latest('entity_updated_at')->paginate(50)->withQueryString(),
-            'pipelines' => $this->pipelines($amoAccount),
-            'statuses' => $this->statuses($amoAccount),
-            'responsibles' => $this->responsibles($amoAccount),
+        $pipelines = $this->pipelines($amoAccount);
+        $statuses = $this->statuses($amoAccount);
+        $responsibles = $this->responsibles($amoAccount);
+
+        return Inertia::render('AmoAccounts/Leads', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
+            'leads' => $this->filteredQuery($request, $amoAccount)
+                ->latest('entity_updated_at')
+                ->paginate(50)
+                ->withQueryString()
+                ->through(fn (CrmEntitySnapshot $lead): array => [
+                    'id' => $lead->id,
+                    'external_id' => $lead->external_id,
+                    'name' => $lead->name,
+                    'pipeline_id' => $lead->pipeline_id,
+                    'pipeline_name' => $pipelines->firstWhere('amo_pipeline_id', (int) $lead->pipeline_id)?->name,
+                    'status_id' => $lead->status_id,
+                    'status_name' => $statuses
+                        ->where('amo_pipeline_id', (int) $lead->pipeline_id)
+                        ->firstWhere('amo_status_id', (int) $lead->status_id)?->name,
+                    'responsible_user_id' => $lead->responsible_user_id,
+                    'responsible_name' => $responsibles->firstWhere('id', $lead->responsible_user_id)['name'] ?? null,
+                    'entity_created_at' => $lead->entity_created_at?->toDateTimeString(),
+                    'entity_updated_at' => $lead->entity_updated_at?->toDateTimeString(),
+                    'price' => ($lead->raw ?? [])['price'] ?? null,
+                    'custom_fields_values' => $lead->custom_fields_values ?? [],
+                    'raw' => $lead->raw ?? [],
+                ]),
+            'pipelines' => $pipelines->map(fn (CrmPipelineSnapshot $pipeline): array => [
+                'id' => $pipeline->amo_pipeline_id,
+                'name' => $pipeline->name,
+            ]),
+            'statuses' => $statuses->map(fn (CrmPipelineStatusSnapshot $status): array => [
+                'id' => $status->amo_status_id,
+                'pipeline_id' => $status->amo_pipeline_id,
+                'name' => $status->name,
+            ]),
+            'responsibles' => $responsibles,
+            'filters' => [
+                'search' => $request->string('search')->toString(),
+                'pipeline_id' => $request->filled('pipeline_id') ? (string) $request->input('pipeline_id') : '',
+                'status_id' => $request->filled('status_id') ? (string) $request->input('status_id') : '',
+                'responsible_user_id' => $request->filled('responsible_user_id') ? (string) $request->input('responsible_user_id') : '',
+                'created_from' => $request->string('created_from')->toString(),
+                'created_to' => $request->string('created_to')->toString(),
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'export' => route('amo-accounts.leads.export', array_merge(['amo_account' => $amoAccount], $request->query())),
+                'reset' => route('amo-accounts.leads', $amoAccount),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 

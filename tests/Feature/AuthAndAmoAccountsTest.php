@@ -499,9 +499,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($viewer)
             ->get("/amo-accounts/{$account->id}/leads?pipeline_id=10")
             ->assertOk()
-            ->assertSee('Visible Lead')
-            ->assertSee('Sales Manager (55)')
-            ->assertDontSee('Hidden Lead');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Leads')
+                ->where('account.name', 'Client')
+                ->where('filters.pipeline_id', '10')
+                ->where('leads.data.0.name', 'Visible Lead')
+                ->where('leads.data.0.pipeline_name', 'Sales')
+                ->where('leads.data.0.status_name', 'New')
+                ->where('leads.data.0.responsible_name', 'Sales Manager')
+                ->where('leads.data.0.price', 5000)
+                ->missing('leads.data.1'));
 
         $response = $this->actingAs($viewer)
             ->get("/amo-accounts/{$account->id}/leads-export?pipeline_id=10");
