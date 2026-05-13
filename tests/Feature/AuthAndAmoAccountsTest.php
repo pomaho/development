@@ -141,10 +141,13 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->actingAs($viewer)->get("/amo-accounts/{$first->id}/dashboard")
             ->assertOk()
-            ->assertSee('Dashboard: First')
-            ->assertSee('first.amocrm.ru')
-            ->assertSee('Пользователи')
-            ->assertSee('Администраторы');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Dashboard/Index')
+                ->where('currentAccount.name', 'First')
+                ->where('currentAccount.base_domain', 'first.amocrm.ru')
+                ->where('summary.users_count', 1)
+                ->where('summary.admins_count', 1)
+                ->has('links.current_account.users'));
     }
 
     public function test_can_open_second_amo_account_page(): void
