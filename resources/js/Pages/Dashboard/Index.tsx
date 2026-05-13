@@ -1,4 +1,3 @@
-import { Link } from '@inertiajs/react';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout';
 import DashboardMetric from '../../Components/DashboardMetric';
 import type { AmoAccountSummary } from '../../types';
@@ -73,13 +72,13 @@ export default function DashboardIndex({ currentAccount, widgets, summary, recen
 
             {currentAccount && accountLinks ? (
                 <div className="mb-6 flex flex-wrap gap-3 text-sm">
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.show}>Карточка клиента</Link>
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.users}>Пользователи</Link>
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.roles}>Роли</Link>
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines}>Воронки</Link>
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.crm_audit}>CRM-аудит</Link>
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.integrations}>Интеграции</Link>
-                    <Link className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.widgets}>Dashboard-блоки</Link>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.show}>Карточка клиента</a>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.users}>Пользователи</a>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.roles}>Роли</a>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines}>Воронки</a>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.crm_audit}>CRM-аудит</a>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.integrations}>Интеграции</a>
+                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.widgets}>Dashboard-блоки</a>
                 </div>
             ) : null}
 

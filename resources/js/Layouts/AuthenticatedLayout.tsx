@@ -1,4 +1,4 @@
-import { Link, router, usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
     Activity,
     BarChart3,
@@ -6,7 +6,6 @@ import {
     BriefcaseBusiness,
     ChevronRight,
     ClipboardList,
-    Database,
     FileText,
     LayoutDashboard,
     LogOut,
@@ -100,7 +99,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
 
     const selectAccount = (value: string) => {
         if (value) {
-            router.visit(value);
+            window.location.href = value;
         }
     };
 
@@ -108,10 +107,10 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
         <div className="min-h-screen bg-slate-50 text-slate-900">
             <header className="border-b border-slate-200 bg-white">
                 <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-                    <Link className="flex items-center gap-2 text-lg font-semibold text-slate-950" href={links.dashboard}>
+                    <a className="flex items-center gap-2 text-lg font-semibold text-slate-950" href={links.dashboard}>
                         <Activity className="text-cyan-600" size={20} />
                         {title}
-                    </Link>
+                    </a>
 
                     <div className="flex flex-wrap items-center gap-3 text-sm">
                         <select
@@ -135,7 +134,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
                         {navLinks
                             .filter((link) => ! link.adminOnly || isAdmin)
                             .map((link) => (
-                                <Link
+                                <a
                                     key={link.label}
                                     className={link.active
                                         ? 'inline-flex items-center gap-1.5 rounded bg-blue-50 px-2 py-1 font-medium text-blue-800'
@@ -144,7 +143,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
                                 >
                                     {link.icon}
                                     {link.label}
-                                </Link>
+                                </a>
                             ))}
                         <span className="rounded bg-slate-100 px-2 py-1">{user?.role}</span>
                         <button
@@ -165,9 +164,9 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
                         <span className="inline-flex items-center gap-2" key={`${crumb.label}-${index}`}>
                             {index > 0 ? <ChevronRight size={14} /> : null}
                             {crumb.href && index < breadcrumbs.length - 1 ? (
-                                <Link className="text-blue-700 hover:text-blue-900" href={crumb.href}>
+                                <a className="text-blue-700 hover:text-blue-900" href={crumb.href}>
                                     {crumb.label}
-                                </Link>
+                                </a>
                             ) : (
                                 <span className={index === breadcrumbs.length - 1 ? 'font-medium text-slate-700' : ''}>{crumb.label}</span>
                             )}
