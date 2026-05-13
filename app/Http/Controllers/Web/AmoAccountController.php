@@ -11,14 +11,53 @@ use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoAccountController extends Controller
 {
-    public function index(): View
+    public function index(Request $request): Response
     {
-        return view('amo-accounts.index', [
-            'accounts' => AmoAccount::query()->with('credentials')->latest()->paginate(20),
+        return Inertia::render('AmoAccounts/Index', [
+            'accounts' => AmoAccount::query()
+                ->with('credentials')
+                ->latest()
+                ->paginate(20)
+                ->through(fn (AmoAccount $account): array => [
+                    'id' => $account->id,
+                    'name' => $account->name,
+                    'base_domain' => $account->base_domain,
+                    'auth_type' => $account->credentials?->auth_type,
+                    'is_active' => $account->is_active,
+                    'auth_status' => $account->auth_status,
+                    'last_successful_sync_at' => $account->last_successful_sync_at?->toDateTimeString(),
+                    'links' => [
+                        'show' => route('amo-accounts.show', $account),
+                        'edit' => route('amo-accounts.edit', $account),
+                        'test' => route('amo-accounts.test', $account),
+                        'sync' => route('amo-accounts.sync', $account),
+                        'destroy' => route('amo-accounts.destroy', $account),
+                    ],
+                    'can' => [
+                        'sync' => $request->user()?->can('sync', $account) ?? false,
+                        'update' => $request->user()?->can('update', $account) ?? false,
+                        'delete' => $request->user()?->can('delete', $account) ?? false,
+                    ],
+                ]),
+            'can' => [
+                'create' => $request->user()?->can('create', AmoAccount::class) ?? false,
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'install' => route('amo-oauth.install'),
+                'export' => route('amo-accounts.export'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'current_account' => null,
+            ],
         ]);
     }
 

@@ -54,11 +54,21 @@ class AuthAndAmoAccountsTest extends TestCase
     public function test_manual_amo_account_creation_is_not_available(): void
     {
         $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $account->credentials()->create(['auth_type' => AmoCredential::AUTH_LONG_LIVED, 'access_token' => 'abcdef1234567890']);
 
         $this->actingAs($admin)->get('/amo-accounts/create')->assertNotFound();
         $this->actingAs($admin)->get('/amo-accounts')
             ->assertOk()
-            ->assertDontSee('Добавить вручную');
+            ->assertDontSee('Добавить вручную')
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Index')
+                ->where('can.create', true)
+                ->where('accounts.data.0.name', 'Client')
+                ->where('accounts.data.0.base_domain', 'client.amocrm.ru')
+                ->where('accounts.data.0.auth_type', AmoCredential::AUTH_LONG_LIVED)
+                ->where('accounts.data.0.can.sync', true)
+                ->has('links.install'));
     }
 
     public function test_viewer_cannot_edit_amo_account(): void
