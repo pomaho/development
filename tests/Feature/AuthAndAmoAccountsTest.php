@@ -248,10 +248,12 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($viewer)
             ->get("/amo-accounts/{$account->id}/pipelines/10")
             ->assertOk()
-            ->assertSee('Sales')
-            ->assertSee('Настройки этапов')
-            ->assertSee('Project')
-            ->assertSee('Website');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Pipelines/Show')
+                ->where('details.pipeline.name', 'Sales')
+                ->where('details.stage_rows.0.required_fields.0.name', 'Project')
+                ->where('details.stage_rows.0.sources.0.name', 'Website')
+                ->where('can.sync', false));
     }
 
     public function test_pipeline_list_filters_archived_and_exports_current_filter(): void

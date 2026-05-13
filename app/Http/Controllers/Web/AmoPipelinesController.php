@@ -117,7 +117,7 @@ class AmoPipelinesController extends Controller
         ]);
     }
 
-    public function show(AmoAccount $amoAccount, int $pipelineId, AmoPipelinesService $pipelinesService): View
+    public function show(AmoAccount $amoAccount, int $pipelineId, AmoPipelinesService $pipelinesService): Response
     {
         $details = [
             'pipeline' => [],
@@ -141,11 +141,38 @@ class AmoPipelinesController extends Controller
             $error = $exception->getMessage();
         }
 
-        return view('amo-accounts.pipelines.show', [
-            'account' => $amoAccount,
+        return Inertia::render('AmoAccounts/Pipelines/Show', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
             'pipelineId' => $pipelineId,
             'details' => $details,
             'error' => $error,
+            'can' => [
+                'sync' => request()->user()?->can('sync', $amoAccount) ?? false,
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'clone' => route('amo-accounts.pipelines.clone-form', [$amoAccount, $pipelineId]),
+                'create' => route('amo-accounts.pipelines.create', $amoAccount),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 
