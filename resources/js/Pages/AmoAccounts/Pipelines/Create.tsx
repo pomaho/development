@@ -1,4 +1,6 @@
 import { usePage } from '@inertiajs/react';
+import { Plus } from 'lucide-react';
+import { useState } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
 type Account = {
@@ -12,6 +14,7 @@ type Status = {
     name: string;
     sort?: number;
     color?: string;
+    hint?: string;
 };
 
 type Props = {
@@ -56,7 +59,33 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
         sort: (defaultStatuses.length + offset + 1) * 10,
         color: '#98cbff',
     }));
-    const rows = [...defaultStatuses, ...extraRows];
+    const [rows, setRows] = useState<Status[]>([...defaultStatuses, ...extraRows]);
+
+    const updateRow = (index: number, field: keyof Status, value: string) => {
+        setRows((currentRows) => currentRows.map((row, rowIndex) => {
+            if (rowIndex !== index) {
+                return row;
+            }
+
+            return {
+                ...row,
+                [field]: field === 'sort' ? Number(value) : value,
+            };
+        }));
+    };
+
+    const addRowAfter = (index: number) => {
+        const nextSort = rows
+            .slice(0, index + 1)
+            .filter((row) => row.id === undefined)
+            .length * 10 + 10;
+
+        setRows((currentRows) => [
+            ...currentRows.slice(0, index + 1),
+            { name: '', sort: nextSort, color: '#98cbff', hint: '' },
+            ...currentRows.slice(index + 1),
+        ]);
+    };
 
     return (
         <AuthenticatedLayout
@@ -104,7 +133,7 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="text-slate-500">
-                                <tr><th className="py-2">Системный ID</th><th>Название</th><th>Сортировка</th><th>Цвет</th></tr>
+                                <tr><th className="py-2">Системный ID</th><th>Название</th><th>Подсказка</th><th>Сортировка</th><th>Цвет</th><th></th></tr>
                             </thead>
                             <tbody>
                                 {rows.map((status, index) => {
@@ -121,18 +150,31 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                                                 ) : <span className="text-slate-400">обычный</span>}
                                             </td>
                                             <td>
-                                                <input className="w-full rounded border-slate-300" defaultValue={status.name} name={`statuses[${index}][name]`} placeholder={status.name ? undefined : 'Дополнительный этап'} />
+                                                <input className="w-full rounded border-slate-300" name={`statuses[${index}][name]`} onChange={(event) => updateRow(index, 'name', event.target.value)} placeholder={status.name ? undefined : 'Дополнительный этап'} value={status.name} />
                                                 <FieldError name={`statuses.${index}.name`} />
                                             </td>
                                             <td>
                                                 {isSystem ? <span className="text-slate-400">системная</span> : (
-                                                    <input className="w-28 rounded border-slate-300" defaultValue={status.sort} max={9999} min={1} name={`statuses[${index}][sort]`} type="number" />
+                                                    <>
+                                                        <textarea className="min-w-64 rounded border-slate-300" name={`statuses[${index}][hint]`} onChange={(event) => updateRow(index, 'hint', event.target.value)} placeholder="Подсказка для менеджера" rows={2} value={status.hint || ''} />
+                                                        <FieldError name={`statuses.${index}.hint`} />
+                                                    </>
+                                                )}
+                                            </td>
+                                            <td>
+                                                {isSystem ? <span className="text-slate-400">системная</span> : (
+                                                    <input className="w-28 rounded border-slate-300" max={9999} min={1} name={`statuses[${index}][sort]`} onChange={(event) => updateRow(index, 'sort', event.target.value)} type="number" value={status.sort || ''} />
                                                 )}
                                             </td>
                                             <td>
                                                 {isSystem ? <span className="text-slate-400">amoCRM</span> : (
-                                                    <input className="h-9 w-16 rounded border-slate-300" defaultValue={status.color || '#98cbff'} name={`statuses[${index}][color]`} type="color" />
+                                                    <input className="h-9 w-16 rounded border-slate-300" name={`statuses[${index}][color]`} onChange={(event) => updateRow(index, 'color', event.target.value)} type="color" value={status.color || '#98cbff'} />
                                                 )}
+                                            </td>
+                                            <td className="text-right">
+                                                <button aria-label="Добавить этап после этой строки" className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-700" onClick={() => addRowAfter(index)} title="Добавить этап после этой строки" type="button">
+                                                    <Plus size={16} />
+                                                </button>
                                             </td>
                                         </tr>
                                     );

@@ -209,6 +209,23 @@ class AuthAndAmoAccountsTest extends TestCase
         $admin = User::factory()->admin()->create();
         $viewer = User::factory()->create();
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $createPayload = null;
+        $pipelinesService = Mockery::mock(AmoPipelinesService::class);
+        $pipelinesService->shouldReceive('defaultStatuses')
+            ->once()
+            ->andReturn([
+                ['name' => 'Первичный контакт', 'sort' => 10, 'color' => '#98cbff'],
+                ['id' => 142, 'name' => 'Успешно реализовано'],
+            ]);
+        $pipelinesService->shouldReceive('createPipeline')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), Mockery::on(function (array $payload) use (&$createPayload): bool {
+                $createPayload = $payload;
+
+                return true;
+            }))
+            ->andReturn(['_embedded' => ['pipelines' => [['id' => 123]]]]);
+        $this->app->instance(AmoPipelinesService::class, $pipelinesService);
 
         $this->actingAs($admin)
             ->get("/amo-accounts/{$account->id}/pipelines/create")
@@ -218,6 +235,23 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('account.name', 'Client')
                 ->where('defaultStatuses.0.name', 'Первичный контакт')
                 ->has('links.store'));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/pipelines", [
+                'name' => 'Pipeline',
+                'sort' => 20,
+                'is_unsorted_on' => '1',
+                'statuses' => [
+                    ['name' => 'Первичный контакт', 'hint' => 'Проверить источник и бюджет', 'sort' => 10, 'color' => '#99ccff'],
+                    ['id' => 142, 'name' => 'Успешно реализовано'],
+                ],
+            ])
+            ->assertRedirect(route('amo-accounts.pipelines.index', $account));
+
+        $this->assertArrayHasKey('descriptions', $createPayload['statuses'][0], var_export($createPayload, true));
+        $this->assertSame('newbie', $createPayload['statuses'][0]['descriptions'][0]['level']);
+        $this->assertSame('Проверить источник и бюджет', $createPayload['statuses'][0]['descriptions'][0]['description']);
+        $this->assertArrayNotHasKey('hint', $createPayload['statuses'][0]);
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/pipelines", [

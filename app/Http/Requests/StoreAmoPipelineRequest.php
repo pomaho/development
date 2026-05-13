@@ -21,6 +21,7 @@ class StoreAmoPipelineRequest extends FormRequest
             'statuses' => ['required', 'array', 'min:1', 'max:98'],
             'statuses.*.id' => ['nullable', 'integer', 'in:142,143'],
             'statuses.*.name' => ['nullable', 'string', 'max:255'],
+            'statuses.*.hint' => ['nullable', 'string', 'max:1000'],
             'statuses.*.sort' => ['nullable', 'integer', 'min:1', 'max:9999'],
             'statuses.*.color' => ['nullable', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ];
@@ -31,8 +32,31 @@ class StoreAmoPipelineRequest extends FormRequest
         $data = $this->validated();
         $data['is_main'] = $this->boolean('is_main');
         $data['is_unsorted_on'] = $this->boolean('is_unsorted_on', true);
-        $data['statuses'] = collect($data['statuses'])
+        $data['statuses'] = collect(array_values($this->input('statuses', [])))
             ->filter(fn (array $status) => filled($status['name'] ?? null))
+            ->map(function (array $submittedStatus): array {
+                $status = [
+                    'name' => $submittedStatus['name'],
+                ];
+
+                if (isset($submittedStatus['id']) && in_array((int) $submittedStatus['id'], [142, 143], true)) {
+                    $status['id'] = (int) $submittedStatus['id'];
+
+                    return $status;
+                }
+
+                $status['sort'] = isset($submittedStatus['sort']) ? (int) $submittedStatus['sort'] : null;
+                $status['color'] = $submittedStatus['color'] ?? null;
+
+                if (filled($submittedStatus['hint'] ?? null)) {
+                    $status['descriptions'] = [[
+                        'level' => 'newbie',
+                        'description' => $submittedStatus['hint'],
+                    ]];
+                }
+
+                return $status;
+            })
             ->values()
             ->all();
 

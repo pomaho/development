@@ -75,6 +75,7 @@ class AmoServicesTest extends TestCase
                     && $payload[0]['is_unsorted_on'] === true
                     && $payload[0]['_embedded']['statuses'][0]['name'] === 'Первичный контакт'
                     && $payload[0]['_embedded']['statuses'][0]['color'] === '#98cbff'
+                    && $payload[0]['_embedded']['statuses'][0]['descriptions'][0]['description'] === 'Проверить источник'
                     && $payload[0]['_embedded']['statuses'][1]['id'] === 142;
             }))
             ->andReturn(['_embedded' => ['pipelines' => [['id' => 123]]]]);
@@ -85,7 +86,7 @@ class AmoServicesTest extends TestCase
             'is_main' => false,
             'is_unsorted_on' => true,
             'statuses' => [
-                ['name' => 'Первичный контакт', 'sort' => 10, 'color' => '#99ccff'],
+                ['name' => 'Первичный контакт', 'sort' => 10, 'color' => '#99ccff', 'descriptions' => [['level' => 'newbie', 'description' => 'Проверить источник']]],
                 ['id' => 142, 'name' => 'Успешно реализовано'],
             ],
         ]);
