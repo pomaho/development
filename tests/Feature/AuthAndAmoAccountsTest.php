@@ -698,4 +698,43 @@ class AuthAndAmoAccountsTest extends TestCase
             'status' => AmoOAuthConnection::STATUS_CONNECTED,
         ]);
     }
+
+    public function test_admin_oauth_pages_render_inertia_without_secrets(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $connection = AmoOAuthConnection::query()->create([
+            'owner_user_id' => $admin->id,
+            'amo_account_id' => $account->id,
+            'state' => 'state-token',
+            'name' => 'OAuth Client',
+            'base_domain' => 'client.amocrm.ru',
+            'client_id' => 'client-id',
+            'client_secret' => 'client-secret',
+            'redirect_uri' => 'https://app.example.test/amo-oauth/callback',
+            'secrets_uri' => 'https://app.example.test/amo-oauth/external/secrets',
+            'scopes' => ['crm'],
+            'status' => AmoOAuthConnection::STATUS_CONNECTED,
+            'expires_at' => now()->addMinutes(30),
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/amo-oauth/external')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('OAuth/External/Index')
+                ->where('connections.data.0.name', 'OAuth Client')
+                ->where('connections.data.0.account.name', 'Client'));
+
+        $this->actingAs($admin)
+            ->get("/amo-oauth/external/{$connection->id}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('OAuth/External/Show')
+                ->where('connection.name', 'OAuth Client')
+                ->where('connection.state', 'state-token')
+                ->where('connection.account.name', 'Client'))
+            ->assertDontSee('client-secret')
+            ->assertDontSee('client-id');
+    }
 }
