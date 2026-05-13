@@ -11,6 +11,8 @@ use App\Models\ApiRequestLog;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
+use App\Models\DashboardWidget;
+use App\Models\IntegrationModule;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoOAuthTokenExchanger;
@@ -364,6 +366,74 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $response->assertOk();
         $this->assertStringContainsString('Managers', $response->streamedContent());
+    }
+
+    public function test_integrations_and_widgets_pages_render_inertia(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        IntegrationModule::query()->create([
+            'code' => 'users_audit',
+            'name' => 'Users audit',
+            'description' => 'Audit users',
+            'is_enabled' => true,
+        ]);
+
+        DashboardWidget::query()->create([
+            'code' => 'users_count',
+            'name' => 'Users count',
+            'component_key' => 'metric.users',
+            'sort_order' => 10,
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/integrations")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Integrations')
+                ->where('account.name', 'Client')
+                ->where('modules.0.code', 'users_audit')
+                ->where('modules.0.is_enabled', true)
+                ->where('can.sync', true)
+                ->has('links.current_account.users'));
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/widgets")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Widgets')
+                ->where('account.name', 'Client')
+                ->where('widgets.0.code', 'users_count')
+                ->where('widgets.0.component_key', 'metric.users'));
+    }
+
+    public function test_api_logs_page_renders_inertia_and_hides_secret_headers(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        ApiRequestLog::query()->create([
+            'amo_account_id' => $account->id,
+            'method' => 'GET',
+            'url' => 'https://client.amocrm.ru/api/v4/account',
+            'status_code' => 200,
+            'duration_ms' => 123,
+            'request_payload' => ['Authorization' => '[redacted]'],
+            'response_payload' => ['id' => 123],
+        ]);
+
+        $this->actingAs($viewer)
+            ->get('/logs/api')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Logs/Api')
+                ->where('logs.data.0.account_name', 'Client')
+                ->where('logs.data.0.method', 'GET')
+                ->where('logs.data.0.response_payload.id', 123)
+                ->has('links.export'))
+            ->assertDontSee('Authorization');
     }
 
     public function test_leads_page_filters_and_exports_current_filter(): void
