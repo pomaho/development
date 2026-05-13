@@ -82,15 +82,64 @@ class AmoAccountController extends Controller
         ]));
     }
 
-    public function show(AmoAccount $amoAccount): View
+    public function show(AmoAccount $amoAccount): Response
     {
         $amoAccount->load('credentials');
 
-        return view('amo-accounts.show', [
-            'account' => $amoAccount,
-            'usersCount' => $amoAccount->usersSnapshots()->count(),
-            'adminsCount' => $amoAccount->usersSnapshots()->where('is_admin', true)->count(),
-            'logs' => $amoAccount->apiRequestLogs()->latest()->limit(15)->get(),
+        return Inertia::render('AmoAccounts/Show', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+                'account_id' => $amoAccount->account_id,
+                'is_active' => $amoAccount->is_active,
+                'auth_status' => $amoAccount->auth_status,
+                'auth_type' => $amoAccount->credentials?->auth_type,
+                'last_successful_sync_at' => $amoAccount->last_successful_sync_at?->toDateTimeString(),
+                'settings' => is_array($amoAccount->settings) ? $amoAccount->settings : [],
+            ],
+            'summary' => [
+                'users_count' => $amoAccount->usersSnapshots()->count(),
+                'admins_count' => $amoAccount->usersSnapshots()->where('is_admin', true)->count(),
+            ],
+            'logs' => $amoAccount->apiRequestLogs()
+                ->latest()
+                ->limit(15)
+                ->get()
+                ->map(fn ($log): array => [
+                    'id' => $log->id,
+                    'created_at' => $log->created_at?->toDateTimeString(),
+                    'method' => $log->method,
+                    'status_code' => $log->status_code,
+                    'url' => $log->url,
+                    'error_message' => $log->error_message,
+                ]),
+            'can' => [
+                'sync' => request()->user()?->can('sync', $amoAccount) ?? false,
+                'update' => request()->user()?->can('update', $amoAccount) ?? false,
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'edit' => route('amo-accounts.edit', $amoAccount),
+                    'test' => route('amo-accounts.test', $amoAccount),
+                    'sync' => route('amo-accounts.sync', $amoAccount),
+                    'deactivate' => route('amo-accounts.deactivate', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 

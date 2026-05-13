@@ -174,9 +174,15 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($viewer)
             ->get("/amo-accounts/{$second->id}")
             ->assertOk()
-            ->assertSee('Second')
-            ->assertSee('second.amocrm.ru')
-            ->assertSee('Second Company');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Show')
+                ->where('account.name', 'Second')
+                ->where('account.base_domain', 'second.amocrm.ru')
+                ->where('account.settings.company_name', 'Second Company')
+                ->where('account.settings.timezone', 'Europe/Moscow')
+                ->where('account.auth_type', AmoCredential::AUTH_OAUTH)
+                ->where('can.update', false)
+                ->has('links.current_account.pipelines'));
     }
 
     public function test_admin_can_open_pipeline_create_form_and_viewer_cannot_create_pipeline(): void
