@@ -598,7 +598,12 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($admin)
             ->get("/amo-accounts/{$account->id}/crm-audit")
             ->assertOk()
-            ->assertSee('CRM-аудит');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/CrmAudit/Index')
+                ->where('account.name', 'Client')
+                ->where('can.sync', true)
+                ->has('summary')
+                ->has('links.sync'));
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/crm-audit/sync", [
