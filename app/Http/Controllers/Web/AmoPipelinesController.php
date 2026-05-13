@@ -11,11 +11,13 @@ use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoPipelinesController extends Controller
 {
-    public function index(Request $request, AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): View
+    public function index(Request $request, AmoAccount $amoAccount, AmoPipelinesService $pipelinesService): Response
     {
         $pipelines = [];
         $error = null;
@@ -26,10 +28,55 @@ class AmoPipelinesController extends Controller
             $error = $exception->getMessage();
         }
 
-        return view('amo-accounts.pipelines.index', [
-            'account' => $amoAccount,
-            'pipelines' => $pipelines,
+        return Inertia::render('AmoAccounts/Pipelines/Index', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
+            'pipelines' => collect($pipelines)->map(fn (array $pipeline): array => [
+                'id' => $pipeline['id'] ?? null,
+                'name' => $pipeline['name'] ?? '-',
+                'is_main' => (bool) ($pipeline['is_main'] ?? false),
+                'is_unsorted_on' => (bool) ($pipeline['is_unsorted_on'] ?? false),
+                'is_archive' => (bool) ($pipeline['is_archive'] ?? false),
+                'statuses' => collect($pipeline['_embedded']['statuses'] ?? [])->map(fn (array $status): array => [
+                    'id' => $status['id'] ?? null,
+                    'name' => $status['name'] ?? '-',
+                ])->values(),
+                'links' => isset($pipeline['id']) ? [
+                    'show' => route('amo-accounts.pipelines.show', [$amoAccount, $pipeline['id']]),
+                    'clone' => route('amo-accounts.pipelines.clone-form', [$amoAccount, $pipeline['id']]),
+                ] : null,
+            ])->values(),
             'error' => $error,
+            'filters' => [
+                'activity' => $request->string('activity')->toString(),
+            ],
+            'can' => [
+                'sync' => $request->user()?->can('sync', $amoAccount) ?? false,
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'export' => route('amo-accounts.pipelines.export', array_merge(['amo_account' => $amoAccount], $request->query())),
+                'reset' => route('amo-accounts.pipelines.index', $amoAccount),
+                'create' => route('amo-accounts.pipelines.create', $amoAccount),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 

@@ -272,8 +272,13 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->actingAs($viewer)
             ->get("/amo-accounts/{$account->id}/pipelines?activity=active")
             ->assertOk()
-            ->assertSee('Active Pipeline')
-            ->assertDontSee('Archived Pipeline');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Pipelines/Index')
+                ->where('account.name', 'Client')
+                ->where('filters.activity', 'active')
+                ->where('pipelines.0.name', 'Active Pipeline')
+                ->where('pipelines.0.is_archive', false)
+                ->missing('pipelines.1'));
 
         $response = $this->actingAs($viewer)
             ->get("/amo-accounts/{$account->id}/pipelines-export?activity=archived");
