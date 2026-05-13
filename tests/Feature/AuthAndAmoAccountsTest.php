@@ -309,6 +309,17 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => ['id' => 100, 'price' => 5000],
             'synced_at' => now(),
         ]);
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 55,
+            'name' => 'Sales Manager',
+            'email' => 'manager@example.test',
+            'rights' => [],
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
         CrmEntitySnapshot::query()->create([
             'amo_account_id' => $account->id,
             'entity_type' => 'leads',
@@ -327,6 +338,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->get("/amo-accounts/{$account->id}/leads?pipeline_id=10")
             ->assertOk()
             ->assertSee('Visible Lead')
+            ->assertSee('Sales Manager (55)')
             ->assertDontSee('Hidden Lead');
 
         $response = $this->actingAs($viewer)
@@ -335,6 +347,7 @@ class AuthAndAmoAccountsTest extends TestCase
         $response->assertOk();
         $content = $response->streamedContent();
         $this->assertStringContainsString('Visible Lead', $content);
+        $this->assertStringContainsString('Sales Manager (55)', $content);
         $this->assertStringContainsString('5000', $content);
         $this->assertStringNotContainsString('Hidden Lead', $content);
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccount;
+use App\Models\AmoUsersSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
@@ -55,7 +56,7 @@ class AmoLeadsController extends Controller
                 $this->pipelineName($amoAccount, $lead->pipeline_id),
                 $lead->status_id,
                 $this->statusName($amoAccount, $lead->pipeline_id, $lead->status_id),
-                $lead->responsible_user_id,
+                $this->responsibleName($amoAccount, $lead->responsible_user_id),
                 $lead->entity_created_at,
                 $lead->entity_updated_at,
                 $lead->entity_closed_at,
@@ -121,13 +122,24 @@ class AmoLeadsController extends Controller
 
     private function responsibles(AmoAccount $account)
     {
-        return CrmEntitySnapshot::query()
+        $responsibleIds = CrmEntitySnapshot::query()
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->whereNotNull('responsible_user_id')
             ->distinct()
             ->orderBy('responsible_user_id')
             ->pluck('responsible_user_id');
+
+        $users = AmoUsersSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereIn('amo_user_id', $responsibleIds)
+            ->get()
+            ->keyBy('amo_user_id');
+
+        return $responsibleIds->map(fn ($responsibleId): array => [
+            'id' => $responsibleId,
+            'name' => $users->get($responsibleId)?->name,
+        ]);
     }
 
     private function pipelineName(AmoAccount $account, mixed $pipelineId): ?string
@@ -140,5 +152,19 @@ class AmoLeadsController extends Controller
         return $this->statuses($account)
             ->where('amo_pipeline_id', (int) $pipelineId)
             ->firstWhere('amo_status_id', (int) $statusId)?->name;
+    }
+
+    private function responsibleName(AmoAccount $account, mixed $responsibleId): ?string
+    {
+        if (! $responsibleId) {
+            return null;
+        }
+
+        $user = AmoUsersSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('amo_user_id', $responsibleId)
+            ->first();
+
+        return $user ? "{$user->name} ({$responsibleId})" : (string) $responsibleId;
     }
 }

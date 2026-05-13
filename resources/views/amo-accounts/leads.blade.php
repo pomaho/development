@@ -27,8 +27,10 @@
     </select>
     <select name="responsible_user_id" class="rounded border-slate-300">
         <option value="">Все ответственные</option>
-        @foreach ($responsibles as $responsibleId)
-            <option value="{{ $responsibleId }}" @selected((string) request('responsible_user_id') === (string) $responsibleId)>{{ $responsibleId }}</option>
+        @foreach ($responsibles as $responsible)
+            <option value="{{ $responsible['id'] }}" @selected((string) request('responsible_user_id') === (string) $responsible['id'])>
+                {{ $responsible['name'] ? $responsible['name'].' ('.$responsible['id'].')' : $responsible['id'] }}
+            </option>
         @endforeach
     </select>
     <input name="created_from" type="date" value="{{ request('created_from') }}" class="rounded border-slate-300">
@@ -49,6 +51,7 @@
                 @php
                     $pipeline = $pipelines->firstWhere('amo_pipeline_id', (int) $lead->pipeline_id);
                     $status = $statuses->where('amo_pipeline_id', (int) $lead->pipeline_id)->firstWhere('amo_status_id', (int) $lead->status_id);
+                    $responsible = $responsibles->firstWhere('id', $lead->responsible_user_id);
                     $raw = $lead->raw ?? [];
                 @endphp
                 <tr class="border-t border-slate-100 align-top">
@@ -56,7 +59,7 @@
                     <td class="font-medium">{{ $lead->name }}</td>
                     <td>{{ $pipeline?->name ?? $lead->pipeline_id }}</td>
                     <td>{{ $status?->name ?? $lead->status_id }}</td>
-                    <td>{{ $lead->responsible_user_id }}</td>
+                    <td>{{ ($responsible['name'] ?? null) ? $responsible['name'].' ('.$lead->responsible_user_id.')' : $lead->responsible_user_id }}</td>
                     <td>{{ $lead->entity_created_at }}</td>
                     <td>{{ $lead->entity_updated_at }}</td>
                     <td>{{ $raw['price'] ?? '-' }}</td>
