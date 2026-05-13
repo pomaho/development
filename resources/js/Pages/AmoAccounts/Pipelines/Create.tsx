@@ -1,5 +1,5 @@
 import { usePage } from '@inertiajs/react';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
@@ -87,6 +87,28 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
         ]);
     };
 
+    const addRowToEnd = () => {
+        const lastRegularSort = Math.max(
+            0,
+            ...rows
+                .filter((row) => row.id === undefined)
+                .map((row) => Number(row.sort) || 0),
+        );
+
+        setRows((currentRows) => [
+            ...currentRows,
+            { name: '', sort: lastRegularSort + 10, color: '#98cbff', hint: '' },
+        ]);
+    };
+
+    const removeRow = (index: number) => {
+        if (rows[index]?.id !== undefined) {
+            return;
+        }
+
+        setRows((currentRows) => currentRows.filter((_, rowIndex) => rowIndex !== index));
+    };
+
     return (
         <AuthenticatedLayout
             title="amo Integrator Hub"
@@ -129,52 +151,73 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                 </div>
 
                 <div>
-                    <h2 className="mb-3 font-semibold">Этапы</h2>
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 className="font-semibold">Этапы</h2>
+                            <div className="text-sm text-slate-500">Обычные этапы можно добавлять после любой строки, удалять и снабжать подсказками для менеджеров.</div>
+                        </div>
+                        <button className="inline-flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:border-blue-400 hover:text-blue-700" onClick={addRowToEnd} type="button">
+                            <Plus size={16} />
+                            Добавить этап
+                        </button>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="text-slate-500">
-                                <tr><th className="py-2">Системный ID</th><th>Название</th><th>Подсказка</th><th>Сортировка</th><th>Цвет</th><th></th></tr>
+                                <tr>
+                                    <th className="py-2">Тип</th>
+                                    <th>Название</th>
+                                    <th>Подсказка</th>
+                                    <th>Сортировка</th>
+                                    <th>Цвет</th>
+                                    <th className="text-right">Действия</th>
+                                </tr>
                             </thead>
                             <tbody>
                                 {rows.map((status, index) => {
                                     const isSystem = status.id !== undefined;
 
                                     return (
-                                        <tr className="border-t border-slate-100" key={`${status.id || 'custom'}-${index}`}>
-                                            <td className="py-2">
+                                        <tr className="align-top border-t border-slate-100" key={`${status.id || 'custom'}-${index}`}>
+                                            <td className="py-3 pr-3">
                                                 {isSystem ? (
                                                     <>
                                                         <input name={`statuses[${index}][id]`} type="hidden" value={status.id} />
                                                         <span className="rounded bg-slate-100 px-2 py-1 text-xs">{status.id}</span>
                                                     </>
-                                                ) : <span className="text-slate-400">обычный</span>}
+                                                ) : <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">обычный</span>}
                                             </td>
-                                            <td>
+                                            <td className="py-3 pr-3">
                                                 <input className="w-full rounded border-slate-300" name={`statuses[${index}][name]`} onChange={(event) => updateRow(index, 'name', event.target.value)} placeholder={status.name ? undefined : 'Дополнительный этап'} value={status.name} />
                                                 <FieldError name={`statuses.${index}.name`} />
                                             </td>
-                                            <td>
-                                                {isSystem ? <span className="text-slate-400">системная</span> : (
+                                            <td className="py-3 pr-3">
+                                                {isSystem ? <span className="inline-block rounded bg-slate-50 px-2 py-1 text-xs text-slate-400">системная</span> : (
                                                     <>
-                                                        <textarea className="min-w-64 rounded border-slate-300" name={`statuses[${index}][hint]`} onChange={(event) => updateRow(index, 'hint', event.target.value)} placeholder="Подсказка для менеджера" rows={2} value={status.hint || ''} />
+                                                        <textarea className="min-w-72 rounded border-slate-300" name={`statuses[${index}][hint]`} onChange={(event) => updateRow(index, 'hint', event.target.value)} placeholder="Подсказка для менеджера" rows={2} value={status.hint || ''} />
                                                         <FieldError name={`statuses.${index}.hint`} />
                                                     </>
                                                 )}
                                             </td>
-                                            <td>
-                                                {isSystem ? <span className="text-slate-400">системная</span> : (
+                                            <td className="py-3 pr-3">
+                                                {isSystem ? <span className="inline-block rounded bg-slate-50 px-2 py-1 text-xs text-slate-400">системная</span> : (
                                                     <input className="w-28 rounded border-slate-300" max={9999} min={1} name={`statuses[${index}][sort]`} onChange={(event) => updateRow(index, 'sort', event.target.value)} type="number" value={status.sort || ''} />
                                                 )}
                                             </td>
-                                            <td>
-                                                {isSystem ? <span className="text-slate-400">amoCRM</span> : (
+                                            <td className="py-3 pr-3">
+                                                {isSystem ? <span className="inline-block rounded bg-slate-50 px-2 py-1 text-xs text-slate-400">amoCRM</span> : (
                                                     <input className="h-9 w-16 rounded border-slate-300" name={`statuses[${index}][color]`} onChange={(event) => updateRow(index, 'color', event.target.value)} type="color" value={status.color || '#98cbff'} />
                                                 )}
                                             </td>
-                                            <td className="text-right">
-                                                <button aria-label="Добавить этап после этой строки" className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-700" onClick={() => addRowAfter(index)} title="Добавить этап после этой строки" type="button">
-                                                    <Plus size={16} />
-                                                </button>
+                                            <td className="py-3 text-right">
+                                                <div className="inline-flex items-start gap-2">
+                                                    <button aria-label="Добавить этап после этой строки" className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-700" onClick={() => addRowAfter(index)} title="Добавить этап после этой строки" type="button">
+                                                        <Plus size={16} />
+                                                    </button>
+                                                    <button aria-label="Удалить этап" className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-slate-500 hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSystem} onClick={() => removeRow(index)} title={isSystem ? 'Системный этап нельзя удалить' : 'Удалить этап'} type="button">
+                                                        <Trash2 size={16} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
