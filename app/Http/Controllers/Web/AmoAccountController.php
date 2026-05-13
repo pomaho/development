@@ -10,7 +10,6 @@ use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -143,13 +142,45 @@ class AmoAccountController extends Controller
         ]);
     }
 
-    public function edit(AmoAccount $amoAccount): View
+    public function edit(AmoAccount $amoAccount): Response
     {
         $this->authorize('update', $amoAccount);
+        $amoAccount->load('credentials');
 
-        return view('amo-accounts.edit', [
-            'account' => $amoAccount->load('credentials'),
-            'credential' => $amoAccount->credentials,
+        return Inertia::render('AmoAccounts/Edit', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+                'is_active' => $amoAccount->is_active,
+                'notes' => $amoAccount->notes,
+            ],
+            'credential' => [
+                'auth_type' => $amoAccount->credentials?->auth_type,
+                'masked_access_token' => $amoAccount->credentials?->maskedAccessToken(),
+                'redirect_uri' => $amoAccount->credentials?->redirect_uri,
+                'token_expires_at' => $amoAccount->credentials?->token_expires_at?->format('Y-m-d\TH:i'),
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'edit' => route('amo-accounts.edit', $amoAccount),
+                    'update' => route('amo-accounts.update', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 

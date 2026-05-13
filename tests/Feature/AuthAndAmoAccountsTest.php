@@ -107,8 +107,12 @@ class AuthAndAmoAccountsTest extends TestCase
         $account->credentials()->create(['auth_type' => AmoCredential::AUTH_LONG_LIVED, 'access_token' => 'abcdef1234567890']);
 
         $this->actingAs($admin)->get("/amo-accounts/{$account->id}/edit")
-            ->assertSee('abcdef******7890')
-            ->assertDontSee('value="abcdef1234567890"', false);
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Edit')
+                ->where('credential.masked_access_token', 'abcdef******7890')
+                ->where('account.name', 'Client'))
+            ->assertDontSee('abcdef1234567890');
     }
 
     public function test_secrets_are_not_stored_in_api_logs(): void
