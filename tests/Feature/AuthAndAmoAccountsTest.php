@@ -16,6 +16,9 @@ use App\Services\Amo\AmoOAuthTokenExchanger;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
+use Inertia\Inertia;
+use Inertia\Testing\AssertableInertia;
 use League\OAuth2\Client\Token\AccessToken;
 use Mockery;
 use Tests\TestCase;
@@ -27,6 +30,25 @@ class AuthAndAmoAccountsTest extends TestCase
     public function test_guest_cannot_see_dashboard(): void
     {
         $this->get('/dashboard')->assertRedirect('/login');
+    }
+
+    public function test_inertia_react_stack_returns_shared_account_context(): void
+    {
+        Route::middleware('web')->get('/__inertia-probe/{amo_account}', fn (AmoAccount $amo_account) => Inertia::render('System/InertiaProbe', [
+            'probe' => true,
+        ]));
+
+        $user = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $this->actingAs($user)
+            ->get("/__inertia-probe/{$account->id}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('System/InertiaProbe')
+                ->where('currentAmoAccount.id', $account->id)
+                ->where('auth.user.email', $user->email)
+                ->where('probe', true));
     }
 
     public function test_manual_amo_account_creation_is_not_available(): void
