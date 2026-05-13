@@ -7,20 +7,66 @@ use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
 use App\Services\Exports\TableExportService;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoUsersController extends Controller
 {
-    public function __invoke(Request $request, AmoAccount $amoAccount): View
+    public function __invoke(Request $request, AmoAccount $amoAccount): Response
     {
         $query = $this->filteredQuery($request, $amoAccount)->latest('synced_at');
 
-        return view('amo-accounts.users', [
-            'account' => $amoAccount,
-            'users' => $query->paginate(50)->withQueryString(),
+        return Inertia::render('AmoAccounts/Users', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
+            'users' => $query
+                ->paginate(50)
+                ->withQueryString()
+                ->through(fn (AmoUsersSnapshot $user): array => [
+                    'id' => $user->id,
+                    'amo_user_id' => $user->amo_user_id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role_id' => $user->role_id,
+                    'group_id' => $user->group_id,
+                    'is_admin' => $user->is_admin,
+                    'is_active' => $user->is_active,
+                    'rights' => $user->rights ?? [],
+                    'raw' => $user->raw ?? [],
+                    'synced_at' => $user->synced_at?->toDateTimeString(),
+                ]),
             'roles' => $amoAccount->usersSnapshots()->whereNotNull('role_id')->distinct()->orderBy('role_id')->pluck('role_id'),
             'groups' => $amoAccount->usersSnapshots()->whereNotNull('group_id')->distinct()->orderBy('group_id')->pluck('group_id'),
+            'filters' => [
+                'search' => $request->string('search')->toString(),
+                'active' => $request->filled('active') ? $request->input('active') : '',
+                'role_id' => $request->filled('role_id') ? (string) $request->input('role_id') : '',
+                'group_id' => $request->filled('group_id') ? (string) $request->input('group_id') : '',
+                'admins' => $request->boolean('admins'),
+            ],
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'export' => route('amo-accounts.users.export', array_merge(['amo_account' => $amoAccount], $request->query())),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
         ]);
     }
 

@@ -292,10 +292,12 @@ class AuthAndAmoAccountsTest extends TestCase
             'amo_user_id' => 1,
             'name' => 'Visible Admin',
             'email' => 'visible@example.test',
-            'rights' => ['is_admin' => true],
+            'rights' => ['is_admin' => true, 'leads' => ['view' => 'A']],
             'is_admin' => true,
             'is_active' => true,
-            'raw' => [],
+            'role_id' => 10,
+            'group_id' => 20,
+            'raw' => ['id' => 1, 'name' => 'Visible Admin'],
             'synced_at' => now(),
         ]);
         AmoUsersSnapshot::query()->create([
@@ -309,6 +311,19 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => [],
             'synced_at' => now(),
         ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/users?admins=1")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Users')
+                ->where('account.name', 'Client')
+                ->where('filters.admins', true)
+                ->where('users.data.0.name', 'Visible Admin')
+                ->where('users.data.0.role_id', 10)
+                ->where('users.data.0.group_id', 20)
+                ->where('users.data.0.rights.leads.view', 'A')
+                ->missing('users.data.1'));
 
         $response = $this->actingAs($viewer)
             ->get("/amo-accounts/{$account->id}/users-export?admins=1");
