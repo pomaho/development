@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/amo-accounts/{amo_account}/catalogs', [AmoCatalogsController::class, 'storeCatalog'])->name('amo-accounts.catalogs.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/elements', [AmoCatalogsController::class, 'storeElements'])->name('amo-accounts.catalogs.elements.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/chained-list-fields', [AmoCatalogsController::class, 'storeChainedListField'])->name('amo-accounts.catalogs.chained-list-fields.store');
+    Route::post('/amo-accounts/{amo_account}/catalogs/enum-fields', [AmoCatalogsController::class, 'updateEnumField'])->name('amo-accounts.catalogs.enum-fields.update');
     Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
     Route::get('/amo-accounts/{amo_account}/pipelines-export', [AmoPipelinesController::class, 'export'])->name('amo-accounts.pipelines.export');
     Route::get('/amo-accounts/{amo_account}/pipelines/create', [AmoPipelinesController::class, 'create'])->name('amo-accounts.pipelines.create');

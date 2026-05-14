@@ -125,6 +125,29 @@ class AmoServicesTest extends TestCase
                 && $payload[0]['chained_lists'][1]['parent_catalog_id'] === 1001
             ))
             ->andReturn(['_embedded' => ['custom_fields' => [['id' => 3001]]]]);
+        foreach (['leads', 'contacts', 'companies'] as $entity) {
+            $http->shouldReceive('get')
+                ->once()
+                ->with($account, "/api/v4/{$entity}/custom_fields", Mockery::on(fn (array $query): bool => $query['page'] === 1 && $query['limit'] === 250))
+                ->andReturn([
+                    '_page' => 1,
+                    '_page_count' => 1,
+                    '_embedded' => [
+                        'custom_fields' => $entity === 'leads' ? [
+                            ['id' => 4001, 'name' => 'Источник', 'type' => 'select', 'enums' => [['id' => 10, 'value' => 'Авито']]],
+                            ['id' => 4002, 'name' => 'Комментарий', 'type' => 'textarea', 'enums' => null],
+                        ] : [],
+                    ],
+                ]);
+        }
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/leads/custom_fields/4001', Mockery::on(fn (array $payload): bool =>
+                $payload['name'] === 'Источник'
+                && $payload['enums'][0] === ['value' => 'Авито', 'sort' => 0, 'id' => 10]
+                && $payload['enums'][1] === ['value' => 'Сайт', 'sort' => 1]
+            ))
+            ->andReturn(['id' => 4001]);
 
         $service = new AmoCatalogsService($http);
         $service->createCatalog($account, ['name' => 'Проекты', 'can_show_in_cards' => true]);
@@ -135,6 +158,18 @@ class AmoServicesTest extends TestCase
             'levels' => [
                 ['title' => 'Проект', 'catalog_id' => 1001, 'parent_catalog_id' => 0],
                 ['title' => 'Вакансия', 'catalog_id' => 1002, 'parent_catalog_id' => 1001],
+            ],
+        ]);
+
+        $fields = $service->fetchEnumCustomFields($account);
+        $this->assertSame('Источник', $fields[0]['name']);
+        $this->assertSame('leads', $fields[0]['entity_type']);
+
+        $service->updateEnumCustomField($account, 'leads', 4001, [
+            'name' => 'Источник',
+            'enums' => [
+                ['id' => 10, 'value' => 'Авито'],
+                ['value' => 'Сайт'],
             ],
         ]);
     }

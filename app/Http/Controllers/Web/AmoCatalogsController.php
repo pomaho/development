@@ -15,10 +15,12 @@ class AmoCatalogsController extends Controller
     public function index(AmoAccount $amoAccount, AmoCatalogsService $catalogsService): Response
     {
         $catalogs = [];
+        $enumFields = [];
         $error = null;
 
         try {
             $catalogs = $catalogsService->fetchCatalogs($amoAccount);
+            $enumFields = $catalogsService->fetchEnumCustomFields($amoAccount);
         } catch (\Throwable $exception) {
             $error = $exception->getMessage();
         }
@@ -37,6 +39,18 @@ class AmoCatalogsController extends Controller
                 'can_add_elements' => (bool) ($catalog['can_add_elements'] ?? false),
                 'can_show_in_cards' => (bool) ($catalog['can_show_in_cards'] ?? false),
                 'can_link_multiple' => (bool) ($catalog['can_link_multiple'] ?? false),
+            ])->values(),
+            'enumFields' => collect($enumFields)->map(fn (array $field): array => [
+                'id' => $field['id'] ?? null,
+                'name' => $field['name'] ?? '-',
+                'type' => $field['type'] ?? null,
+                'entity_type' => $field['entity_type'] ?? null,
+                'sort' => $field['sort'] ?? null,
+                'enums' => collect($field['enums'] ?? [])->map(fn (array $enum): array => [
+                    'id' => $enum['id'] ?? null,
+                    'value' => $enum['value'] ?? '',
+                    'sort' => $enum['sort'] ?? null,
+                ])->values(),
             ])->values(),
             'error' => $error,
             'can' => [
@@ -111,6 +125,40 @@ class AmoCatalogsController extends Controller
         return back()->with('status', 'Связанное поле отправлено в amoCRM.');
     }
 
+    public function updateEnumField(Request $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
+    {
+        $this->authorize('sync', $amoAccount);
+
+        $data = $request->validate([
+            'entity_type' => ['required', 'string', 'in:leads,contacts,companies'],
+            'field_id' => ['required', 'integer', 'min:1'],
+            'name' => ['required', 'string', 'max:255'],
+            'values' => ['required', 'string', 'max:20000'],
+        ]);
+
+        $data['enums'] = collect(preg_split('/\R/u', $data['values']) ?: [])
+            ->map(fn (string $line): string => trim($line))
+            ->filter()
+            ->map(function (string $line): array {
+                [$id, $value] = array_pad(explode('|', $line, 2), 2, null);
+
+                if ($value === null) {
+                    return ['value' => trim($id)];
+                }
+
+                return [
+                    'id' => is_numeric(trim($id)) ? (int) trim($id) : null,
+                    'value' => trim($value),
+                ];
+            })
+            ->values()
+            ->all();
+
+        $catalogsService->updateEnumCustomField($amoAccount, $data['entity_type'], (int) $data['field_id'], $data);
+
+        return back()->with('status', 'Значения поля отправлены в amoCRM.');
+    }
+
     private function links(AmoAccount $amoAccount): array
     {
         return [
@@ -122,6 +170,7 @@ class AmoCatalogsController extends Controller
             'store_catalog' => route('amo-accounts.catalogs.store', $amoAccount),
             'store_elements' => route('amo-accounts.catalogs.elements.store', $amoAccount),
             'store_chained_list_field' => route('amo-accounts.catalogs.chained-list-fields.store', $amoAccount),
+            'update_enum_field' => route('amo-accounts.catalogs.enum-fields.update', $amoAccount),
             'current_account' => [
                 'dashboard' => route('amo-accounts.dashboard', $amoAccount),
                 'show' => route('amo-accounts.show', $amoAccount),

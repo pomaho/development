@@ -6,6 +6,8 @@ use App\Models\AmoAccount;
 
 class AmoCatalogsService
 {
+    private const CUSTOM_FIELD_ENTITIES = ['leads', 'contacts', 'companies'];
+
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
     }
@@ -57,6 +59,49 @@ class AmoCatalogsService
             'sort' => (int) ($data['sort'] ?? 100),
             'chained_lists' => $levels,
         ]]);
+    }
+
+    public function fetchEnumCustomFields(AmoAccount $account): array
+    {
+        $fields = [];
+
+        foreach (self::CUSTOM_FIELD_ENTITIES as $entity) {
+            foreach ($this->fetchPaginated($account, "/api/v4/{$entity}/custom_fields", 'custom_fields') as $field) {
+                if (! is_array($field['enums'] ?? null) || $field['enums'] === []) {
+                    continue;
+                }
+
+                $field['entity_type'] = $entity;
+                $fields[] = $field;
+            }
+        }
+
+        return $fields;
+    }
+
+    public function updateEnumCustomField(AmoAccount $account, string $entityType, int $fieldId, array $data): array
+    {
+        $entity = in_array($entityType, self::CUSTOM_FIELD_ENTITIES, true) ? $entityType : 'leads';
+
+        return $this->http->patch($account, "/api/v4/{$entity}/custom_fields/{$fieldId}", [
+            'name' => $data['name'],
+            'enums' => collect($data['enums'] ?? [])
+                ->filter(fn (array $enum): bool => filled($enum['value'] ?? null))
+                ->map(function (array $enum, int $index): array {
+                    $payload = [
+                        'value' => $enum['value'],
+                        'sort' => $index,
+                    ];
+
+                    if (isset($enum['id']) && (int) $enum['id'] > 0) {
+                        $payload['id'] = (int) $enum['id'];
+                    }
+
+                    return $payload;
+                })
+                ->values()
+                ->all(),
+        ]);
     }
 
     private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array

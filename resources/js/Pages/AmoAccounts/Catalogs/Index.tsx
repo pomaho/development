@@ -17,6 +17,19 @@ type Catalog = {
     can_link_multiple: boolean;
 };
 
+type EnumField = {
+    id: number | null;
+    name: string;
+    type: string | null;
+    entity_type: string | null;
+    sort: number | null;
+    enums: Array<{
+        id: number | null;
+        value: string;
+        sort: number | null;
+    }>;
+};
+
 type Links = {
     dashboard: string;
     amo_accounts: string;
@@ -26,6 +39,7 @@ type Links = {
     store_catalog: string;
     store_elements: string;
     store_chained_list_field: string;
+    update_enum_field: string;
     current_account: {
         dashboard: string;
         show: string;
@@ -43,6 +57,7 @@ type Links = {
 type Props = {
     account: Account;
     catalogs: Catalog[];
+    enumFields: EnumField[];
     error: string | null;
     can: {
         sync: boolean;
@@ -55,7 +70,23 @@ type ChainLevel = {
     catalog_id: string;
 };
 
-export default function CatalogsIndex({ account, catalogs, error, can, links }: Props) {
+const entityLabel = (entityType: string | null) => {
+    if (entityType === 'leads') {
+        return 'Сделки';
+    }
+
+    if (entityType === 'contacts') {
+        return 'Контакты';
+    }
+
+    if (entityType === 'companies') {
+        return 'Компании';
+    }
+
+    return entityType || '-';
+};
+
+export default function CatalogsIndex({ account, catalogs, enumFields, error, can, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const accountLinks = links.current_account;
     const firstCatalog = catalogs.find((catalog) => catalog.id);
@@ -189,6 +220,49 @@ export default function CatalogsIndex({ account, catalogs, error, can, links }: 
                     </form>
                 </section>
             </div>
+
+            <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 className="font-semibold">Списки в полях сделок, контактов и компаний</h2>
+                        <div className="mt-1 text-sm text-slate-500">
+                            Редактируются значения enum-полей. Формат строки: <span className="font-mono">id|значение</span>. Для нового значения укажите только текст.
+                        </div>
+                    </div>
+                    <span className="rounded bg-slate-100 px-2 py-1 text-xs text-slate-600">{enumFields.length} полей</span>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    {enumFields.length > 0 ? enumFields.map((field) => (
+                        <form action={links.update_enum_field} className="rounded border border-slate-200 bg-slate-50 p-4" key={`${field.entity_type}-${field.id}`} method="post">
+                            <input name="_token" type="hidden" value={csrf} />
+                            <input name="entity_type" type="hidden" value={field.entity_type || ''} />
+                            <input name="field_id" type="hidden" value={field.id || ''} />
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm text-slate-500">{entityLabel(field.entity_type)} · {field.type || '-'}</div>
+                                    <input className="mt-1 w-full rounded border-slate-300 font-medium" name="name" required defaultValue={field.name} />
+                                </div>
+                                <span className="rounded bg-white px-2 py-1 text-xs text-slate-500">ID {field.id}</span>
+                            </div>
+                            <label className="mt-3 block text-sm">
+                                <span>Значения</span>
+                                <textarea
+                                    className="mt-1 min-h-40 w-full rounded border-slate-300 font-mono text-xs"
+                                    name="values"
+                                    defaultValue={field.enums.map((item) => item.id ? `${item.id}|${item.value}` : item.value).join('\n')}
+                                    required
+                                />
+                            </label>
+                            <button className="mt-3 rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50" disabled={! can.sync} type="submit">Сохранить значения</button>
+                        </form>
+                    )) : (
+                        <div className="rounded border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                            Enum-поля не загружены. В amoCRM это обычно поля типа список, мультисписок или переключатель.
+                        </div>
+                    )}
+                </div>
+            </section>
 
             <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <h2 className="font-semibold">Текущие списки amoCRM</h2>

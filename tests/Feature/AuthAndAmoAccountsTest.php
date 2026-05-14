@@ -500,6 +500,7 @@ class AuthAndAmoAccountsTest extends TestCase
         $viewer = User::factory()->create();
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
         $capturedField = null;
+        $capturedEnumField = null;
 
         $catalogsService = Mockery::mock(AmoCatalogsService::class);
         $catalogsService->shouldReceive('fetchCatalogs')
@@ -507,6 +508,20 @@ class AuthAndAmoAccountsTest extends TestCase
             ->andReturn([
                 ['id' => 1001, 'name' => 'Проекты', 'type' => 'regular', 'sort' => 10, 'can_add_elements' => true],
                 ['id' => 1002, 'name' => 'Вакансии', 'type' => 'regular', 'sort' => 20, 'can_add_elements' => true],
+            ]);
+        $catalogsService->shouldReceive('fetchEnumCustomFields')
+            ->once()
+            ->andReturn([
+                [
+                    'id' => 4001,
+                    'name' => 'Источник',
+                    'type' => 'select',
+                    'entity_type' => 'leads',
+                    'enums' => [
+                        ['id' => 10, 'value' => 'Авито', 'sort' => 0],
+                        ['id' => 11, 'value' => 'Сайт', 'sort' => 1],
+                    ],
+                ],
             ]);
         $catalogsService->shouldReceive('createCatalog')
             ->once()
@@ -524,6 +539,14 @@ class AuthAndAmoAccountsTest extends TestCase
                 return true;
             }))
             ->andReturn([]);
+        $catalogsService->shouldReceive('updateEnumCustomField')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), 'leads', 4001, Mockery::on(function (array $data) use (&$capturedEnumField): bool {
+                $capturedEnumField = $data;
+
+                return true;
+            }))
+            ->andReturn([]);
         $this->app->instance(AmoCatalogsService::class, $catalogsService);
 
         $this->actingAs($admin)
@@ -532,6 +555,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('AmoAccounts/Catalogs/Index')
                 ->where('catalogs.0.name', 'Проекты')
+                ->where('enumFields.0.name', 'Источник')
                 ->has('links.store_chained_list_field'));
 
         $this->actingAs($admin)
@@ -556,6 +580,19 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->assertSame(0, $capturedField['levels'][0]['parent_catalog_id']);
         $this->assertSame(1001, $capturedField['levels'][1]['parent_catalog_id']);
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs/enum-fields", [
+                'entity_type' => 'leads',
+                'field_id' => 4001,
+                'name' => 'Источник',
+                'values' => "10|Авито\n11|Сайт\nTelegram",
+            ])
+            ->assertRedirect();
+
+        $this->assertSame('Источник', $capturedEnumField['name']);
+        $this->assertSame(['id' => 10, 'value' => 'Авито'], $capturedEnumField['enums'][0]);
+        $this->assertSame(['value' => 'Telegram'], $capturedEnumField['enums'][2]);
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/catalogs", ['name' => 'Forbidden'])
