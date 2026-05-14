@@ -34,6 +34,7 @@ type Props = {
             leads: string;
             pipelines: string;
             pipelines_create: string;
+            catalogs: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -88,6 +89,12 @@ export default function AmoAccountIntegrations({ account, modules, can, links }:
                             <div className="mt-4 flex flex-wrap gap-2 text-sm">
                                 <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines}>Список воронок</a>
                                 {can.sync ? <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines_create}>Создать воронку</a> : null}
+                            </div>
+                        ) : null}
+
+                        {module.code === 'catalogs_builder' ? (
+                            <div className="mt-4 flex flex-wrap gap-2 text-sm">
+                                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.catalogs}>Списки и связанные списки</a>
                             </div>
                         ) : null}
 

@@ -15,6 +15,7 @@ use App\Models\DashboardWidget;
 use App\Models\IntegrationModule;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoOAuthTokenExchanger;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoUsersService;
@@ -491,6 +492,74 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('logs.data.0.response_payload.id', 123)
                 ->has('links.export'))
             ->assertDontSee('Authorization');
+    }
+
+    public function test_admin_can_manage_catalogs_and_chained_lists(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $capturedField = null;
+
+        $catalogsService = Mockery::mock(AmoCatalogsService::class);
+        $catalogsService->shouldReceive('fetchCatalogs')
+            ->once()
+            ->andReturn([
+                ['id' => 1001, 'name' => 'Проекты', 'type' => 'regular', 'sort' => 10, 'can_add_elements' => true],
+                ['id' => 1002, 'name' => 'Вакансии', 'type' => 'regular', 'sort' => 20, 'can_add_elements' => true],
+            ]);
+        $catalogsService->shouldReceive('createCatalog')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), Mockery::on(fn (array $data): bool => $data['name'] === 'Объекты'))
+            ->andReturn([]);
+        $catalogsService->shouldReceive('createElements')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), 1001, ['Проект А', 'Проект Б'])
+            ->andReturn([]);
+        $catalogsService->shouldReceive('createChainedListField')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), Mockery::on(function (array $data) use (&$capturedField): bool {
+                $capturedField = $data;
+
+                return true;
+            }))
+            ->andReturn([]);
+        $this->app->instance(AmoCatalogsService::class, $catalogsService);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/catalogs")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Catalogs/Index')
+                ->where('catalogs.0.name', 'Проекты')
+                ->has('links.store_chained_list_field'));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs", ['name' => 'Объекты', 'sort' => 30])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs/elements", ['catalog_id' => 1001, 'elements' => "Проект А\nПроект Б"])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs/chained-list-fields", [
+                'name' => 'Проект / Вакансия',
+                'entity_type' => 'leads',
+                'sort' => 100,
+                'levels' => [
+                    ['title' => 'Проект', 'catalog_id' => 1001],
+                    ['title' => 'Вакансия', 'catalog_id' => 1002],
+                ],
+            ])
+            ->assertRedirect();
+
+        $this->assertSame(0, $capturedField['levels'][0]['parent_catalog_id']);
+        $this->assertSame(1001, $capturedField['levels'][1]['parent_catalog_id']);
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/catalogs", ['name' => 'Forbidden'])
+            ->assertForbidden();
     }
 
     public function test_leads_page_filters_and_exports_current_filter(): void

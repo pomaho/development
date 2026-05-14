@@ -7,6 +7,7 @@ import {
     ChevronRight,
     ClipboardList,
     FileText,
+    ListTree,
     LayoutDashboard,
     LogOut,
     Plug,
@@ -45,6 +46,7 @@ type Props = {
             users: string;
             leads: string;
             pipelines: string;
+            catalogs?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -61,6 +63,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const isAdmin = user?.role === 'admin';
 
     const currentLinks = links.current_account;
+    const catalogsHref = currentAccount ? currentLinks?.catalogs || `/amo-accounts/${currentAccount.id}/catalogs` : null;
     const navLinks: NavLink[] = [
         {
             label: 'Dashboard',
@@ -85,6 +88,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
             { label: 'Users audit', href: currentLinks.users, icon: <Users size={16} />, active: url.endsWith('/users') },
             { label: 'Сделки', href: currentLinks.leads, icon: <ClipboardList size={16} />, active: url.endsWith('/leads') },
             { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 size={16} />, active: url.includes('/pipelines') },
+            ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree size={16} />, active: url.includes('/catalogs') }] : []),
             { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck size={16} />, active: url.includes('/crm-audit') },
             { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 size={16} />, active: url.endsWith('/integrations') },
             { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks size={16} />, active: url.endsWith('/widgets') },

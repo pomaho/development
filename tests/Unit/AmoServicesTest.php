@@ -7,6 +7,7 @@ use App\Models\AmoCredential;
 use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
 use App\Services\Amo\AmoClientFactory;
+use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoTokenManager;
@@ -92,6 +93,50 @@ class AmoServicesTest extends TestCase
         ]);
 
         $this->assertSame(123, $result['_embedded']['pipelines'][0]['id']);
+    }
+
+    public function test_catalogs_service_creates_catalog_elements_and_chained_list_field(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('post')
+            ->once()
+            ->with($account, '/api/v4/catalogs', Mockery::on(fn (array $payload): bool =>
+                $payload[0]['name'] === 'Проекты'
+                && $payload[0]['type'] === 'regular'
+                && $payload[0]['can_show_in_cards'] === true
+            ))
+            ->andReturn(['_embedded' => ['catalogs' => [['id' => 1001]]]]);
+        $http->shouldReceive('post')
+            ->once()
+            ->with($account, '/api/v4/catalogs/1001/elements', Mockery::on(fn (array $payload): bool =>
+                $payload[0]['name'] === 'Проект А'
+                && $payload[1]['name'] === 'Проект Б'
+            ))
+            ->andReturn(['_embedded' => ['elements' => [['id' => 2001]]]]);
+        $http->shouldReceive('post')
+            ->once()
+            ->with($account, '/api/v4/leads/custom_fields', Mockery::on(fn (array $payload): bool =>
+                $payload[0]['name'] === 'Проект / Вакансия'
+                && $payload[0]['type'] === 'chained_list'
+                && $payload[0]['chained_lists'][0]['catalog_id'] === 1001
+                && $payload[0]['chained_lists'][0]['parent_catalog_id'] === 0
+                && $payload[0]['chained_lists'][1]['catalog_id'] === 1002
+                && $payload[0]['chained_lists'][1]['parent_catalog_id'] === 1001
+            ))
+            ->andReturn(['_embedded' => ['custom_fields' => [['id' => 3001]]]]);
+
+        $service = new AmoCatalogsService($http);
+        $service->createCatalog($account, ['name' => 'Проекты', 'can_show_in_cards' => true]);
+        $service->createElements($account, 1001, ['Проект А', '', 'Проект Б']);
+        $service->createChainedListField($account, [
+            'name' => 'Проект / Вакансия',
+            'entity_type' => 'leads',
+            'levels' => [
+                ['title' => 'Проект', 'catalog_id' => 1001, 'parent_catalog_id' => 0],
+                ['title' => 'Вакансия', 'catalog_id' => 1002, 'parent_catalog_id' => 1001],
+            ],
+        ]);
     }
 
     public function test_pipelines_service_collects_pipeline_details(): void

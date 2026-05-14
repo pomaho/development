@@ -66,6 +66,13 @@ class DatabaseSeeder extends Seeder
                 'is_enabled' => true,
                 'config' => [],
             ],
+            [
+                'code' => 'catalogs_builder',
+                'name' => 'Catalogs Builder',
+                'description' => 'Создание списков amoCRM, элементов списков и связанных списков через поле chained_list.',
+                'is_enabled' => true,
+                'config' => [],
+            ],
         ];
     }
 }
