@@ -34,6 +34,7 @@ type Props = {
             leads: string;
             pipelines: string;
             pipelines_create: string;
+            pipelines_transfer_leads?: string;
             catalogs: string;
             crm_audit: string;
             integrations: string;
@@ -89,6 +90,7 @@ export default function AmoAccountIntegrations({ account, modules, can, links }:
                             <div className="mt-4 flex flex-wrap gap-2 text-sm">
                                 <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines}>Список воронок</a>
                                 {can.sync ? <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines_create}>Создать воронку</a> : null}
+                                {can.sync && accountLinks.pipelines_transfer_leads ? <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines_transfer_leads}>Перенос сделок</a> : null}
                             </div>
                         ) : null}
 

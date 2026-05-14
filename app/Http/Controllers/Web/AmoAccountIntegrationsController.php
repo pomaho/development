@@ -45,6 +45,7 @@ class AmoAccountIntegrationsController extends Controller
                     'leads' => route('amo-accounts.leads', $amoAccount),
                     'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
                     'pipelines_create' => route('amo-accounts.pipelines.create', $amoAccount),
+                    'pipelines_transfer_leads' => route('amo-accounts.pipelines.transfer-leads', $amoAccount),
                     'catalogs' => route('amo-accounts.catalogs.index', $amoAccount),
                     'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
                     'integrations' => route('amo-accounts.integrations', $amoAccount),

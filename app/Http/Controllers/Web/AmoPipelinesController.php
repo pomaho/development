@@ -65,6 +65,7 @@ class AmoPipelinesController extends Controller
                 'export' => route('amo-accounts.pipelines.export', array_merge(['amo_account' => $amoAccount], $request->query())),
                 'reset' => route('amo-accounts.pipelines.index', $amoAccount),
                 'create' => route('amo-accounts.pipelines.create', $amoAccount),
+                'transfer_leads' => route('amo-accounts.pipelines.transfer-leads', $amoAccount),
                 'current_account' => [
                     'dashboard' => route('amo-accounts.dashboard', $amoAccount),
                     'show' => route('amo-accounts.show', $amoAccount),

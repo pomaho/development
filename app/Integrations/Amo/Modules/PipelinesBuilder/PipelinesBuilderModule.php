@@ -20,6 +20,8 @@ class PipelinesBuilderModule
             'amo-accounts.pipelines.index',
             'amo-accounts.pipelines.create',
             'amo-accounts.pipelines.store',
+            'amo-accounts.pipelines.transfer-leads',
+            'amo-accounts.pipelines.transfer-leads.store',
         ];
     }
 }

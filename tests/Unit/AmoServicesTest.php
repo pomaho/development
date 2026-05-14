@@ -4,11 +4,14 @@ namespace Tests\Unit;
 
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
+use App\Models\CrmEntitySnapshot;
+use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
 use App\Services\Amo\AmoClientFactory;
 use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoTokenManager;
 use App\Services\Amo\AmoUsersService;
@@ -171,6 +174,62 @@ class AmoServicesTest extends TestCase
                 ['id' => 10, 'value' => 'Авито'],
                 ['value' => 'Сайт'],
             ],
+        ]);
+    }
+
+    public function test_lead_transfer_service_maps_statuses_and_updates_snapshots(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        CrmPipelineStatusSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'amo_status_id' => 101,
+            'name' => 'Первичный контакт',
+            'sort' => 10,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmPipelineStatusSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 20,
+            'amo_status_id' => 201,
+            'name' => 'Первичный контакт',
+            'sort' => 10,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '1001',
+            'name' => 'Lead A',
+            'pipeline_id' => 10,
+            'status_id' => 101,
+            'embedded' => [],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/leads', Mockery::on(fn (array $payload): bool =>
+                $payload[0] === ['id' => 1001, 'pipeline_id' => 20, 'status_id' => 201]
+            ))
+            ->andReturn(['_embedded' => ['leads' => [['id' => 1001]]]]);
+
+        $service = new AmoLeadTransferService($http);
+        $plan = $service->plan($account, 10, 20);
+
+        $this->assertSame(1, $plan['transferable_leads']);
+
+        $result = $service->transfer($account, 10, 20, [101 => 201]);
+
+        $this->assertSame(1, $result['updated']);
+        $this->assertDatabaseHas('crm_entity_snapshots', [
+            'external_id' => '1001',
+            'pipeline_id' => 20,
+            'status_id' => 201,
         ]);
     }
 

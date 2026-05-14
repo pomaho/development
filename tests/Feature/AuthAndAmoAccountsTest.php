@@ -16,6 +16,7 @@ use App\Models\IntegrationModule;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoCatalogsService;
+use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoOAuthTokenExchanger;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoUsersService;
@@ -341,6 +342,90 @@ class AuthAndAmoAccountsTest extends TestCase
         $content = $response->streamedContent();
         $this->assertStringContainsString('Archived Pipeline', $content);
         $this->assertStringNotContainsString('Active Pipeline', $content);
+    }
+
+    public function test_admin_can_transfer_leads_between_pipelines_and_viewer_cannot(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        foreach ([[10, 'Old'], [20, 'New']] as [$pipelineId, $name]) {
+            CrmPipelineSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'amo_pipeline_id' => $pipelineId,
+                'name' => $name,
+                'is_archive' => false,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+        CrmPipelineStatusSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'amo_status_id' => 101,
+            'name' => 'Первичный контакт',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmPipelineStatusSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 20,
+            'amo_status_id' => 201,
+            'name' => 'Первичный контакт',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $transferService = Mockery::mock(AmoLeadTransferService::class);
+        $transferService->shouldReceive('plan')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), 10, 20, [])
+            ->andReturn([
+                'rows' => [[
+                    'source_status_id' => 101,
+                    'source_status_name' => 'Первичный контакт',
+                    'target_status_id' => 201,
+                    'target_status_name' => 'Первичный контакт',
+                    'lead_count' => 2,
+                    'can_transfer' => true,
+                ]],
+                'total_leads' => 2,
+                'transferable_leads' => 2,
+                'blocked_leads' => 0,
+            ]);
+        $transferService->shouldReceive('transfer')
+            ->once()
+            ->with(Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)), 10, 20, [101 => 201])
+            ->andReturn(['updated' => 2, 'skipped' => 0]);
+        $this->app->instance(AmoLeadTransferService::class, $transferService);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/pipelines/transfer-leads?source_pipeline_id=10&target_pipeline_id=20")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Pipelines/TransferLeads')
+                ->where('plan.transferable_leads', 2)
+                ->has('links.submit'));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/pipelines/transfer-leads", [
+                'source_pipeline_id' => 10,
+                'target_pipeline_id' => 20,
+                'status_map' => [101 => 201],
+            ])
+            ->assertRedirect(route('amo-accounts.pipelines.transfer-leads', [
+                'amo_account' => $account,
+                'source_pipeline_id' => 10,
+                'target_pipeline_id' => 20,
+            ]));
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/pipelines/transfer-leads", [
+                'source_pipeline_id' => 10,
+                'target_pipeline_id' => 20,
+                'status_map' => [101 => 201],
+            ])
+            ->assertForbidden();
     }
 
     public function test_users_export_respects_current_filters(): void

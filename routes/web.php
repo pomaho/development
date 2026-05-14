@@ -9,6 +9,7 @@ use App\Http\Controllers\Web\AmoAccountIntegrationsController;
 use App\Http\Controllers\Web\AmoAccountWidgetsController;
 use App\Http\Controllers\Web\AmoCatalogsController;
 use App\Http\Controllers\Web\AmoExternalOAuthController;
+use App\Http\Controllers\Web\AmoLeadTransferController;
 use App\Http\Controllers\Web\AmoLeadsController;
 use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoRolesController;
@@ -56,6 +57,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
     Route::get('/amo-accounts/{amo_account}/pipelines-export', [AmoPipelinesController::class, 'export'])->name('amo-accounts.pipelines.export');
     Route::get('/amo-accounts/{amo_account}/pipelines/create', [AmoPipelinesController::class, 'create'])->name('amo-accounts.pipelines.create');
+    Route::get('/amo-accounts/{amo_account}/pipelines/transfer-leads', [AmoLeadTransferController::class, 'index'])->name('amo-accounts.pipelines.transfer-leads');
+    Route::post('/amo-accounts/{amo_account}/pipelines/transfer-leads', [AmoLeadTransferController::class, 'store'])->name('amo-accounts.pipelines.transfer-leads.store');
     Route::get('/amo-accounts/{amo_account}/pipelines/{pipelineId}/clone', [AmoPipelinesController::class, 'cloneForm'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.clone-form');
     Route::post('/amo-accounts/{amo_account}/pipelines/{pipelineId}/clone', [AmoPipelinesController::class, 'clone'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.clone');
     Route::get('/amo-accounts/{amo_account}/pipelines/{pipelineId}', [AmoPipelinesController::class, 'show'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.show');

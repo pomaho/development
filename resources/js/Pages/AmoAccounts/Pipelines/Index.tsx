@@ -41,6 +41,7 @@ type Props = {
         export: string;
         reset: string;
         create: string;
+        transfer_leads: string;
         current_account: {
             dashboard: string;
             show: string;
@@ -74,6 +75,7 @@ export default function PipelineIndex({ account, pipelines, error, filters, can,
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.export}>Экспорт в Excel</a>
+                    {can.sync ? <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.transfer_leads}>Перенос сделок</a> : null}
                     {can.sync ? <a className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" href={links.create}>Создать воронку</a> : null}
                 </div>
             </div>
