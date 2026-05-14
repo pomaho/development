@@ -1,5 +1,5 @@
 import { usePage } from '@inertiajs/react';
-import { Plus, Trash2 } from 'lucide-react';
+import { GripVertical, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
@@ -45,6 +45,25 @@ type PageProps = {
     errors?: Record<string, string>;
 };
 
+const isSystemStatus = (status: Status): boolean => status.id !== undefined;
+
+const normalizeRegularSorts = (statuses: Status[]): Status[] => {
+    let regularIndex = 0;
+
+    return statuses.map((status) => {
+        if (isSystemStatus(status)) {
+            return status;
+        }
+
+        regularIndex += 1;
+
+        return {
+            ...status,
+            sort: regularIndex * 10,
+        };
+    });
+};
+
 function FieldError({ name }: { name: string }) {
     const { props } = usePage<PageProps>();
     const message = props.errors?.[name];
@@ -59,7 +78,10 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
         sort: (defaultStatuses.length + offset + 1) * 10,
         color: '#98cbff',
     }));
-    const [rows, setRows] = useState<Status[]>([...defaultStatuses, ...extraRows]);
+    const initialRegularStatuses = defaultStatuses.filter((status) => ! isSystemStatus(status));
+    const initialSystemStatuses = defaultStatuses.filter(isSystemStatus);
+    const [rows, setRows] = useState<Status[]>(normalizeRegularSorts([...initialRegularStatuses, ...extraRows, ...initialSystemStatuses]));
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     const updateRow = (index: number, field: keyof Status, value: string) => {
         setRows((currentRows) => currentRows.map((row, rowIndex) => {
@@ -75,30 +97,24 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
     };
 
     const addRowAfter = (index: number) => {
-        const nextSort = rows
-            .slice(0, index + 1)
-            .filter((row) => row.id === undefined)
-            .length * 10 + 10;
-
-        setRows((currentRows) => [
+        setRows((currentRows) => normalizeRegularSorts([
             ...currentRows.slice(0, index + 1),
-            { name: '', sort: nextSort, color: '#98cbff', hint: '' },
+            { name: '', sort: 10, color: '#98cbff', hint: '' },
             ...currentRows.slice(index + 1),
-        ]);
+        ]));
     };
 
     const addRowToEnd = () => {
-        const lastRegularSort = Math.max(
-            0,
-            ...rows
-                .filter((row) => row.id === undefined)
-                .map((row) => Number(row.sort) || 0),
-        );
+        setRows((currentRows) => {
+            const firstSystemIndex = currentRows.findIndex(isSystemStatus);
+            const insertIndex = firstSystemIndex === -1 ? currentRows.length : firstSystemIndex;
 
-        setRows((currentRows) => [
-            ...currentRows,
-            { name: '', sort: lastRegularSort + 10, color: '#98cbff', hint: '' },
-        ]);
+            return normalizeRegularSorts([
+                ...currentRows.slice(0, insertIndex),
+                { name: '', sort: 10, color: '#98cbff', hint: '' },
+                ...currentRows.slice(insertIndex),
+            ]);
+        });
     };
 
     const removeRow = (index: number) => {
@@ -106,7 +122,33 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
             return;
         }
 
-        setRows((currentRows) => currentRows.filter((_, rowIndex) => rowIndex !== index));
+        setRows((currentRows) => normalizeRegularSorts(currentRows.filter((_, rowIndex) => rowIndex !== index)));
+    };
+
+    const moveDraggedRowTo = (targetIndex: number) => {
+        if (draggedIndex === null || draggedIndex === targetIndex || isSystemStatus(rows[draggedIndex])) {
+            setDraggedIndex(null);
+
+            return;
+        }
+
+        setRows((currentRows) => {
+            const draggedRow = currentRows[draggedIndex];
+
+            if (! draggedRow || isSystemStatus(draggedRow)) {
+                return currentRows;
+            }
+
+            const nextRows = currentRows.filter((_, rowIndex) => rowIndex !== draggedIndex);
+            const insertIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+
+            return normalizeRegularSorts([
+                ...nextRows.slice(0, insertIndex),
+                draggedRow,
+                ...nextRows.slice(insertIndex),
+            ]);
+        });
+        setDraggedIndex(null);
     };
 
     return (
@@ -154,7 +196,7 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h2 className="font-semibold">Этапы</h2>
-                            <div className="text-sm text-slate-500">Обычные этапы можно добавлять после любой строки, удалять и снабжать подсказками для менеджеров.</div>
+                            <div className="text-sm text-slate-500">Обычные этапы можно добавлять, удалять, перетаскивать и снабжать подсказками для менеджеров.</div>
                         </div>
                         <button className="inline-flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:border-blue-400 hover:text-blue-700" onClick={addRowToEnd} type="button">
                             <Plus size={16} />
@@ -165,7 +207,8 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                         <table className="w-full text-left text-sm">
                             <thead className="text-slate-500">
                                 <tr>
-                                    <th className="py-2">Тип</th>
+                                    <th className="py-2">Порядок</th>
+                                    <th>Тип</th>
                                     <th>Название</th>
                                     <th>Подсказка</th>
                                     <th>Сортировка</th>
@@ -175,10 +218,40 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                             </thead>
                             <tbody>
                                 {rows.map((status, index) => {
-                                    const isSystem = status.id !== undefined;
+                                    const isSystem = isSystemStatus(status);
 
                                     return (
-                                        <tr className="align-top border-t border-slate-100" key={`${status.id || 'custom'}-${index}`}>
+                                        <tr
+                                            className={`align-top border-t border-slate-100 ${draggedIndex === index ? 'bg-blue-50/60' : ''}`}
+                                            draggable={! isSystem}
+                                            key={`${status.id || 'custom'}-${index}`}
+                                            onDragEnd={() => setDraggedIndex(null)}
+                                            onDragOver={(event) => {
+                                                if (draggedIndex !== null) {
+                                                    event.preventDefault();
+                                                }
+                                            }}
+                                            onDragStart={() => {
+                                                if (! isSystem) {
+                                                    setDraggedIndex(index);
+                                                }
+                                            }}
+                                            onDrop={(event) => {
+                                                event.preventDefault();
+                                                moveDraggedRowTo(index);
+                                            }}
+                                        >
+                                            <td className="py-3 pr-3">
+                                                <button
+                                                    aria-label={isSystem ? 'Системный этап нельзя перетаскивать' : 'Перетащить этап'}
+                                                    className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    disabled={isSystem}
+                                                    title={isSystem ? 'Системный этап нельзя перетаскивать' : 'Перетащить этап'}
+                                                    type="button"
+                                                >
+                                                    <GripVertical size={16} />
+                                                </button>
+                                            </td>
                                             <td className="py-3 pr-3">
                                                 {isSystem ? (
                                                     <>
