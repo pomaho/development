@@ -15,15 +15,15 @@ class CrmAuditService
     {
     }
 
-    public function syncAll(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function syncAll(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, ?int $pipelineId = null): array
     {
-        $structure = $this->syncStructure($account);
-        $data = $this->syncOperationalData($account, $from, $to);
+        $structure = $this->syncStructure($account, $pipelineId);
+        $data = $this->syncOperationalData($account, $from, $to, $pipelineId);
 
         return array_merge($structure, $data);
     }
 
-    public function syncStructure(AmoAccount $account): array
+    public function syncStructure(AmoAccount $account, ?int $pipelineId = null): array
     {
         $syncedAt = now();
         $counts = [
@@ -35,7 +35,7 @@ class CrmAuditService
             'catalogs' => 0,
         ];
 
-        foreach ($this->fetchPipelines($account) as $pipeline) {
+        foreach ($this->fetchPipelines($account, $pipelineId) as $pipeline) {
             CrmPipelineSnapshot::query()->updateOrCreate(
                 ['amo_account_id' => $account->id, 'amo_pipeline_id' => $pipeline['id']],
                 [
@@ -70,16 +70,24 @@ class CrmAuditService
         return $counts;
     }
 
-    public function syncOperationalData(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function syncOperationalData(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, ?int $pipelineId = null): array
     {
         $syncedAt = now();
         $periodQuery = $this->periodQuery($from, $to);
+        $leadQuery = [
+            'with' => 'contacts,loss_reason,source',
+            ...$periodQuery,
+            ...$this->pipelineQuery($pipelineId),
+        ];
+
+        if ($pipelineId !== null) {
+            return [
+                'leads' => $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, $leadQuery),
+            ];
+        }
 
         return [
-            'leads' => $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, [
-                'with' => 'contacts,loss_reason,source',
-                ...$periodQuery,
-            ]),
+            'leads' => $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, $leadQuery),
             'contacts' => $this->syncSimpleEntity($account, 'contacts', '/api/v4/contacts', 'contacts', $syncedAt, [
                 'with' => 'leads,companies',
                 ...$periodQuery,
@@ -112,20 +120,22 @@ class CrmAuditService
         ];
     }
 
-    private function fetchPipelines(AmoAccount $account): array
+    private function fetchPipelines(AmoAccount $account, ?int $onlyPipelineId = null): array
     {
         $pipelines = $this->fetchPaginated($account, '/api/v4/leads/pipelines', 'pipelines');
 
-        return collect($pipelines)->map(function (array $pipeline) use ($account): array {
-            if (isset($pipeline['_embedded']['statuses'])) {
+        return collect($pipelines)
+            ->filter(fn (array $pipeline): bool => $onlyPipelineId === null || (int) ($pipeline['id'] ?? 0) === $onlyPipelineId)
+            ->map(function (array $pipeline) use ($account): array {
+                if (isset($pipeline['_embedded']['statuses'])) {
+                    return $pipeline;
+                }
+
+                $statuses = $this->fetchPaginated($account, "/api/v4/leads/pipelines/{$pipeline['id']}/statuses", 'statuses');
+                $pipeline['_embedded']['statuses'] = $statuses;
+
                 return $pipeline;
-            }
-
-            $statuses = $this->fetchPaginated($account, "/api/v4/leads/pipelines/{$pipeline['id']}/statuses", 'statuses');
-            $pipeline['_embedded']['statuses'] = $statuses;
-
-            return $pipeline;
-        })->all();
+            })->all();
     }
 
     private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array
@@ -224,6 +234,11 @@ class CrmAuditService
             'filter[created_at][from]' => $from?->timestamp,
             'filter[created_at][to]' => $to?->timestamp,
         ], fn ($value) => $value !== null);
+    }
+
+    private function pipelineQuery(?int $pipelineId): array
+    {
+        return $pipelineId ? ['filter[pipeline_id]' => $pipelineId] : [];
     }
 
     private function timestamp(mixed $timestamp): ?Carbon

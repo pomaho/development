@@ -426,6 +426,61 @@ class AmoServicesTest extends TestCase
         $this->assertDatabaseHas('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '1']);
     }
 
+    public function test_crm_audit_service_can_sync_selected_pipeline(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/pipelines', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['pipelines' => [
+                [
+                    'id' => 10,
+                    'name' => 'Target',
+                    'sort' => 1,
+                    '_embedded' => ['statuses' => [['id' => 20, 'name' => 'New', 'sort' => 10]]],
+                ],
+                [
+                    'id' => 99,
+                    'name' => 'Other',
+                    'sort' => 2,
+                    '_embedded' => ['statuses' => [['id' => 88, 'name' => 'Other stage', 'sort' => 10]]],
+                ],
+            ]],
+        ]);
+        foreach (['leads', 'contacts', 'companies'] as $entityType) {
+            $http->shouldReceive('get')->with($account, "/api/v4/{$entityType}/custom_fields", Mockery::any())->andReturn([
+                '_page' => 1,
+                '_embedded' => ['custom_fields' => []],
+            ]);
+        }
+        foreach ([
+            ['/api/v4/leads/loss_reasons', 'loss_reasons'],
+            ['/api/v4/sources', 'sources'],
+            ['/api/v4/catalogs', 'catalogs'],
+        ] as [$path, $key]) {
+            $http->shouldReceive('get')->with($account, $path, Mockery::any())->andReturn([
+                '_page' => 1,
+                '_embedded' => [$key => []],
+            ]);
+        }
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/leads', Mockery::on(fn (array $query): bool => (int) $query['filter[pipeline_id]'] === 10))
+            ->andReturn([
+                '_page' => 1,
+                '_embedded' => ['leads' => [['id' => 100, 'name' => 'Lead', 'pipeline_id' => 10, 'status_id' => 20]]],
+            ]);
+
+        $counts = (new CrmAuditService($http))->syncAll($account, null, null, 10);
+
+        $this->assertSame(1, $counts['pipelines']);
+        $this->assertSame(1, $counts['leads']);
+        $this->assertDatabaseHas('crm_pipelines_snapshots', ['amo_pipeline_id' => 10, 'name' => 'Target']);
+        $this->assertDatabaseMissing('crm_pipelines_snapshots', ['amo_pipeline_id' => 99]);
+        $this->assertDatabaseHas('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '100', 'pipeline_id' => 10]);
+    }
+
     public function test_oauth_refresh_saves_new_refresh_token(): void
     {
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');

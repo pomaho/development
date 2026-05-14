@@ -19,6 +19,11 @@ class CrmAuditController extends Controller
 {
     public function index(AmoAccount $amoAccount, CrmAuditService $auditService): Response
     {
+        $pipelines = CrmPipelineSnapshot::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->orderBy('sort')
+            ->get();
+
         return Inertia::render('AmoAccounts/CrmAudit/Index', [
             'account' => [
                 'id' => $amoAccount->id,
@@ -26,17 +31,13 @@ class CrmAuditController extends Controller
                 'base_domain' => $amoAccount->base_domain,
             ],
             'summary' => $auditService->auditSummary($amoAccount),
-            'pipelines' => CrmPipelineSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->orderBy('sort')
-                ->get()
-                ->map(fn (CrmPipelineSnapshot $pipeline): array => [
-                    'id' => $pipeline->id,
-                    'amo_pipeline_id' => $pipeline->amo_pipeline_id,
-                    'name' => $pipeline->name,
-                    'is_main' => $pipeline->is_main,
-                    'is_unsorted_on' => $pipeline->is_unsorted_on,
-                ]),
+            'pipelines' => $pipelines->map(fn (CrmPipelineSnapshot $pipeline): array => [
+                'id' => $pipeline->id,
+                'amo_pipeline_id' => $pipeline->amo_pipeline_id,
+                'name' => $pipeline->name,
+                'is_main' => $pipeline->is_main,
+                'is_unsorted_on' => $pipeline->is_unsorted_on,
+            ]),
             'fields' => CrmCustomFieldSnapshot::query()
                 ->where('amo_account_id', $amoAccount->id)
                 ->orderBy('entity_type')
@@ -72,6 +73,7 @@ class CrmAuditController extends Controller
             'defaults' => [
                 'from' => now()->subMonths(6)->format('Y-m-d'),
                 'to' => now()->format('Y-m-d'),
+                'pipeline_id' => '',
             ],
             'links' => [
                 'dashboard' => route('dashboard'),
@@ -102,6 +104,7 @@ class CrmAuditController extends Controller
         $data = $request->validate([
             'from' => ['nullable', 'date'],
             'to' => ['nullable', 'date'],
+            'pipeline_id' => ['nullable', 'integer', 'min:1'],
             'structure_only' => ['nullable', 'boolean'],
         ]);
 
@@ -109,9 +112,14 @@ class CrmAuditController extends Controller
             $amoAccount->id,
             $data['from'] ?? null,
             $data['to'] ?? null,
-            $request->boolean('structure_only')
+            $request->boolean('structure_only'),
+            isset($data['pipeline_id']) ? (int) $data['pipeline_id'] : null
         );
 
-        return back()->with('status', 'CRM-аудит поставлен в очередь.');
+        $message = isset($data['pipeline_id'])
+            ? "CRM-аудит по воронке {$data['pipeline_id']} поставлен в очередь."
+            : 'CRM-аудит поставлен в очередь.';
+
+        return back()->with('status', $message);
     }
 }

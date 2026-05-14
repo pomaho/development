@@ -20,6 +20,7 @@ class SyncCrmAuditJob implements ShouldQueue
         public readonly ?string $from = null,
         public readonly ?string $to = null,
         public readonly bool $structureOnly = false,
+        public readonly ?int $pipelineId = null,
     ) {
     }
 
@@ -30,10 +31,10 @@ class SyncCrmAuditJob implements ShouldQueue
         $to = $this->to ? Carbon::parse($this->to) : null;
 
         if ($this->structureOnly) {
-            $auditService->syncStructure($account);
+            $auditService->syncStructure($account, $this->pipelineId);
             return;
         }
 
-        $auditService->syncAll($account, $from, $to);
+        $auditService->syncAll($account, $from, $to, $this->pipelineId);
     }
 }

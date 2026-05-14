@@ -56,6 +56,7 @@ type Props = {
     defaults: {
         from: string;
         to: string;
+        pipeline_id: string;
     };
     links: {
         dashboard: string;
@@ -98,8 +99,17 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                     <div className="text-sm text-slate-500">{account.base_domain}</div>
                 </div>
                 {can.sync ? (
-                    <form action={links.sync} className="grid gap-2 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-4" method="post">
+                    <form action={links.sync} className="grid gap-2 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-5" method="post">
                         <input name="_token" type="hidden" value={csrf} />
+                        <label>
+                            <span className="text-xs text-slate-500">Воронка</span>
+                            <select className="mt-1 w-full rounded border-slate-300" defaultValue={defaults.pipeline_id} name="pipeline_id">
+                                <option value="">Все воронки</option>
+                                {pipelines.map((pipeline) => (
+                                    <option key={pipeline.amo_pipeline_id} value={pipeline.amo_pipeline_id}>{pipeline.name}</option>
+                                ))}
+                            </select>
+                        </label>
                         <label>
                             <span className="text-xs text-slate-500">С даты</span>
                             <input className="mt-1 w-full rounded border-slate-300" defaultValue={defaults.from} name="from" type="date" />

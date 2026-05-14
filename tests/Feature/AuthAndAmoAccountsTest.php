@@ -13,6 +13,7 @@ use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\DashboardWidget;
 use App\Models\IntegrationModule;
+use App\Jobs\SyncCrmAuditJob;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoCatalogsService;
@@ -21,6 +22,7 @@ use App\Services\Amo\AmoOAuthTokenExchanger;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Inertia\Testing\AssertableInertia;
@@ -831,6 +833,14 @@ class AuthAndAmoAccountsTest extends TestCase
         $admin = User::factory()->admin()->create();
         $viewer = User::factory()->create();
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        Queue::fake();
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Sales',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
 
         $this->actingAs($admin)
             ->get("/amo-accounts/{$account->id}/crm-audit")
@@ -839,8 +849,24 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->component('AmoAccounts/CrmAudit/Index')
                 ->where('account.name', 'Client')
                 ->where('can.sync', true)
+                ->where('pipelines.0.name', 'Sales')
                 ->has('summary')
                 ->has('links.sync'));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/crm-audit/sync", [
+                'from' => '2026-01-01',
+                'to' => '2026-05-05',
+                'pipeline_id' => 10,
+            ])
+            ->assertRedirect();
+
+        Queue::assertPushed(SyncCrmAuditJob::class, fn (SyncCrmAuditJob $job): bool =>
+            $job->amoAccountId === $account->id
+            && $job->from === '2026-01-01'
+            && $job->to === '2026-05-05'
+            && $job->pipelineId === 10
+        );
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/crm-audit/sync", [
