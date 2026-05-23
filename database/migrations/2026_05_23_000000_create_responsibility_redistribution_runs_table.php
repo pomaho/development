@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::hasTable('responsibility_redistribution_runs')) {
+            return;
+        }
+
         Schema::create('responsibility_redistribution_runs', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('amo_account_id')->constrained()->cascadeOnDelete();
