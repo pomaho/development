@@ -13,6 +13,7 @@ use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoPipelinesService;
+use App\Services\Amo\AmoResponsibilityRedistributionService;
 use App\Services\Amo\AmoTokenManager;
 use App\Services\Amo\AmoUsersService;
 use App\Services\Amo\CrmAuditService;
@@ -377,6 +378,101 @@ class AmoServicesTest extends TestCase
         $this->assertCount(3, $capturedPayload[0]['_embedded']['statuses']);
         $this->assertSame(123, $result['_embedded']['pipelines'][0]['id']);
         $this->assertArrayNotHasKey('_clone_warnings', $result);
+    }
+
+    public function test_responsibility_redistribution_previews_round_robin_contacts_and_linked_leads(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['with'] === 'leads'
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['contacts' => [
+                    ['id' => 100, 'name' => 'Contact A', '_embedded' => ['leads' => [['id' => 501], ['id' => 502]]]],
+                    ['id' => 101, 'name' => 'Contact B', '_embedded' => ['leads' => [['id' => 503]]]],
+                    ['id' => 102, 'name' => 'Contact C', '_embedded' => ['leads' => [['id' => 504]]]],
+                ]],
+            ]);
+
+        $preview = (new AmoResponsibilityRedistributionService($http))->preview($account, 10, [20, 30]);
+
+        $this->assertSame(3, $preview['contacts_count']);
+        $this->assertSame(4, $preview['leads_count']);
+        $this->assertSame([
+            ['target_user_id' => 20, 'contacts_count' => 2, 'leads_count' => 3],
+            ['target_user_id' => 30, 'contacts_count' => 1, 'leads_count' => 1],
+        ], $preview['by_target']);
+    }
+
+    public function test_responsibility_redistribution_updates_contacts_and_linked_leads_with_same_manager(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['with'] === 'leads'
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['contacts' => [
+                    ['id' => 100, 'name' => 'Contact A', '_embedded' => ['leads' => [['id' => 501], ['id' => 502]]]],
+                    ['id' => 101, 'name' => 'Contact B', '_embedded' => ['leads' => [['id' => 503]]]],
+                ]],
+            ]);
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $payload): bool =>
+                $payload === [
+                    ['id' => 100, 'responsible_user_id' => 20],
+                    ['id' => 101, 'responsible_user_id' => 30],
+                ]
+            ))
+            ->andReturn([]);
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/leads', Mockery::on(fn (array $payload): bool =>
+                $payload === [
+                    ['id' => 501, 'responsible_user_id' => 20],
+                    ['id' => 502, 'responsible_user_id' => 20],
+                    ['id' => 503, 'responsible_user_id' => 30],
+                ]
+            ))
+            ->andReturn([]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['with'] === 'leads'
+                && $query['page'] === 1
+            ))
+            ->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['contacts' => []]]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/leads', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['page'] === 1
+            ))
+            ->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['leads' => []]]);
+
+        $result = (new AmoResponsibilityRedistributionService($http))->redistribute($account, 10, [20, 30]);
+
+        $this->assertSame(2, $result['updated_contacts']);
+        $this->assertSame(3, $result['updated_leads']);
+        $this->assertSame(0, $result['remaining_contacts_count']);
+        $this->assertSame(0, $result['remaining_leads_count']);
     }
 
     public function test_crm_audit_service_saves_structure_and_entities(): void

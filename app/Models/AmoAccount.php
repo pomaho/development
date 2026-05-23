@@ -56,6 +56,11 @@ class AmoAccount extends Model
         return $this->hasMany(ApiRequestLog::class);
     }
 
+    public function responsibilityRedistributionRuns(): HasMany
+    {
+        return $this->hasMany(ResponsibilityRedistributionRun::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
