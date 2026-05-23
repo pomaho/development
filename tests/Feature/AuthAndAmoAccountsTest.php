@@ -14,12 +14,14 @@ use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\DashboardWidget;
 use App\Models\IntegrationModule;
 use App\Jobs\SyncCrmAuditJob;
+use App\Models\ResponsibilityRedistributionRun;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoOAuthTokenExchanger;
 use App\Services\Amo\AmoPipelinesService;
+use App\Services\Amo\AmoResponsibilityRedistributionService;
 use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -426,6 +428,106 @@ class AuthAndAmoAccountsTest extends TestCase
                 'source_pipeline_id' => 10,
                 'target_pipeline_id' => 20,
                 'status_map' => [101 => 201],
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_admin_can_preview_responsibility_redistribution(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $service = Mockery::mock(AmoResponsibilityRedistributionService::class);
+        $service->shouldReceive('activeUsers')->twice()->with(Mockery::type(AmoAccount::class))->andReturn([
+            ['id' => 10, 'name' => 'Old Manager', 'email' => 'old@example.test'],
+            ['id' => 20, 'name' => 'New Manager A', 'email' => 'a@example.test'],
+            ['id' => 30, 'name' => 'New Manager B', 'email' => 'b@example.test'],
+        ]);
+        $service->shouldReceive('preview')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), 10, ['20', '30'])
+            ->andReturn([
+                'source_user_id' => 10,
+                'target_user_ids' => [20, 30],
+                'contacts_count' => 3,
+                'leads_count' => 4,
+                'by_target' => [
+                    ['target_user_id' => 20, 'contacts_count' => 2, 'leads_count' => 3],
+                    ['target_user_id' => 30, 'contacts_count' => 1, 'leads_count' => 1],
+                ],
+                'sample_contacts' => [],
+            ]);
+        $this->app->instance(AmoResponsibilityRedistributionService::class, $service);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/responsibility-redistribution")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/ResponsibilityRedistribution/Index')
+                ->where('users.0.name', 'Old Manager')
+                ->where('can.sync', true));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/responsibility-redistribution/preview", [
+                'source_user_id' => 10,
+                'target_user_ids' => [20, 30],
+            ])
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/ResponsibilityRedistribution/Index')
+                ->where('preview.contacts_count', 3)
+                ->where('preview.by_target.0.contacts_count', 2));
+    }
+
+    public function test_admin_can_run_responsibility_redistribution_and_persist_result(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $service = Mockery::mock(AmoResponsibilityRedistributionService::class);
+        $service->shouldReceive('preview')->once()->andReturn([
+            'source_user_id' => 10,
+            'target_user_ids' => [20, 30],
+            'contacts_count' => 2,
+            'leads_count' => 3,
+            'by_target' => [],
+            'sample_contacts' => [],
+        ]);
+        $service->shouldReceive('redistribute')->once()->andReturn([
+            'source_user_id' => 10,
+            'target_user_ids' => [20, 30],
+            'updated_contacts' => 2,
+            'updated_leads' => 3,
+            'remaining_contacts_count' => 0,
+            'remaining_leads_count' => 0,
+            'remaining_contact_ids' => [],
+            'remaining_lead_ids' => [],
+            'by_target' => [],
+        ]);
+        $this->app->instance(AmoResponsibilityRedistributionService::class, $service);
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/responsibility-redistribution", [
+                'source_user_id' => 10,
+                'target_user_ids' => [20, 30],
+            ])
+            ->assertRedirect("/amo-accounts/{$account->id}/responsibility-redistribution");
+
+        $run = ResponsibilityRedistributionRun::query()->firstOrFail();
+        $this->assertSame(ResponsibilityRedistributionRun::STATUS_COMPLETED, $run->status);
+        $this->assertSame(2, $run->result['updated_contacts']);
+        $this->assertSame(3, $run->result['updated_leads']);
+    }
+
+    public function test_viewer_cannot_run_responsibility_redistribution(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/responsibility-redistribution", [
+                'source_user_id' => 10,
+                'target_user_ids' => [20],
             ])
             ->assertForbidden();
     }

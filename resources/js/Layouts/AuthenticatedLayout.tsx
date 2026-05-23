@@ -13,6 +13,7 @@ import {
     Plug,
     Settings2,
     ShieldCheck,
+    UserRoundCog,
     Users,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -47,6 +48,7 @@ type Props = {
             leads: string;
             pipelines: string;
             catalogs?: string;
+            responsibility_redistribution?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -64,6 +66,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
 
     const currentLinks = links.current_account;
     const catalogsHref = currentAccount ? currentLinks?.catalogs || `/amo-accounts/${currentAccount.id}/catalogs` : null;
+    const responsibilityHref = currentAccount ? currentLinks?.responsibility_redistribution || `/amo-accounts/${currentAccount.id}/responsibility-redistribution` : null;
     const navLinks: NavLink[] = [
         {
             label: 'Dashboard',
@@ -89,6 +92,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
             { label: 'Сделки', href: currentLinks.leads, icon: <ClipboardList size={16} />, active: url.endsWith('/leads') },
             { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 size={16} />, active: url.includes('/pipelines') },
             ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree size={16} />, active: url.includes('/catalogs') }] : []),
+            ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog size={16} />, active: url.includes('/responsibility-redistribution') }] : []),
             { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck size={16} />, active: url.includes('/crm-audit') },
             { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 size={16} />, active: url.endsWith('/integrations') },
             { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks size={16} />, active: url.endsWith('/widgets') },
