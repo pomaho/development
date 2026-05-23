@@ -122,9 +122,10 @@ class AmoResponsibilityRedistributionService
             $pageItems = $response['_embedded'][$embeddedKey] ?? [];
             $items = array_merge($items, is_array($pageItems) ? $pageItems : []);
 
-            $pageCount = (int) ($response['_page_count'] ?? $response['page_count'] ?? $page);
+            $pageCount = (int) ($response['_page_count'] ?? $response['page_count'] ?? 0);
+            $hasNextPage = isset($response['_links']['next']['href']);
             $page++;
-        } while ($page <= $pageCount);
+        } while (($pageCount > 0 && $page <= $pageCount) || ($pageCount === 0 && $hasNextPage));
 
         return $items;
     }

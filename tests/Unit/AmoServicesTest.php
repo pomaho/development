@@ -412,6 +412,43 @@ class AmoServicesTest extends TestCase
         ], $preview['by_target']);
     }
 
+    public function test_responsibility_redistribution_uses_next_link_when_page_count_is_missing(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_links' => ['next' => ['href' => 'https://client.amocrm.ru/api/v4/contacts?page=2']],
+                '_embedded' => ['contacts' => [
+                    ['id' => 100, 'name' => 'Contact A', '_embedded' => ['leads' => []]],
+                ]],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['page'] === 2
+            ))
+            ->andReturn([
+                '_page' => 2,
+                '_embedded' => ['contacts' => [
+                    ['id' => 101, 'name' => 'Contact B', '_embedded' => ['leads' => []]],
+                ]],
+            ]);
+
+        $preview = (new AmoResponsibilityRedistributionService($http))->preview($account, 10, [20]);
+
+        $this->assertSame(2, $preview['contacts_count']);
+        $this->assertSame(2, $preview['by_target'][0]['contacts_count']);
+    }
+
     public function test_responsibility_redistribution_can_update_linked_tasks_when_enabled(): void
     {
         $account = $this->accountWithToken('abcdef123456');
