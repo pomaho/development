@@ -17,13 +17,16 @@ type TargetSummary = {
     target_user_id: number;
     contacts_count: number;
     leads_count: number;
+    tasks_count?: number;
 };
 
 type Preview = {
     source_user_id: number;
     target_user_ids: number[];
+    include_tasks: boolean;
     contacts_count: number;
     leads_count: number;
+    tasks_count: number;
     by_target: TargetSummary[];
     sample_contacts: Array<{
         id: number;
@@ -40,8 +43,10 @@ type Run = {
     result: {
         updated_contacts?: number;
         updated_leads?: number;
+        updated_tasks?: number;
         remaining_contacts_count?: number;
         remaining_leads_count?: number;
+        remaining_tasks_count?: number;
         by_target?: TargetSummary[];
     } | null;
     error_message: string | null;
@@ -55,6 +60,7 @@ type Props = {
     form: {
         source_user_id: string;
         target_user_ids: string[];
+        include_tasks: boolean;
     };
     preview: Preview;
     runs: Run[];
@@ -148,7 +154,7 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                     </div>
                 </div>
 
-                <form action={links.preview} className="mt-4 grid gap-4 lg:grid-cols-[1fr_2fr_auto]" method="post">
+                <form action={links.preview} className="mt-4 grid gap-4 lg:grid-cols-[1fr_2fr]" method="post">
                     <input name="_token" type="hidden" value={csrf} />
                     <label className="block text-sm">
                         <span>Текущий ответственный</span>
@@ -181,8 +187,26 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                         </div>
                     </div>
 
-                    <div className="flex items-end">
-                        <button className="w-full rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50" disabled={! can.sync} type="submit">
+                    <div className="rounded border border-slate-200 bg-slate-50 p-3 text-sm lg:col-span-2">
+                        <label className="flex items-start gap-3">
+                            <input
+                                className="mt-1 rounded border-slate-300"
+                                defaultChecked={form.include_tasks}
+                                name="include_tasks"
+                                type="checkbox"
+                                value="1"
+                            />
+                            <span>
+                                <span className="block font-medium">Также переназначить задачи</span>
+                                <span className="mt-1 block text-slate-500">
+                                    Будут изменены задачи, привязанные к найденным контактам и связанным сделкам. Включайте осознанно, если задачи действительно должны перейти вместе с клиентской базой.
+                                </span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <div className="flex items-end lg:col-span-2">
+                        <button className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50" disabled={! can.sync} type="submit">
                             Показать план
                         </button>
                     </div>
@@ -199,13 +223,14 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                         <div className="flex flex-wrap gap-2 text-sm">
                             <span className="rounded bg-slate-100 px-2 py-1">Контактов: {preview.contacts_count}</span>
                             <span className="rounded bg-slate-100 px-2 py-1">Сделок: {preview.leads_count}</span>
+                            {preview.include_tasks ? <span className="rounded bg-slate-100 px-2 py-1">Задач: {preview.tasks_count}</span> : null}
                         </div>
                     </div>
 
                     <div className="mt-4 overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="text-slate-500">
-                                <tr><th className="py-2">Новый ответственный</th><th>Контакты</th><th>Связанные сделки</th></tr>
+                                <tr><th className="py-2">Новый ответственный</th><th>Контакты</th><th>Связанные сделки</th>{preview.include_tasks ? <th>Задачи</th> : null}</tr>
                             </thead>
                             <tbody>
                                 {preview.by_target.map((row) => (
@@ -213,6 +238,7 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                                         <td className="py-2 font-medium">{userName(users, row.target_user_id)}</td>
                                         <td>{row.contacts_count}</td>
                                         <td>{row.leads_count}</td>
+                                        {preview.include_tasks ? <td>{row.tasks_count || 0}</td> : null}
                                     </tr>
                                 ))}
                             </tbody>
@@ -225,6 +251,7 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                         {preview.target_user_ids.map((targetUserId) => (
                             <input key={targetUserId} name="target_user_ids[]" type="hidden" value={targetUserId} />
                         ))}
+                        {preview.include_tasks ? <input name="include_tasks" type="hidden" value="1" /> : null}
                         <button className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50" disabled={! can.sync || preview.contacts_count === 0} type="submit">
                             Запустить распределение
                         </button>
@@ -238,7 +265,7 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                 <div className="mt-3 overflow-x-auto">
                     <table className="w-full text-left text-sm">
                         <thead className="text-slate-500">
-                            <tr><th className="py-2">Дата</th><th>Источник</th><th>Статус</th><th>Контакты</th><th>Сделки</th><th>Остатки</th></tr>
+                            <tr><th className="py-2">Дата</th><th>Источник</th><th>Статус</th><th>Контакты</th><th>Сделки</th><th>Задачи</th><th>Остатки</th></tr>
                         </thead>
                         <tbody>
                             {runs.length > 0 ? runs.map((run) => (
@@ -257,15 +284,16 @@ export default function ResponsibilityRedistributionIndex({ account, users, form
                                     </td>
                                     <td className="py-3">{run.result?.updated_contacts ?? '-'}</td>
                                     <td className="py-3">{run.result?.updated_leads ?? '-'}</td>
+                                    <td className="py-3">{run.result?.updated_tasks ?? '-'}</td>
                                     <td className="py-3">
                                         {run.result ? (
-                                            <span>{run.result.remaining_contacts_count ?? 0} контактов / {run.result.remaining_leads_count ?? 0} сделок</span>
+                                            <span>{run.result.remaining_contacts_count ?? 0} контактов / {run.result.remaining_leads_count ?? 0} сделок / {run.result.remaining_tasks_count ?? 0} задач</span>
                                         ) : '-'}
                                     </td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={6}>Запусков пока нет.</td>
+                                    <td className="py-4 text-slate-500" colSpan={7}>Запусков пока нет.</td>
                                 </tr>
                             )}
                         </tbody>

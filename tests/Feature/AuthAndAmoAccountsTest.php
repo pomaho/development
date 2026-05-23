@@ -445,15 +445,17 @@ class AuthAndAmoAccountsTest extends TestCase
         ]);
         $service->shouldReceive('preview')
             ->once()
-            ->with(Mockery::type(AmoAccount::class), 10, ['20', '30'])
+            ->with(Mockery::type(AmoAccount::class), 10, ['20', '30'], true)
             ->andReturn([
                 'source_user_id' => 10,
                 'target_user_ids' => [20, 30],
+                'include_tasks' => true,
                 'contacts_count' => 3,
                 'leads_count' => 4,
+                'tasks_count' => 5,
                 'by_target' => [
-                    ['target_user_id' => 20, 'contacts_count' => 2, 'leads_count' => 3],
-                    ['target_user_id' => 30, 'contacts_count' => 1, 'leads_count' => 1],
+                    ['target_user_id' => 20, 'contacts_count' => 2, 'leads_count' => 3, 'tasks_count' => 4],
+                    ['target_user_id' => 30, 'contacts_count' => 1, 'leads_count' => 1, 'tasks_count' => 1],
                 ],
                 'sample_contacts' => [],
             ]);
@@ -471,11 +473,13 @@ class AuthAndAmoAccountsTest extends TestCase
             ->post("/amo-accounts/{$account->id}/responsibility-redistribution/preview", [
                 'source_user_id' => 10,
                 'target_user_ids' => [20, 30],
+                'include_tasks' => '1',
             ])
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('AmoAccounts/ResponsibilityRedistribution/Index')
                 ->where('preview.contacts_count', 3)
+                ->where('preview.tasks_count', 5)
                 ->where('preview.by_target.0.contacts_count', 2));
     }
 
@@ -485,23 +489,29 @@ class AuthAndAmoAccountsTest extends TestCase
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
 
         $service = Mockery::mock(AmoResponsibilityRedistributionService::class);
-        $service->shouldReceive('preview')->once()->andReturn([
+        $service->shouldReceive('preview')->once()->with(Mockery::type(AmoAccount::class), 10, ['20', '30'], true)->andReturn([
             'source_user_id' => 10,
             'target_user_ids' => [20, 30],
+            'include_tasks' => true,
             'contacts_count' => 2,
             'leads_count' => 3,
+            'tasks_count' => 4,
             'by_target' => [],
             'sample_contacts' => [],
         ]);
-        $service->shouldReceive('redistribute')->once()->andReturn([
+        $service->shouldReceive('redistribute')->once()->with(Mockery::type(AmoAccount::class), 10, ['20', '30'], true)->andReturn([
             'source_user_id' => 10,
             'target_user_ids' => [20, 30],
+            'include_tasks' => true,
             'updated_contacts' => 2,
             'updated_leads' => 3,
+            'updated_tasks' => 4,
             'remaining_contacts_count' => 0,
             'remaining_leads_count' => 0,
+            'remaining_tasks_count' => 0,
             'remaining_contact_ids' => [],
             'remaining_lead_ids' => [],
+            'remaining_task_ids' => [],
             'by_target' => [],
         ]);
         $this->app->instance(AmoResponsibilityRedistributionService::class, $service);
@@ -510,6 +520,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->post("/amo-accounts/{$account->id}/responsibility-redistribution", [
                 'source_user_id' => 10,
                 'target_user_ids' => [20, 30],
+                'include_tasks' => '1',
             ])
             ->assertRedirect("/amo-accounts/{$account->id}/responsibility-redistribution");
 
@@ -517,6 +528,7 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertSame(ResponsibilityRedistributionRun::STATUS_COMPLETED, $run->status);
         $this->assertSame(2, $run->result['updated_contacts']);
         $this->assertSame(3, $run->result['updated_leads']);
+        $this->assertSame(4, $run->result['updated_tasks']);
     }
 
     public function test_viewer_cannot_run_responsibility_redistribution(): void

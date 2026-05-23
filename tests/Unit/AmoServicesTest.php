@@ -407,9 +407,80 @@ class AmoServicesTest extends TestCase
         $this->assertSame(3, $preview['contacts_count']);
         $this->assertSame(4, $preview['leads_count']);
         $this->assertSame([
-            ['target_user_id' => 20, 'contacts_count' => 2, 'leads_count' => 3],
-            ['target_user_id' => 30, 'contacts_count' => 1, 'leads_count' => 1],
+            ['target_user_id' => 20, 'contacts_count' => 2, 'leads_count' => 3, 'tasks_count' => 0],
+            ['target_user_id' => 30, 'contacts_count' => 1, 'leads_count' => 1, 'tasks_count' => 0],
         ], $preview['by_target']);
+    }
+
+    public function test_responsibility_redistribution_can_update_linked_tasks_when_enabled(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/contacts', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['with'] === 'leads'
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['contacts' => [
+                    ['id' => 100, 'name' => 'Contact A', '_embedded' => ['leads' => [['id' => 501]]]],
+                ]],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool =>
+                $query['filter[entity_type]'] === 'contacts'
+                && $query['filter[entity_id]'] === [100]
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['tasks' => [['id' => 900, 'entity_id' => 100]]],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool =>
+                $query['filter[entity_type]'] === 'leads'
+                && $query['filter[entity_id]'] === [501]
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['tasks' => [['id' => 901, 'entity_id' => 501]]],
+            ]);
+        $http->shouldReceive('patch')->once()->with($account, '/api/v4/contacts', Mockery::any())->andReturn([]);
+        $http->shouldReceive('patch')->once()->with($account, '/api/v4/leads', Mockery::any())->andReturn([]);
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $payload): bool =>
+                $payload === [
+                    ['id' => 900, 'responsible_user_id' => 20],
+                    ['id' => 901, 'responsible_user_id' => 20],
+                ]
+            ))
+            ->andReturn([]);
+        $http->shouldReceive('get')->once()->with($account, '/api/v4/contacts', Mockery::any())->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['contacts' => []]]);
+        $http->shouldReceive('get')->once()->with($account, '/api/v4/leads', Mockery::any())->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['leads' => []]]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool =>
+                $query['filter[responsible_user_id]'] === 10
+                && $query['page'] === 1
+            ))
+            ->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['tasks' => []]]);
+
+        $result = (new AmoResponsibilityRedistributionService($http))->redistribute($account, 10, [20], true);
+
+        $this->assertSame(2, $result['updated_tasks']);
+        $this->assertSame(0, $result['remaining_tasks_count']);
+        $this->assertSame(2, $result['by_target'][0]['tasks_count']);
     }
 
     public function test_responsibility_redistribution_updates_contacts_and_linked_leads_with_same_manager(): void

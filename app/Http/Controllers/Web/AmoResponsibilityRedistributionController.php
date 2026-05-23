@@ -28,7 +28,7 @@ class AmoResponsibilityRedistributionController extends Controller
         $error = null;
 
         try {
-            $preview = $service->preview($amoAccount, (int) $data['source_user_id'], $data['target_user_ids']);
+            $preview = $service->preview($amoAccount, (int) $data['source_user_id'], $data['target_user_ids'], (bool) $data['include_tasks']);
         } catch (Throwable $exception) {
             $error = $exception->getMessage();
         }
@@ -36,6 +36,7 @@ class AmoResponsibilityRedistributionController extends Controller
         return $this->renderPage($amoAccount, $service, [
             'source_user_id' => (string) $data['source_user_id'],
             'target_user_ids' => array_map('strval', $data['target_user_ids']),
+            'include_tasks' => (bool) $data['include_tasks'],
         ], $preview, $error);
     }
 
@@ -53,8 +54,8 @@ class AmoResponsibilityRedistributionController extends Controller
         ]);
 
         try {
-            $preview = $service->preview($amoAccount, (int) $data['source_user_id'], $data['target_user_ids']);
-            $result = $service->redistribute($amoAccount, (int) $data['source_user_id'], $data['target_user_ids']);
+            $preview = $service->preview($amoAccount, (int) $data['source_user_id'], $data['target_user_ids'], (bool) $data['include_tasks']);
+            $result = $service->redistribute($amoAccount, (int) $data['source_user_id'], $data['target_user_ids'], (bool) $data['include_tasks']);
 
             $run->forceFill([
                 'status' => ResponsibilityRedistributionRun::STATUS_COMPLETED,
@@ -65,7 +66,7 @@ class AmoResponsibilityRedistributionController extends Controller
 
             return redirect()
                 ->route('amo-accounts.responsibility-redistribution.index', $amoAccount)
-                ->with('status', "Распределено контактов: {$result['updated_contacts']}. Сделок: {$result['updated_leads']}.");
+                ->with('status', "Распределено контактов: {$result['updated_contacts']}. Сделок: {$result['updated_leads']}. Задач: {$result['updated_tasks']}.");
         } catch (Throwable $exception) {
             $run->forceFill([
                 'status' => ResponsibilityRedistributionRun::STATUS_FAILED,
@@ -82,7 +83,7 @@ class AmoResponsibilityRedistributionController extends Controller
     private function renderPage(
         AmoAccount $amoAccount,
         AmoResponsibilityRedistributionService $service,
-        array $form = ['source_user_id' => '', 'target_user_ids' => []],
+        array $form = ['source_user_id' => '', 'target_user_ids' => [], 'include_tasks' => false],
         ?array $preview = null,
         ?string $error = null
     ): Response {
@@ -126,11 +127,16 @@ class AmoResponsibilityRedistributionController extends Controller
 
     private function validatedData(Request $request): array
     {
-        return $request->validate([
+        $data = $request->validate([
             'source_user_id' => ['required', 'integer', 'min:1'],
             'target_user_ids' => ['required', 'array', 'min:1'],
             'target_user_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'include_tasks' => ['sometimes', 'boolean'],
         ]);
+
+        $data['include_tasks'] = $request->boolean('include_tasks');
+
+        return $data;
     }
 
     private function links(AmoAccount $amoAccount): array
