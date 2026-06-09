@@ -13,6 +13,12 @@ type Widget = {
     component_key: string;
     sort_order: number;
     is_enabled: boolean;
+    installation: {
+        public_key: string;
+        is_enabled: boolean;
+        iframe_url: string | null;
+        api_url: string | null;
+    };
 };
 
 type Props = {
@@ -31,6 +37,9 @@ type Props = {
             roles: string;
             leads: string;
             pipelines: string;
+            catalogs?: string;
+            responsibility_redistribution?: string;
+            task_statistics?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -65,6 +74,8 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
                                 <th>Компонент</th>
                                 <th>Порядок</th>
                                 <th>Статус</th>
+                                <th>Ключ клиента</th>
+                                <th>Iframe URL</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -74,7 +85,20 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
                                     <td>{widget.name}</td>
                                     <td>{widget.component_key}</td>
                                     <td>{widget.sort_order}</td>
-                                    <td>{widget.is_enabled ? 'enabled' : 'disabled'}</td>
+                                    <td>{widget.is_enabled && widget.installation.is_enabled ? 'enabled' : 'disabled'}</td>
+                                    <td className="font-mono text-xs">{widget.installation.public_key}</td>
+                                    <td className="max-w-xl">
+                                        {widget.installation.iframe_url ? (
+                                            <div className="space-y-1">
+                                                <a className="break-all text-blue-700 hover:text-blue-900" href={widget.installation.iframe_url} target="_blank" rel="noreferrer">
+                                                    {widget.installation.iframe_url}
+                                                </a>
+                                                {widget.installation.api_url ? <div className="break-all text-xs text-slate-500">API: {widget.installation.api_url}</div> : null}
+                                            </div>
+                                        ) : (
+                                            <span className="text-slate-400">-</span>
+                                        )}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

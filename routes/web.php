@@ -19,6 +19,7 @@ use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
 use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
@@ -38,6 +39,10 @@ Route::post('/amo-oauth/external/secrets', [AmoExternalOAuthController::class, '
     ->name('amo-oauth.external.secrets');
 Route::get('/amo-oauth/callback', [AmoExternalOAuthController::class, 'callback'])->name('amo-oauth.callback');
 Route::get('/install', [AmoExternalOAuthController::class, 'install'])->name('amo-oauth.install');
+Route::get('/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'show'])
+    ->name('widgets.amo.task-overdue-dashboard.show');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'json'])
+    ->name('api.widgets.amo.task-overdue-dashboard.show');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');

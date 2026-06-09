@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AmoAccount;
+use App\Models\AmoAccountDashboardWidget;
 use App\Models\AmoCredential;
 use App\Models\AmoOAuthConnection;
 use App\Models\AmoRolesSnapshot;
@@ -721,7 +722,62 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->component('AmoAccounts/Widgets')
                 ->where('account.name', 'Client')
                 ->where('widgets.0.code', 'users_count')
-                ->where('widgets.0.component_key', 'metric.users'));
+                ->where('widgets.0.component_key', 'metric.users')
+                ->has('widgets.0.installation.public_key'));
+    }
+
+    public function test_public_task_overdue_widget_uses_account_installation_key(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $widget = DashboardWidget::query()->create([
+            'code' => 'task_overdue_dashboard',
+            'name' => 'Просроченные выполненные задачи',
+            'component_key' => 'amo_iframe_task_overdue_dashboard',
+            'sort_order' => 70,
+            'is_enabled' => true,
+        ]);
+        $installation = AmoAccountDashboardWidget::query()->create([
+            'amo_account_id' => $account->id,
+            'dashboard_widget_id' => $widget->id,
+            'public_key' => 'public-widget-key',
+            'is_enabled' => true,
+        ]);
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 10,
+            'name' => 'Manager',
+            'rights' => [],
+            'group_id' => 20,
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => ['_embedded' => ['group' => ['name' => 'Sales']]],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'tasks',
+            'external_id' => '100',
+            'name' => 'Task',
+            'responsible_user_id' => 10,
+            'entity_created_at' => now()->subDays(2),
+            'entity_updated_at' => now()->subDay(),
+            'raw' => [
+                'id' => 100,
+                'is_completed' => true,
+                'complete_till' => now()->subDays(2)->timestamp,
+                '_task_statistics' => ['completed_at' => now()->subDay()->timestamp],
+            ],
+            'synced_at' => now(),
+        ]);
+
+        $this->get("/api/widgets/amo/{$installation->public_key}/task-overdue-dashboard")
+            ->assertOk()
+            ->assertJsonPath('account.name', 'Client')
+            ->assertJsonPath('groups.0.group_name', 'Sales')
+            ->assertJsonPath('groups.0.users.0.name', 'Manager')
+            ->assertJsonPath('groups.0.users.0.completed_overdue_count', 1);
+
+        $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }
 
     public function test_api_logs_page_renders_inertia_and_hides_secret_headers(): void

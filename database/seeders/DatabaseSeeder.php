@@ -39,6 +39,14 @@ class DatabaseSeeder extends Seeder
             ['code' => 'admins_count', 'name' => 'Admins count', 'component_key' => 'metric', 'sort_order' => 40, 'is_enabled' => true],
             ['code' => 'last_sync_status', 'name' => 'Last sync status', 'component_key' => 'metric', 'sort_order' => 50, 'is_enabled' => true],
             ['code' => 'recent_api_errors', 'name' => 'Recent API errors', 'component_key' => 'table', 'sort_order' => 60, 'is_enabled' => true],
+            [
+                'code' => 'task_overdue_dashboard',
+                'name' => 'Просроченные выполненные задачи',
+                'description' => 'Универсальный iframe-виджет Sonic Expert для рабочего стола amoCRM.',
+                'component_key' => 'amo_iframe_task_overdue_dashboard',
+                'sort_order' => 70,
+                'is_enabled' => true,
+            ],
         ];
     }
 

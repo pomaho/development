@@ -66,6 +66,11 @@ class AmoAccount extends Model
         return $this->hasMany(TaskStatisticsSyncRun::class);
     }
 
+    public function dashboardWidgetInstallations(): HasMany
+    {
+        return $this->hasMany(AmoAccountDashboardWidget::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);

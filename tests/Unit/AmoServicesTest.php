@@ -640,6 +640,7 @@ class AmoServicesTest extends TestCase
             'amo_user_id' => 10,
             'name' => 'Manager',
             'rights' => [],
+            'group_id' => 20,
             'is_admin' => false,
             'is_active' => true,
             'raw' => [],
@@ -766,6 +767,14 @@ class AmoServicesTest extends TestCase
         $this->assertSame(1, $rows[0]['open_overdue_count']);
         $this->assertSame(2, $rows[0]['overdue_count']);
         $this->assertSame(66.7, $rows[0]['overdue_rate']);
+
+        $groups = $service->completedOverdueDashboard($account, $from, $to);
+
+        $this->assertSame('Группа 20', $groups[0]['group_name']);
+        $this->assertSame(1, $groups[0]['completed_count']);
+        $this->assertSame(1, $groups[0]['completed_overdue_count']);
+        $this->assertSame('Manager', $groups[0]['users'][0]['name']);
+        $this->assertSame(100.0, $groups[0]['users'][0]['overdue_rate']);
     }
 
     public function test_crm_audit_service_can_sync_selected_pipeline(): void

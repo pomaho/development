@@ -117,6 +117,81 @@ class AmoTaskStatisticsService
             ->all();
     }
 
+    public function completedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $users = AmoUsersSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->get()
+            ->keyBy('amo_user_id');
+        $rows = [];
+
+        CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'tasks')
+            ->orderBy('id')
+            ->chunkById(500, function ($tasks) use (&$rows, $users, $from, $to): void {
+                foreach ($tasks as $task) {
+                    $raw = $task->raw ?? [];
+                    $responsibleId = (int) ($task->responsible_user_id ?? 0);
+                    $user = $users->get($responsibleId);
+
+                    if ($responsibleId <= 0 || $user === null || ! (bool) ($raw['is_completed'] ?? false)) {
+                        continue;
+                    }
+
+                    $completedAt = $this->completionTime($raw) ?? $task->entity_updated_at;
+                    $completeTill = $this->timestamp($raw['complete_till'] ?? null);
+
+                    if (! $this->inPeriod($completedAt, $from, $to)) {
+                        continue;
+                    }
+
+                    $groupId = $user->group_id ? (int) $user->group_id : 0;
+                    $rows[$groupId] ??= [
+                        'group_id' => $groupId ?: null,
+                        'group_name' => $this->groupName($user),
+                        'users' => [],
+                    ];
+                    $rows[$groupId]['users'][$responsibleId] ??= [
+                        'id' => $responsibleId,
+                        'name' => $user->name,
+                        'completed_count' => 0,
+                        'completed_overdue_count' => 0,
+                        'overdue_rate' => 0.0,
+                    ];
+
+                    $rows[$groupId]['users'][$responsibleId]['completed_count']++;
+
+                    if ($completeTill !== null && $completedAt !== null && $completedAt->greaterThan($completeTill)) {
+                        $rows[$groupId]['users'][$responsibleId]['completed_overdue_count']++;
+                    }
+                }
+            });
+
+        return collect($rows)
+            ->map(function (array $group): array {
+                $group['users'] = collect($group['users'])
+                    ->map(function (array $user): array {
+                        $user['overdue_rate'] = $user['completed_count'] > 0
+                            ? round($user['completed_overdue_count'] / $user['completed_count'] * 100, 1)
+                            : 0.0;
+
+                        return $user;
+                    })
+                    ->sortByDesc('completed_overdue_count')
+                    ->values()
+                    ->all();
+
+                $group['completed_count'] = collect($group['users'])->sum('completed_count');
+                $group['completed_overdue_count'] = collect($group['users'])->sum('completed_overdue_count');
+
+                return $group;
+            })
+            ->sortBy('group_name')
+            ->values()
+            ->all();
+    }
+
     private function syncTaskQuery(AmoAccount $account, array $query, Carbon $syncedAt, ?TaskStatisticsSyncRun $run, string $type): int
     {
         $page = 1;
@@ -330,5 +405,12 @@ class AmoTaskStatisticsService
         $text = trim(preg_replace('/\s+/u', ' ', (string) $text) ?: '');
 
         return mb_strlen($text) > 250 ? mb_substr($text, 0, 247).'...' : $text;
+    }
+
+    private function groupName(AmoUsersSnapshot $user): string
+    {
+        return data_get($user->raw, '_embedded.group.name')
+            ?: data_get($user->raw, 'group.name')
+            ?: ($user->group_id ? "Группа {$user->group_id}" : 'Без группы');
     }
 }

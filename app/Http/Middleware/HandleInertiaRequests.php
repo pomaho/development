@@ -49,7 +49,7 @@ class HandleInertiaRequests extends Middleware
                     'role' => $request->user()->role,
                 ] : null,
             ],
-            'amoAccounts' => fn () => AmoAccount::query()
+            'amoAccounts' => fn () => $request->user() ? AmoAccount::query()
                 ->orderBy('name')
                 ->get(['id', 'name', 'base_domain', 'is_active'])
                 ->map(fn (AmoAccount $account): array => [
@@ -58,7 +58,7 @@ class HandleInertiaRequests extends Middleware
                     'base_domain' => $account->base_domain,
                     'is_active' => $account->is_active,
                     'dashboard_url' => route('amo-accounts.dashboard', $account),
-                ]),
+                ]) : [],
             'currentAmoAccount' => $currentAccount ? [
                 'id' => $currentAccount->id,
                 'name' => $currentAccount->name,
