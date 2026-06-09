@@ -13,6 +13,7 @@ import {
     Plug,
     Settings2,
     ShieldCheck,
+    SquareCheckBig,
     UserRoundCog,
     Users,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ type Props = {
             pipelines: string;
             catalogs?: string;
             responsibility_redistribution?: string;
+            task_statistics?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -67,6 +69,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const currentLinks = links.current_account;
     const catalogsHref = currentAccount ? currentLinks?.catalogs || `/amo-accounts/${currentAccount.id}/catalogs` : null;
     const responsibilityHref = currentAccount ? currentLinks?.responsibility_redistribution || `/amo-accounts/${currentAccount.id}/responsibility-redistribution` : null;
+    const taskStatisticsHref = currentAccount ? currentLinks?.task_statistics || `/amo-accounts/${currentAccount.id}/task-statistics` : null;
     const navLinks: NavLink[] = [
         {
             label: 'Dashboard',
@@ -93,6 +96,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
             { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 size={16} />, active: url.includes('/pipelines') },
             ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree size={16} />, active: url.includes('/catalogs') }] : []),
             ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog size={16} />, active: url.includes('/responsibility-redistribution') }] : []),
+            ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig size={16} />, active: url.includes('/task-statistics') }] : []),
             { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck size={16} />, active: url.includes('/crm-audit') },
             { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 size={16} />, active: url.endsWith('/integrations') },
             { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks size={16} />, active: url.endsWith('/widgets') },

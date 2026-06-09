@@ -1,0 +1,159 @@
+import { router } from '@inertiajs/react';
+import { RefreshCw } from 'lucide-react';
+import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
+
+type Account = {
+    id: number;
+    name: string;
+    base_domain: string;
+};
+
+type Row = {
+    responsible_user_id: number;
+    responsible_name: string | null;
+    completed_count: number;
+    open_count: number;
+    overdue_count: number;
+    total_count: number;
+    overdue_rate: number;
+};
+
+type Props = {
+    account: Account;
+    rows: Row[];
+    filters: {
+        from: string;
+        to: string;
+    };
+    can: {
+        sync: boolean;
+    };
+    links: {
+        dashboard: string;
+        amo_accounts: string;
+        oauth: string;
+        api_logs: string;
+        logout: string;
+        sync: string;
+        export: string;
+        reset: string;
+        current_account: {
+            dashboard: string;
+            show: string;
+            users: string;
+            roles: string;
+            leads: string;
+            pipelines: string;
+            catalogs: string;
+            responsibility_redistribution: string;
+            task_statistics: string;
+            crm_audit: string;
+            integrations: string;
+            widgets: string;
+        };
+    };
+};
+
+const userLabel = (row: Row) => row.responsible_name ? `${row.responsible_name} (${row.responsible_user_id})` : `ID ${row.responsible_user_id}`;
+
+export default function TaskStatisticsIndex({ account, rows, filters, can, links }: Props) {
+    const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+
+    const sync = () => {
+        router.post(links.sync, {
+            from: filters.from,
+            to: filters.to,
+        });
+    };
+
+    return (
+        <AuthenticatedLayout
+            title="amo Integrator Hub"
+            breadcrumbs={[
+                { label: 'Dashboard', href: links.dashboard },
+                { label: 'Клиенты', href: links.amo_accounts },
+                { label: account.name, href: links.current_account.show },
+                { label: 'Статистика задач' },
+            ]}
+            links={links}
+        >
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-semibold">Статистика задач</h1>
+                    <div className="mt-1 text-sm text-slate-500">{account.name} · {account.base_domain}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        className="inline-flex items-center gap-2 rounded bg-blue-700 px-3 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50"
+                        disabled={! can.sync}
+                        onClick={sync}
+                        type="button"
+                    >
+                        <RefreshCw size={16} />
+                        Синхронизировать
+                    </button>
+                    <a className="rounded border border-slate-300 px-3 py-2 text-sm hover:border-blue-400 hover:text-blue-700" href={links.export}>
+                        Экспорт
+                    </a>
+                </div>
+            </div>
+
+            <form className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm md:grid-cols-[1fr_1fr_auto_auto]" method="get">
+                <input name="_token" type="hidden" value={csrf} />
+                <label className="block">
+                    <span>Период с</span>
+                    <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.from} name="from" type="date" />
+                </label>
+                <label className="block">
+                    <span>Период по</span>
+                    <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.to} name="to" type="date" />
+                </label>
+                <div className="flex items-end">
+                    <button className="rounded bg-blue-700 px-3 py-2 text-white hover:bg-blue-800" type="submit">Фильтр</button>
+                </div>
+                <div className="flex items-end">
+                    <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={links.reset}>Сбросить</a>
+                </div>
+            </form>
+
+            <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Выполненные задачи считаются по завершенным задачам, обновленным в выбранный период. Просрочка считается по текущим открытым задачам с дедлайном в прошлом.
+            </div>
+
+            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="text-slate-500">
+                            <tr>
+                                <th className="py-2">Пользователь</th>
+                                <th>Выполнено за период</th>
+                                <th>Открыто сейчас</th>
+                                <th>Просрочено сейчас</th>
+                                <th>Всего в отчете</th>
+                                <th>% просрочки</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.length > 0 ? rows.map((row) => (
+                                <tr className="border-t border-slate-100" key={row.responsible_user_id}>
+                                    <td className="py-3 font-medium">{userLabel(row)}</td>
+                                    <td>{row.completed_count}</td>
+                                    <td>{row.open_count}</td>
+                                    <td>
+                                        <span className={row.overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.overdue_count}</span>
+                                    </td>
+                                    <td>{row.total_count}</td>
+                                    <td>{row.overdue_rate}%</td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td className="py-4 text-slate-500" colSpan={6}>Данных пока нет. Запустите синхронизацию задач.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </AuthenticatedLayout>
+    );
+}

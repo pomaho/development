@@ -22,6 +22,7 @@ use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoOAuthTokenExchanger;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoResponsibilityRedistributionService;
+use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -540,6 +541,55 @@ class AuthAndAmoAccountsTest extends TestCase
             ->post("/amo-accounts/{$account->id}/responsibility-redistribution", [
                 'source_user_id' => 10,
                 'target_user_ids' => [20],
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_admin_can_view_and_sync_task_statistics(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $service = Mockery::mock(AmoTaskStatisticsService::class);
+        $service->shouldReceive('statistics')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), Mockery::any(), Mockery::any())
+            ->andReturn([[
+                'responsible_user_id' => 10,
+                'responsible_name' => 'Manager',
+                'completed_count' => 5,
+                'open_count' => 4,
+                'overdue_count' => 1,
+                'total_count' => 9,
+                'overdue_rate' => 25.0,
+            ]]);
+        $service->shouldReceive('sync')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), Mockery::any(), Mockery::any())
+            ->andReturn(['completed' => 5, 'open' => 4]);
+        $this->app->instance(AmoTaskStatisticsService::class, $service);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/task-statistics?from=2026-06-01&to=2026-06-09")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/TaskStatistics/Index')
+                ->where('rows.0.responsible_name', 'Manager')
+                ->where('rows.0.completed_count', 5)
+                ->where('can.sync', true));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/task-statistics/sync", [
+                'from' => '2026-06-01',
+                'to' => '2026-06-09',
+            ])
+            ->assertRedirect("/amo-accounts/{$account->id}/task-statistics?from=2026-06-01&to=2026-06-09");
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/task-statistics/sync", [
+                'from' => '2026-06-01',
+                'to' => '2026-06-09',
             ])
             ->assertForbidden();
     }

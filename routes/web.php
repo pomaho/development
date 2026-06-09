@@ -14,6 +14,7 @@ use App\Http\Controllers\Web\AmoLeadsController;
 use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoResponsibilityRedistributionController;
 use App\Http\Controllers\Web\AmoRolesController;
+use App\Http\Controllers\Web\AmoTaskStatisticsController;
 use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
 use App\Http\Controllers\Web\CrmAuditController;
@@ -67,6 +68,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'index'])->name('amo-accounts.responsibility-redistribution.index');
     Route::post('/amo-accounts/{amo_account}/responsibility-redistribution/preview', [AmoResponsibilityRedistributionController::class, 'preview'])->name('amo-accounts.responsibility-redistribution.preview');
     Route::post('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'store'])->name('amo-accounts.responsibility-redistribution.store');
+    Route::get('/amo-accounts/{amo_account}/task-statistics', [AmoTaskStatisticsController::class, 'index'])->name('amo-accounts.task-statistics.index');
+    Route::post('/amo-accounts/{amo_account}/task-statistics/sync', [AmoTaskStatisticsController::class, 'sync'])->name('amo-accounts.task-statistics.sync');
+    Route::get('/amo-accounts/{amo_account}/task-statistics-export', [AmoTaskStatisticsController::class, 'export'])->name('amo-accounts.task-statistics.export');
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');

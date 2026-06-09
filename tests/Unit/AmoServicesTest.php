@@ -14,6 +14,7 @@ use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoResponsibilityRedistributionService;
+use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\AmoTokenManager;
 use App\Services\Amo\AmoUsersService;
 use App\Services\Amo\CrmAuditService;
@@ -628,6 +629,83 @@ class AmoServicesTest extends TestCase
         $this->assertDatabaseHas('crm_pipelines_snapshots', ['amo_pipeline_id' => 10, 'name' => 'Sales']);
         $this->assertDatabaseHas('crm_custom_fields_snapshots', ['entity_type' => 'leads', 'amo_field_id' => 100]);
         $this->assertDatabaseHas('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '1']);
+    }
+
+    public function test_task_statistics_service_syncs_tasks_and_counts_completed_and_overdue(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 10,
+            'name' => 'Manager',
+            'rights' => [],
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $from = now()->subWeek()->startOfDay();
+        $to = now()->endOfDay();
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool =>
+                $query['filter[is_completed]'] === 1
+                && $query['filter[updated_at][from]'] === $from->timestamp
+                && $query['filter[updated_at][to]'] === $to->timestamp
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['tasks' => [[
+                    'id' => 100,
+                    'responsible_user_id' => 10,
+                    'is_completed' => true,
+                    'text' => 'Done',
+                    'created_at' => now()->subDays(2)->timestamp,
+                    'updated_at' => now()->subDay()->timestamp,
+                    'complete_till' => now()->subDay()->timestamp,
+                ]]],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool => $query['filter[is_completed]'] === 0))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['tasks' => [
+                    [
+                        'id' => 101,
+                        'responsible_user_id' => 10,
+                        'is_completed' => false,
+                        'text' => 'Overdue',
+                        'created_at' => now()->subDays(2)->timestamp,
+                        'updated_at' => now()->subDay()->timestamp,
+                        'complete_till' => now()->subHour()->timestamp,
+                    ],
+                    [
+                        'id' => 102,
+                        'responsible_user_id' => 10,
+                        'is_completed' => false,
+                        'text' => 'Future',
+                        'created_at' => now()->subDays(2)->timestamp,
+                        'updated_at' => now()->subDay()->timestamp,
+                        'complete_till' => now()->addDay()->timestamp,
+                    ],
+                ]],
+            ]);
+
+        $service = new AmoTaskStatisticsService($http);
+        $syncCounts = $service->sync($account, $from, $to);
+        $rows = $service->statistics($account, $from, $to);
+
+        $this->assertSame(['completed' => 1, 'open' => 2], $syncCounts);
+        $this->assertSame('Manager', $rows[0]['responsible_name']);
+        $this->assertSame(1, $rows[0]['completed_count']);
+        $this->assertSame(2, $rows[0]['open_count']);
+        $this->assertSame(1, $rows[0]['overdue_count']);
+        $this->assertSame(50.0, $rows[0]['overdue_rate']);
     }
 
     public function test_crm_audit_service_can_sync_selected_pipeline(): void
