@@ -672,6 +672,45 @@ class AmoServicesTest extends TestCase
             ]);
         $http->shouldReceive('get')
             ->once()
+            ->with($account, '/api/v4/events', Mockery::on(fn (array $query): bool =>
+                $query['filter[type][]'] === 'task_completed'
+                && $query['filter[entity][]'] === 'task'
+                && $query['filter[created_at][from]'] === $from->timestamp
+                && $query['filter[created_at][to]'] === $to->timestamp
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['events' => [[
+                    'id' => 'event-100',
+                    'entity_id' => 100,
+                    'entity_type' => 'task',
+                    'type' => 'task_completed',
+                    'created_by' => 10,
+                    'created_at' => now()->subDay()->timestamp,
+                ]]],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool =>
+                $query['filter[id]'] === [100]
+                && $query['page'] === 1
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['tasks' => [[
+                    'id' => 100,
+                    'responsible_user_id' => 10,
+                    'is_completed' => true,
+                    'text' => $longTaskText,
+                    'created_at' => now()->subDays(2)->timestamp,
+                    'updated_at' => now()->timestamp,
+                    'complete_till' => now()->subDays(2)->timestamp,
+                ]]],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
             ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool => $query['filter[is_completed]'] === 0))
             ->andReturn([
                 '_page' => 1,
@@ -708,15 +747,18 @@ class AmoServicesTest extends TestCase
         $run->refresh();
         $rows = $service->statistics($account, $from, $to);
 
-        $this->assertSame(['completed' => 1, 'open' => 2], $syncCounts);
+        $this->assertSame(['completed' => 1, 'completion_events' => 1, 'open' => 2], $syncCounts);
         $this->assertSame(TaskStatisticsSyncRun::STATUS_COMPLETED, $run->status);
         $this->assertSame(1, $run->completed_found);
         $this->assertSame(1, $run->completed_synced);
+        $this->assertSame(1, $run->completion_events_found);
+        $this->assertSame(1, $run->completion_events_synced);
         $this->assertSame(2, $run->open_found);
         $this->assertSame(2, $run->open_synced);
         $task = CrmEntitySnapshot::query()->where('entity_type', 'tasks')->where('external_id', '100')->firstOrFail();
         $this->assertLessThanOrEqual(250, mb_strlen((string) $task->name));
         $this->assertSame($longTaskText, $task->raw['text']);
+        $this->assertSame('event-100', $task->raw['_task_statistics']['completed_event_id']);
         $this->assertSame('Manager', $rows[0]['responsible_name']);
         $this->assertSame(1, $rows[0]['completed_count']);
         $this->assertSame(1, $rows[0]['completed_overdue_count']);

@@ -26,6 +26,8 @@ type Run = {
     period_to: string | null;
     completed_found: number;
     completed_synced: number;
+    completion_events_found: number;
+    completion_events_synced: number;
     open_found: number;
     open_synced: number;
     error_message: string | null;
@@ -136,7 +138,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
             </form>
 
             <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                MVP-логика: выполненная задача считается просроченной, если `updated_at` позже `complete_till`. Открытая задача считается просроченной, если дедлайн уже прошел.
+                Выполненная задача считается просроченной по событию завершения `task_completed`: если время события позже дедлайна `complete_till`. Если событие еще не найдено, используется fallback по `updated_at`.
             </div>
 
             <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -179,6 +181,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                 <th>Период</th>
                                 <th>Статус</th>
                                 <th>Выполненные</th>
+                                <th>События завершения</th>
                                 <th>Открытые</th>
                                 <th>Ошибка</th>
                             </tr>
@@ -190,12 +193,13 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                     <td>{run.period_from || '-'} - {run.period_to || '-'}</td>
                                     <td>{statusLabel(run.status)}</td>
                                     <td>нашел {run.completed_found} / синхронизировал {run.completed_synced}</td>
+                                    <td>нашел {run.completion_events_found} / синхронизировал {run.completion_events_synced}</td>
                                     <td>нашел {run.open_found} / синхронизировал {run.open_synced}</td>
                                     <td className="max-w-md text-red-700">{run.error_message || '-'}</td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={6}>Синхронизаций пока нет.</td>
+                                    <td className="py-4 text-slate-500" colSpan={7}>Синхронизаций пока нет.</td>
                                 </tr>
                             )}
                         </tbody>

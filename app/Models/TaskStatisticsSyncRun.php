@@ -19,6 +19,8 @@ class TaskStatisticsSyncRun extends Model
         'period_to',
         'completed_found',
         'completed_synced',
+        'completion_events_found',
+        'completion_events_synced',
         'open_found',
         'open_synced',
         'error_message',

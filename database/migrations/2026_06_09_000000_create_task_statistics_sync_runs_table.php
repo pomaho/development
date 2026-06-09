@@ -20,6 +20,8 @@ return new class extends Migration
             $table->timestamp('period_to')->nullable();
             $table->unsignedInteger('completed_found')->default(0);
             $table->unsignedInteger('completed_synced')->default(0);
+            $table->unsignedInteger('completion_events_found')->default(0);
+            $table->unsignedInteger('completion_events_synced')->default(0);
             $table->unsignedInteger('open_found')->default(0);
             $table->unsignedInteger('open_synced')->default(0);
             $table->text('error_message')->nullable();

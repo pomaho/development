@@ -38,6 +38,8 @@ class AmoTaskStatisticsController extends Controller
                     'period_to' => $run->period_to?->toDateString(),
                     'completed_found' => $run->completed_found,
                     'completed_synced' => $run->completed_synced,
+                    'completion_events_found' => $run->completion_events_found,
+                    'completion_events_synced' => $run->completion_events_synced,
                     'open_found' => $run->open_found,
                     'open_synced' => $run->open_synced,
                     'error_message' => $run->error_message,
