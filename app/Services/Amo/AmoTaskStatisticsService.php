@@ -5,6 +5,7 @@ namespace App\Services\Amo;
 use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
 use App\Models\CrmEntitySnapshot;
+use App\Models\TaskStatisticsSyncRun;
 use Illuminate\Support\Carbon;
 
 class AmoTaskStatisticsService
@@ -13,24 +14,30 @@ class AmoTaskStatisticsService
     {
     }
 
-    public function sync(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function sync(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, ?TaskStatisticsSyncRun $run = null): array
     {
         $syncedAt = now();
-        $completed = $this->fetchTasks($account, [
+        $run?->forceFill([
+            'status' => TaskStatisticsSyncRun::STATUS_RUNNING,
+            'started_at' => now(),
+        ])->save();
+
+        $completed = $this->syncTaskQuery($account, [
             'filter[is_completed]' => 1,
             ...$this->updatedAtQuery($from, $to),
-        ]);
-        $open = $this->fetchTasks($account, [
+        ], $syncedAt, $run, 'completed');
+        $open = $this->syncTaskQuery($account, [
             'filter[is_completed]' => 0,
-        ]);
+        ], $syncedAt, $run, 'open');
 
-        foreach (array_merge($completed, $open) as $task) {
-            $this->saveTask($account, $task, $syncedAt);
-        }
+        $run?->forceFill([
+            'status' => TaskStatisticsSyncRun::STATUS_COMPLETED,
+            'finished_at' => now(),
+        ])->save();
 
         return [
-            'completed' => count($completed),
-            'open' => count($open),
+            'completed' => $completed,
+            'open' => $open,
         ];
     }
 
@@ -98,14 +105,23 @@ class AmoTaskStatisticsService
             ->all();
     }
 
-    private function fetchTasks(AmoAccount $account, array $query): array
+    private function syncTaskQuery(AmoAccount $account, array $query, Carbon $syncedAt, ?TaskStatisticsSyncRun $run, string $type): int
     {
         $page = 1;
-        $items = [];
+        $total = 0;
 
         do {
             $payload = $this->http->get($account, '/api/v4/tasks', [...$query, 'page' => $page, 'limit' => 250]);
-            $items = array_merge($items, $payload['_embedded']['tasks'] ?? []);
+            $tasks = $payload['_embedded']['tasks'] ?? [];
+            $tasks = is_array($tasks) ? $tasks : [];
+
+            foreach ($tasks as $task) {
+                $this->saveTask($account, $task, $syncedAt);
+            }
+
+            $count = count($tasks);
+            $total += $count;
+            $this->updateRunProgress($run, $type, $count);
 
             $currentPage = (int) ($payload['_page'] ?? $page);
             $pageCount = (int) ($payload['_page_count'] ?? 0);
@@ -117,7 +133,20 @@ class AmoTaskStatisticsService
             }
         } while (($pageCount > 0 && $currentPage < $pageCount) || ($pageCount === 0 && $hasNext));
 
-        return $items;
+        return $total;
+    }
+
+    private function updateRunProgress(?TaskStatisticsSyncRun $run, string $type, int $count): void
+    {
+        if ($run === null || $count === 0) {
+            return;
+        }
+
+        $foundColumn = "{$type}_found";
+        $syncedColumn = "{$type}_synced";
+        $run->increment($foundColumn, $count);
+        $run->increment($syncedColumn, $count);
+        $run->refresh();
     }
 
     private function saveTask(AmoAccount $account, array $task, Carbon $syncedAt): void

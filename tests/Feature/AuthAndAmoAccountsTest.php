@@ -14,7 +14,9 @@ use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\DashboardWidget;
 use App\Models\IntegrationModule;
 use App\Jobs\SyncCrmAuditJob;
+use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\ResponsibilityRedistributionRun;
+use App\Models\TaskStatisticsSyncRun;
 use App\Models\User;
 use App\Services\Amo\AmoFallbackHttpClient;
 use App\Services\Amo\AmoCatalogsService;
@@ -547,6 +549,8 @@ class AuthAndAmoAccountsTest extends TestCase
 
     public function test_admin_can_view_and_sync_task_statistics(): void
     {
+        Queue::fake();
+
         $admin = User::factory()->admin()->create();
         $viewer = User::factory()->create();
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
@@ -564,10 +568,6 @@ class AuthAndAmoAccountsTest extends TestCase
                 'total_count' => 9,
                 'overdue_rate' => 25.0,
             ]]);
-        $service->shouldReceive('sync')
-            ->once()
-            ->with(Mockery::type(AmoAccount::class), Mockery::any(), Mockery::any())
-            ->andReturn(['completed' => 5, 'open' => 4]);
         $this->app->instance(AmoTaskStatisticsService::class, $service);
 
         $this->actingAs($admin)
@@ -585,6 +585,12 @@ class AuthAndAmoAccountsTest extends TestCase
                 'to' => '2026-06-09',
             ])
             ->assertRedirect("/amo-accounts/{$account->id}/task-statistics?from=2026-06-01&to=2026-06-09");
+
+        $run = TaskStatisticsSyncRun::query()->firstOrFail();
+        $this->assertSame(TaskStatisticsSyncRun::STATUS_PENDING, $run->status);
+        $this->assertSame('2026-06-01', $run->period_from->toDateString());
+        $this->assertSame('2026-06-09', $run->period_to->toDateString());
+        Queue::assertPushed(SyncAmoTaskStatisticsJob::class);
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/task-statistics/sync", [

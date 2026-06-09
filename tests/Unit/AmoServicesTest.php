@@ -8,6 +8,7 @@ use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
+use App\Models\TaskStatisticsSyncRun;
 use App\Services\Amo\AmoClientFactory;
 use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoFallbackHttpClient;
@@ -696,11 +697,22 @@ class AmoServicesTest extends TestCase
                 ]],
             ]);
 
+        $run = TaskStatisticsSyncRun::query()->create([
+            'amo_account_id' => $account->id,
+            'period_from' => $from,
+            'period_to' => $to,
+        ]);
         $service = new AmoTaskStatisticsService($http);
-        $syncCounts = $service->sync($account, $from, $to);
+        $syncCounts = $service->sync($account, $from, $to, $run);
+        $run->refresh();
         $rows = $service->statistics($account, $from, $to);
 
         $this->assertSame(['completed' => 1, 'open' => 2], $syncCounts);
+        $this->assertSame(TaskStatisticsSyncRun::STATUS_COMPLETED, $run->status);
+        $this->assertSame(1, $run->completed_found);
+        $this->assertSame(1, $run->completed_synced);
+        $this->assertSame(2, $run->open_found);
+        $this->assertSame(2, $run->open_synced);
         $this->assertSame('Manager', $rows[0]['responsible_name']);
         $this->assertSame(1, $rows[0]['completed_count']);
         $this->assertSame(2, $rows[0]['open_count']);

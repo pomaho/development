@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\AmoAccount;
+use App\Models\TaskStatisticsSyncRun;
 use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +27,23 @@ class AmoTaskStatisticsController extends Controller
                 'base_domain' => $amoAccount->base_domain,
             ],
             'rows' => $statisticsService->statistics($amoAccount, $from, $to),
+            'runs' => $amoAccount->taskStatisticsSyncRuns()
+                ->latest()
+                ->limit(10)
+                ->get()
+                ->map(fn (TaskStatisticsSyncRun $run): array => [
+                    'id' => $run->id,
+                    'status' => $run->status,
+                    'period_from' => $run->period_from?->toDateString(),
+                    'period_to' => $run->period_to?->toDateString(),
+                    'completed_found' => $run->completed_found,
+                    'completed_synced' => $run->completed_synced,
+                    'open_found' => $run->open_found,
+                    'open_synced' => $run->open_synced,
+                    'error_message' => $run->error_message,
+                    'created_at' => $run->created_at?->format('Y-m-d H:i:s'),
+                    'finished_at' => $run->finished_at?->format('Y-m-d H:i:s'),
+                ]),
             'filters' => [
                 'from' => $request->string('from')->toString(),
                 'to' => $request->string('to')->toString(),
@@ -36,16 +55,23 @@ class AmoTaskStatisticsController extends Controller
         ]);
     }
 
-    public function sync(Request $request, AmoAccount $amoAccount, AmoTaskStatisticsService $statisticsService): RedirectResponse
+    public function sync(Request $request, AmoAccount $amoAccount): RedirectResponse
     {
         $this->authorize('sync', $amoAccount);
 
         [$from, $to] = $this->period($request);
-        $counts = $statisticsService->sync($amoAccount, $from, $to);
+        $run = TaskStatisticsSyncRun::query()->create([
+            'amo_account_id' => $amoAccount->id,
+            'status' => TaskStatisticsSyncRun::STATUS_PENDING,
+            'period_from' => $from,
+            'period_to' => $to,
+        ]);
+
+        SyncAmoTaskStatisticsJob::dispatch($run->id);
 
         return redirect()
             ->route('amo-accounts.task-statistics.index', array_merge(['amo_account' => $amoAccount], $request->only(['from', 'to'])))
-            ->with('status', "Синхронизировано задач: выполненных {$counts['completed']}, открытых {$counts['open']}.");
+            ->with('status', "Синхронизация задач поставлена в очередь. Запуск #{$run->id}.");
     }
 
     public function export(Request $request, AmoAccount $amoAccount, AmoTaskStatisticsService $statisticsService, TableExportService $export): StreamedResponse

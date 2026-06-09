@@ -61,6 +61,11 @@ class AmoAccount extends Model
         return $this->hasMany(ResponsibilityRedistributionRun::class);
     }
 
+    public function taskStatisticsSyncRuns(): HasMany
+    {
+        return $this->hasMany(TaskStatisticsSyncRun::class);
+    }
+
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
