@@ -1,0 +1,11 @@
+{
+  "widget": {
+    "name": "Sonic Expert: просроченные задачи",
+    "short_description": "Просроченные выполненные задачи",
+    "description": "Отчет Sonic Expert по выполненным просроченным задачам, сгруппированный по группам пользователей amoCRM."
+  },
+  "settings": {
+    "service_base_url": "Адрес Sonic Expert",
+    "public_key": "Ключ клиента"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "widget": {
+    "name": "Sonic Expert: просроченные задачи",
+    "description": "Отчет Sonic Expert по выполненным просроченным задачам, сгруппированный по группам пользователей amoCRM.",
+    "short_description": "Просроченные выполненные задачи",
+    "code": "sonic_expert_task_overdue_dashboard",
+    "version": "1.0.0",
+    "interface_version": 2,
+    "init": "script.js",
+    "locale": [
+      "ru"
+    ],
+    "installation": true,
+    "support": {
+      "link": "https://develop.sonic.expert",
+      "email": "support@sonic.expert"
+    }
+  },
+  "locations": [
+    "dashboard",
+    "widget_page",
+    "settings"
+  ],
+  "settings": {
+    "service_base_url": {
+      "type": "text",
+      "name": "Адрес Sonic Expert",
+      "default": "https://develop.sonic.expert",
+      "required": true
+    },
+    "public_key": {
+      "type": "text",
+      "name": "Ключ клиента",
+      "default": "",
+      "required": true
+    }
+  }
+}

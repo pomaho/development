@@ -306,7 +306,43 @@ AMO_EXTERNAL_INTEGRATION_SCOPES="crm,notifications"
 /amo-accounts/{id}/widgets
 ```
 
-В шапке есть selector клиента. В режиме конкретного клиента dashboard, users audit, воронки, CRM-аудит, интеграции и dashboard-блоки работают в рамках выбранного `amo_account_id`. Dashboard-блоки — это внутренние блоки интерфейса сервиса, а не установленные amoCRM-виджеты клиента.
+В шапке есть selector клиента. В режиме конкретного клиента dashboard, users audit, воронки, CRM-аудит, интеграции и dashboard-блоки работают в рамках выбранного `amo_account_id`. Dashboard-блоки также показывают client-specific `public_key` и iframe URL для amoCRM-виджетов.
+
+## amoCRM dashboard widgets
+
+В проекте есть пакет amoCRM-виджета:
+
+```text
+amo-widget/task-overdue-dashboard
+```
+
+Виджет Sonic Expert открывает iframe-отчет:
+
+```text
+https://your-domain.ru/widgets/amo/{public_key}/task-overdue-dashboard
+```
+
+Каждый клиент amoCRM получает отдельный `public_key`. Получить его можно в интерфейсе сервиса:
+
+```text
+Клиенты → нужный аккаунт → Dashboard-блоки → Просроченные выполненные задачи
+```
+
+Сборка zip-пакета:
+
+```bash
+cd amo-widget/task-overdue-dashboard
+zip -r sonic-expert-task-overdue-dashboard.zip manifest.json script.js style.css i18n
+```
+
+Настройки виджета при установке в amoCRM:
+
+```text
+Адрес Sonic Expert: https://your-domain.ru
+Ключ клиента: public_key из страницы Dashboard-блоки
+```
+
+Если amoCRM-аккаунт не поддерживает placement на рабочем столе, используйте fallback `widget_page`: тот же iframe-отчет будет открываться как отдельная страница виджета внутри amoCRM.
 
 Модуль воронок использует amoCRM API:
 
