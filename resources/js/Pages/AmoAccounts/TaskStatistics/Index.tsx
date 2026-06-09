@@ -11,7 +11,9 @@ type Row = {
     responsible_user_id: number;
     responsible_name: string | null;
     completed_count: number;
+    completed_overdue_count: number;
     open_count: number;
+    open_overdue_count: number;
     overdue_count: number;
     total_count: number;
     overdue_rate: number;
@@ -134,7 +136,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
             </form>
 
             <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Выполненные задачи считаются по завершенным задачам, обновленным в выбранный период. Просрочка считается по текущим открытым задачам с дедлайном в прошлом.
+                MVP-логика: выполненная задача считается просроченной, если `updated_at` позже `complete_till`. Открытая задача считается просроченной, если дедлайн уже прошел.
             </div>
 
             <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -208,8 +210,10 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                             <tr>
                                 <th className="py-2">Пользователь</th>
                                 <th>Выполнено за период</th>
+                                <th>Выполнено с просрочкой</th>
                                 <th>Открыто сейчас</th>
-                                <th>Просрочено сейчас</th>
+                                <th>Открыто просрочено</th>
+                                <th>Всего просрочено</th>
                                 <th>Всего в отчете</th>
                                 <th>% просрочки</th>
                             </tr>
@@ -219,7 +223,13 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                 <tr className="border-t border-slate-100" key={row.responsible_user_id}>
                                     <td className="py-3 font-medium">{userLabel(row)}</td>
                                     <td>{row.completed_count}</td>
+                                    <td>
+                                        <span className={row.completed_overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.completed_overdue_count}</span>
+                                    </td>
                                     <td>{row.open_count}</td>
+                                    <td>
+                                        <span className={row.open_overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.open_overdue_count}</span>
+                                    </td>
                                     <td>
                                         <span className={row.overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.overdue_count}</span>
                                     </td>
@@ -228,7 +238,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={6}>Данных пока нет. Запустите синхронизацию задач.</td>
+                                    <td className="py-4 text-slate-500" colSpan={8}>Данных пока нет. Запустите синхронизацию задач.</td>
                                 </tr>
                             )}
                         </tbody>

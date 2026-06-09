@@ -67,7 +67,9 @@ class AmoTaskStatisticsService
                         'responsible_user_id' => $responsibleId,
                         'responsible_name' => $users->get($responsibleId)?->name,
                         'completed_count' => 0,
+                        'completed_overdue_count' => 0,
                         'open_count' => 0,
+                        'open_overdue_count' => 0,
                         'overdue_count' => 0,
                         'total_count' => 0,
                     ];
@@ -75,10 +77,16 @@ class AmoTaskStatisticsService
                     $isCompleted = (bool) ($raw['is_completed'] ?? false);
                     $completeTill = $this->timestamp($raw['complete_till'] ?? null);
                     $updatedAt = $task->entity_updated_at;
+                    $completedLate = $isCompleted && $completeTill !== null && $updatedAt !== null && $updatedAt->greaterThan($completeTill);
 
                     if ($isCompleted && $this->inPeriod($updatedAt, $from, $to)) {
                         $rows[$responsibleId]['completed_count']++;
                         $rows[$responsibleId]['total_count']++;
+
+                        if ($completedLate) {
+                            $rows[$responsibleId]['completed_overdue_count']++;
+                            $rows[$responsibleId]['overdue_count']++;
+                        }
                     }
 
                     if (! $isCompleted) {
@@ -86,6 +94,7 @@ class AmoTaskStatisticsService
                         $rows[$responsibleId]['total_count']++;
 
                         if ($completeTill !== null && $completeTill->lessThan($now)) {
+                            $rows[$responsibleId]['open_overdue_count']++;
                             $rows[$responsibleId]['overdue_count']++;
                         }
                     }
@@ -94,8 +103,8 @@ class AmoTaskStatisticsService
 
         return collect($rows)
             ->map(function (array $row): array {
-                $row['overdue_rate'] = $row['open_count'] > 0
-                    ? round($row['overdue_count'] / $row['open_count'] * 100, 1)
+                $row['overdue_rate'] = $row['total_count'] > 0
+                    ? round($row['overdue_count'] / $row['total_count'] * 100, 1)
                     : 0.0;
 
                 return $row;

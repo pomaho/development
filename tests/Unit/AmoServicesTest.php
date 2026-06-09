@@ -667,7 +667,7 @@ class AmoServicesTest extends TestCase
                     'text' => $longTaskText,
                     'created_at' => now()->subDays(2)->timestamp,
                     'updated_at' => now()->subDay()->timestamp,
-                    'complete_till' => now()->subDay()->timestamp,
+                    'complete_till' => now()->subDays(2)->timestamp,
                 ]]],
             ]);
         $http->shouldReceive('get')
@@ -719,9 +719,11 @@ class AmoServicesTest extends TestCase
         $this->assertSame($longTaskText, $task->raw['text']);
         $this->assertSame('Manager', $rows[0]['responsible_name']);
         $this->assertSame(1, $rows[0]['completed_count']);
+        $this->assertSame(1, $rows[0]['completed_overdue_count']);
         $this->assertSame(2, $rows[0]['open_count']);
-        $this->assertSame(1, $rows[0]['overdue_count']);
-        $this->assertSame(50.0, $rows[0]['overdue_rate']);
+        $this->assertSame(1, $rows[0]['open_overdue_count']);
+        $this->assertSame(2, $rows[0]['overdue_count']);
+        $this->assertSame(66.7, $rows[0]['overdue_rate']);
     }
 
     public function test_crm_audit_service_can_sync_selected_pipeline(): void
