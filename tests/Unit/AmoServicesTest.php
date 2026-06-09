@@ -649,6 +649,7 @@ class AmoServicesTest extends TestCase
         $from = now()->subWeek()->startOfDay();
         $to = now()->endOfDay();
         $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $longTaskText = str_repeat('https://example.test/tender?message=abcdef ', 20).'Финальный этап по тендеру';
         $http->shouldReceive('get')
             ->once()
             ->with($account, '/api/v4/tasks', Mockery::on(fn (array $query): bool =>
@@ -663,7 +664,7 @@ class AmoServicesTest extends TestCase
                     'id' => 100,
                     'responsible_user_id' => 10,
                     'is_completed' => true,
-                    'text' => 'Done',
+                    'text' => $longTaskText,
                     'created_at' => now()->subDays(2)->timestamp,
                     'updated_at' => now()->subDay()->timestamp,
                     'complete_till' => now()->subDay()->timestamp,
@@ -713,6 +714,9 @@ class AmoServicesTest extends TestCase
         $this->assertSame(1, $run->completed_synced);
         $this->assertSame(2, $run->open_found);
         $this->assertSame(2, $run->open_synced);
+        $task = CrmEntitySnapshot::query()->where('entity_type', 'tasks')->where('external_id', '100')->firstOrFail();
+        $this->assertLessThanOrEqual(250, mb_strlen((string) $task->name));
+        $this->assertSame($longTaskText, $task->raw['text']);
         $this->assertSame('Manager', $rows[0]['responsible_name']);
         $this->assertSame(1, $rows[0]['completed_count']);
         $this->assertSame(2, $rows[0]['open_count']);

@@ -154,7 +154,7 @@ class AmoTaskStatisticsService
         CrmEntitySnapshot::query()->updateOrCreate(
             ['amo_account_id' => $account->id, 'entity_type' => 'tasks', 'external_id' => (string) $task['id']],
             [
-                'name' => $task['text'] ?? null,
+                'name' => $this->previewText($task['text'] ?? null),
                 'responsible_user_id' => $task['responsible_user_id'] ?? null,
                 'entity_created_at' => $this->timestamp($task['created_at'] ?? null),
                 'entity_updated_at' => $this->timestamp($task['updated_at'] ?? null),
@@ -196,5 +196,16 @@ class AmoTaskStatisticsService
     private function timestamp(mixed $timestamp): ?Carbon
     {
         return $timestamp ? Carbon::createFromTimestamp((int) $timestamp) : null;
+    }
+
+    private function previewText(mixed $text): ?string
+    {
+        if ($text === null) {
+            return null;
+        }
+
+        $text = trim(preg_replace('/\s+/u', ' ', (string) $text) ?: '');
+
+        return mb_strlen($text) > 250 ? mb_substr($text, 0, 247).'...' : $text;
     }
 }
