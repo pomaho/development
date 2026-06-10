@@ -27,6 +27,10 @@ class SyncAmoTaskStatisticsJob implements ShouldQueue
         $account = AmoAccount::query()->findOrFail($run->amo_account_id);
 
         $statisticsService->sync($account, $run->period_from, $run->period_to, $run);
+
+        if ($run->period_to !== null && $run->period_to->gt($account->taskStatisticsLastSuccessfulSyncAt() ?? now()->subYears(20))) {
+            $account->markTaskStatisticsSyncedUntil($run->period_to);
+        }
     }
 
     public function failed(Throwable $exception): void

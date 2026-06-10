@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
 use App\Models\CrmEntitySnapshot;
@@ -810,6 +811,25 @@ class AmoServicesTest extends TestCase
         $service->refreshDashboardCacheVersion($account);
         $fresh = $service->completedOverdueDashboard($account, $from, $to);
         $this->assertSame(2, $fresh[0]['completed_count']);
+    }
+
+    public function test_task_statistics_job_updates_incremental_cursor(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $run = TaskStatisticsSyncRun::query()->create([
+            'amo_account_id' => $account->id,
+            'period_from' => now()->subHour(),
+            'period_to' => now(),
+        ]);
+        $service = Mockery::mock(AmoTaskStatisticsService::class);
+        $service->shouldReceive('sync')
+            ->once()
+            ->with(Mockery::type(AmoAccount::class), Mockery::any(), Mockery::any(), Mockery::type(TaskStatisticsSyncRun::class))
+            ->andReturn(['completed' => 0, 'completion_events' => 0, 'open' => 0]);
+
+        (new SyncAmoTaskStatisticsJob($run->id))->handle($service);
+
+        $this->assertSame($run->period_to->toIso8601String(), $account->refresh()->taskStatisticsLastSuccessfulSyncAt()?->toIso8601String());
     }
 
     public function test_crm_audit_service_can_sync_selected_pipeline(): void

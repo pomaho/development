@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 class AmoAccount extends Model
 {
@@ -74,5 +75,20 @@ class AmoAccount extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    public function taskStatisticsLastSuccessfulSyncAt(): ?Carbon
+    {
+        $value = data_get($this->settings, 'task_statistics.last_successful_sync_at');
+
+        return $value ? Carbon::parse($value) : null;
+    }
+
+    public function markTaskStatisticsSyncedUntil(Carbon $syncedUntil): void
+    {
+        $settings = $this->settings ?? [];
+        data_set($settings, 'task_statistics.last_successful_sync_at', $syncedUntil->toIso8601String());
+
+        $this->forceFill(['settings' => $settings])->save();
     }
 }

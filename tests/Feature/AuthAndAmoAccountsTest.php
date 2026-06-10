@@ -28,6 +28,7 @@ use App\Services\Amo\AmoResponsibilityRedistributionService;
 use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\AmoUsersService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -808,6 +809,44 @@ class AuthAndAmoAccountsTest extends TestCase
 
         Queue::assertPushed(SyncAmoTaskStatisticsJob::class, 1);
         $this->assertSame(1, TaskStatisticsSyncRun::query()->where('amo_account_id', $account->id)->count());
+    }
+
+    public function test_task_statistics_command_uses_incremental_cursor_and_refresh_mode(): void
+    {
+        Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-10 12:00:00'));
+
+        try {
+            $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+            $this->artisan('amo:sync-task-statistics', ['accountId' => $account->id])->assertExitCode(0);
+
+            $firstRun = TaskStatisticsSyncRun::query()->firstOrFail();
+            $this->assertSame('2026-04-27 00:00:00', $firstRun->period_from->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-06-10 23:59:59', $firstRun->period_to->format('Y-m-d H:i:s'));
+
+            $firstRun->forceFill(['status' => TaskStatisticsSyncRun::STATUS_COMPLETED, 'created_at' => now()->subHours(3)])->save();
+            $account->markTaskStatisticsSyncedUntil(Carbon::parse('2026-06-10 10:00:00'));
+
+            $this->artisan('amo:sync-task-statistics', ['accountId' => $account->id])->assertExitCode(0);
+
+            $incrementalRun = TaskStatisticsSyncRun::query()->latest('id')->firstOrFail();
+            $this->assertSame('2026-06-10 08:00:00', $incrementalRun->period_from->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-06-10 23:59:59', $incrementalRun->period_to->format('Y-m-d H:i:s'));
+
+            $incrementalRun->forceFill(['status' => TaskStatisticsSyncRun::STATUS_COMPLETED, 'created_at' => now()->subHours(3)])->save();
+            $this->artisan('amo:sync-task-statistics', [
+                'accountId' => $account->id,
+                '--mode' => 'refresh',
+                '--days' => 7,
+            ])->assertExitCode(0);
+
+            $refreshRun = TaskStatisticsSyncRun::query()->latest('id')->firstOrFail();
+            $this->assertSame('2026-06-04 00:00:00', $refreshRun->period_from->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-06-10 23:59:59', $refreshRun->period_to->format('Y-m-d H:i:s'));
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_api_logs_page_renders_inertia_and_hides_secret_headers(): void
