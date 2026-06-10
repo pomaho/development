@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, Percent, TimerReset } from 'lucide-react';
+import { AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Percent, Users } from 'lucide-react';
 
 type Account = {
     name: string;
@@ -38,108 +38,127 @@ export default function TaskOverdueDashboard({ account, period, groups, links }:
     const totalCompleted = groups.reduce((sum, group) => sum + group.completed_count, 0);
     const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
     const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
+    const totalUsers = groups.reduce((sum, group) => sum + group.users.length, 0);
     const periodLabel = `${period.from} - ${period.to}`;
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[#050505] px-4 py-5 text-white">
-            <div className="pointer-events-none absolute inset-0 opacity-80">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_18%,rgba(255,161,0,0.24),transparent_30%),linear-gradient(135deg,rgba(255,169,0,0.10),transparent_38%),linear-gradient(180deg,#050505_0%,#11100c_100%)]" />
-                <div className="absolute right-8 top-6 h-52 w-52 border border-amber-500/30 [clip-path:polygon(50%_0,100%_86%,0_86%)]" />
-                <div className="absolute right-24 top-16 h-72 w-72 bg-gradient-to-br from-yellow-300/80 via-amber-500/55 to-orange-600/20 [clip-path:polygon(50%_0,100%_86%,0_86%)]" />
-                <div className="absolute right-44 top-28 h-36 w-36 bg-black/70 [clip-path:polygon(50%_0,100%_86%,0_86%)]" />
-                <div className="absolute left-5 top-28 h-40 w-px bg-gradient-to-b from-transparent via-amber-400 to-transparent" />
-            </div>
-
-            <div className="relative mx-auto max-w-7xl">
-                <header className="mb-5 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
-                    <div className="max-w-3xl">
-                        <div className="mb-4 flex items-center gap-4">
-                            <div className="h-14 w-16 bg-gradient-to-br from-yellow-300 via-amber-500 to-orange-700 [clip-path:polygon(50%_0,100%_86%,0_86%)]" />
+        <div className="min-h-screen bg-slate-100 px-4 py-4 text-slate-900">
+            <div className="mx-auto max-w-7xl">
+                <header className="mb-4 rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[1fr_auto] lg:items-end">
+                        <div className="flex min-w-0 items-start gap-4">
+                            <img className="h-14 w-14 shrink-0 rounded-md border border-amber-100 bg-slate-950 object-contain p-1.5" src="/assets/anyservice-logo.png" alt="AnyService" />
                             <div>
-                                <div className="text-3xl font-semibold leading-none text-white">{account.name}</div>
-                                <div className="mt-1 text-sm text-zinc-300">{account.base_domain}</div>
+                                <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">BI аналитика задач</div>
+                                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Выполненные просроченные задачи</h1>
+                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+                                    <span>{account.name}</span>
+                                    <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-block" />
+                                    <span>{account.base_domain}</span>
+                                    <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-block" />
+                                    <span>{periodLabel}</span>
+                                </div>
                             </div>
                         </div>
-                        <div className="border-l-2 border-amber-400 pl-5">
-                            <h1 className="text-4xl font-semibold leading-tight text-white lg:text-5xl">
-                                Отчет по выполненным просроченным задачам
-                            </h1>
-                            <p className="mt-3 max-w-2xl text-base text-zinc-300">
-                                Пользователи сгруппированы по отделам. Период отчета: {periodLabel}.
-                            </p>
-                        </div>
-                    </div>
 
-                    <form className="rounded-lg border border-amber-300/45 bg-black/55 p-3 shadow-[0_0_32px_rgba(245,158,11,0.18)] backdrop-blur" method="get" action={links.self}>
-                        <div className="mb-2 flex items-center gap-2 text-sm font-medium text-amber-200">
-                            <CalendarDays className="h-4 w-4" />
-                            Период отчета
-                        </div>
-                        <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-sm">
-                            <input className="h-10 rounded-md border-amber-300/35 bg-zinc-950/80 text-white focus:border-amber-400 focus:ring-amber-400" name="from" type="date" defaultValue={period.from} />
-                            <input className="h-10 rounded-md border-amber-300/35 bg-zinc-950/80 text-white focus:border-amber-400 focus:ring-amber-400" name="to" type="date" defaultValue={period.to} />
-                            <button className="h-10 rounded-md bg-amber-500 px-4 font-semibold text-black shadow-[0_0_18px_rgba(245,158,11,0.35)] hover:bg-amber-400" type="submit">Показать</button>
-                        </div>
-                    </form>
+                        <form className="rounded-md border border-slate-200 bg-slate-50 p-3" method="get" action={links.self}>
+                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                <CalendarDays className="h-4 w-4 text-amber-500" />
+                                Период
+                            </div>
+                            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-sm">
+                                <input className="h-9 rounded-md border-slate-300 bg-white text-slate-900 focus:border-amber-500 focus:ring-amber-500" name="from" type="date" defaultValue={period.from} />
+                                <input className="h-9 rounded-md border-slate-300 bg-white text-slate-900 focus:border-amber-500 focus:ring-amber-500" name="to" type="date" defaultValue={period.to} />
+                                <button className="h-9 rounded-md bg-slate-950 px-4 font-semibold text-white hover:bg-slate-800" type="submit">Показать</button>
+                            </div>
+                        </form>
+                    </div>
                 </header>
 
-                <section className="mb-5 grid gap-3 md:grid-cols-3">
-                    <div className="rounded-lg border border-amber-300/35 bg-zinc-950/82 p-4 shadow-[0_0_26px_rgba(245,158,11,0.12)]">
-                        <div className="flex items-center justify-between gap-3 text-sm text-zinc-300">
+                <section className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
                             Выполнено за период
-                            <CheckCircle2 className="h-5 w-5 text-amber-400" />
+                            <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                         </div>
-                        <div className="mt-2 text-4xl font-semibold text-white">{totalCompleted}</div>
+                        <div className="mt-2 text-3xl font-semibold text-slate-950">{totalCompleted}</div>
+                        <div className="mt-3 h-1.5 rounded-full bg-slate-100">
+                            <div className="h-1.5 w-full rounded-full bg-emerald-500" />
+                        </div>
                     </div>
-                    <div className="rounded-lg border border-amber-300/35 bg-zinc-950/82 p-4 shadow-[0_0_26px_rgba(245,158,11,0.12)]">
-                        <div className="flex items-center justify-between gap-3 text-sm text-zinc-300">
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
                             Выполнено с просрочкой
-                            <AlertTriangle className="h-5 w-5 text-amber-400" />
+                            <AlertTriangle className="h-5 w-5 text-amber-600" />
                         </div>
-                        <div className="mt-2 text-4xl font-semibold text-amber-300">{totalOverdue}</div>
+                        <div className="mt-2 text-3xl font-semibold text-slate-950">{totalOverdue}</div>
+                        <div className="mt-3 h-1.5 rounded-full bg-slate-100">
+                            <div className="h-1.5 rounded-full bg-amber-500" style={{ width: `${Math.min(totalRate, 100)}%` }} />
+                        </div>
                     </div>
-                    <div className="rounded-lg border border-amber-300/35 bg-zinc-950/82 p-4 shadow-[0_0_26px_rgba(245,158,11,0.12)]">
-                        <div className="flex items-center justify-between gap-3 text-sm text-zinc-300">
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
                             Процент просрочки
-                            <Percent className="h-5 w-5 text-amber-400" />
+                            <Percent className="h-5 w-5 text-slate-500" />
                         </div>
-                        <div className="mt-2 text-4xl font-semibold text-white">{totalRate}%</div>
+                        <div className="mt-2 text-3xl font-semibold text-slate-950">{totalRate}%</div>
+                        <div className="mt-3 h-1.5 rounded-full bg-slate-100">
+                            <div className="h-1.5 rounded-full bg-slate-700" style={{ width: `${Math.min(totalRate, 100)}%` }} />
+                        </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
+                            Пользователей в отчете
+                            <Users className="h-5 w-5 text-amber-600" />
+                        </div>
+                        <div className="mt-2 text-3xl font-semibold text-slate-950">{totalUsers}</div>
+                        <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                            <BarChart3 className="h-4 w-4 text-amber-500" />
+                            групп: {groups.length}
+                        </div>
                     </div>
                 </section>
 
                 <div className="space-y-4">
                     {groups.length > 0 ? groups.map((group) => (
-                        <section className="rounded-lg border border-amber-300/30 bg-black/62 p-4 shadow-[0_0_30px_rgba(245,158,11,0.10)] backdrop-blur" key={group.group_id || group.group_name}>
-                            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                                <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-                                    <TimerReset className="h-5 w-5 text-amber-400" />
+                        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm" key={group.group_id || group.group_name}>
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
+                                <h2 className="flex items-center gap-2 text-base font-semibold text-slate-950">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
                                     {group.group_name}
                                 </h2>
-                                <div className="text-sm text-zinc-300">
+                                <div className="text-sm text-slate-500">
                                     выполнено {group.completed_count} · просрочено {group.completed_overdue_count}
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left text-sm">
-                                    <thead className="border-y border-amber-300/25 bg-amber-400/8 text-amber-100">
+                                    <thead className="bg-white text-xs uppercase tracking-wide text-slate-500">
                                         <tr>
-                                            <th className="px-3 py-3 font-semibold">Пользователь</th>
+                                            <th className="px-4 py-3 font-semibold">Пользователь</th>
                                             <th className="px-3 py-3 font-semibold">Выполнено</th>
                                             <th className="px-3 py-3 font-semibold">Просрочено</th>
-                                            <th className="px-3 py-3 font-semibold">%</th>
+                                            <th className="px-3 py-3 font-semibold">Доля</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {group.users.map((user) => (
-                                            <tr className="border-b border-white/8 text-zinc-200 hover:bg-amber-400/6" key={user.id}>
-                                                <td className="px-3 py-3 font-medium text-white">{user.name}</td>
-                                                <td className="px-3 py-3">{user.completed_count}</td>
-                                                <td className="px-3 py-3">
-                                                    <span className={user.completed_overdue_count > 0 ? 'font-semibold text-amber-300' : ''}>
+                                            <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={user.id}>
+                                                <td className="px-4 py-3 font-medium text-slate-950">{user.name}</td>
+                                                <td className="px-3 py-3 tabular-nums">{user.completed_count}</td>
+                                                <td className="px-3 py-3 tabular-nums">
+                                                    <span className={user.completed_overdue_count > 0 ? 'font-semibold text-amber-700' : ''}>
                                                         {user.completed_overdue_count}
                                                     </span>
                                                 </td>
-                                                <td className="px-3 py-3">{user.overdue_rate}%</td>
+                                                <td className="px-3 py-3">
+                                                    <div className="flex min-w-36 items-center gap-2">
+                                                        <div className="h-2 flex-1 rounded-full bg-slate-100">
+                                                            <div className="h-2 rounded-full bg-amber-500" style={{ width: `${Math.min(user.overdue_rate, 100)}%` }} />
+                                                        </div>
+                                                        <span className="w-12 text-right tabular-nums text-slate-600">{user.overdue_rate}%</span>
+                                                    </div>
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -147,7 +166,7 @@ export default function TaskOverdueDashboard({ account, period, groups, links }:
                             </div>
                         </section>
                     )) : (
-                        <section className="rounded-lg border border-amber-300/30 bg-black/62 p-6 text-sm text-zinc-300 shadow-[0_0_30px_rgba(245,158,11,0.10)]">
+                        <section className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">
                             Нет данных за выбранный период. Запустите синхронизацию статистики задач в сервисе.
                         </section>
                     )}
