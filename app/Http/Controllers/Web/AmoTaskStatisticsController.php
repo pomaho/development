@@ -16,6 +16,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoTaskStatisticsController extends Controller
 {
+    private const SYNC_PERIOD_LIMIT_DAYS = 45;
+
     public function index(Request $request, AmoAccount $amoAccount, AmoTaskStatisticsService $statisticsService): Response
     {
         [$from, $to] = $this->period($request);
@@ -61,7 +63,7 @@ class AmoTaskStatisticsController extends Controller
     {
         $this->authorize('sync', $amoAccount);
 
-        [$from, $to] = $this->period($request);
+        [$from, $to] = $this->syncPeriod($request);
         $run = TaskStatisticsSyncRun::query()->create([
             'amo_account_id' => $amoAccount->id,
             'status' => TaskStatisticsSyncRun::STATUS_PENDING,
@@ -109,6 +111,18 @@ class AmoTaskStatisticsController extends Controller
             $request->filled('from') ? $request->date('from')->startOfDay() : now()->startOfMonth(),
             $request->filled('to') ? $request->date('to')->endOfDay() : now()->endOfDay(),
         ];
+    }
+
+    private function syncPeriod(Request $request): array
+    {
+        [$from, $to] = $this->period($request);
+        $minFrom = $to->copy()->subDays(self::SYNC_PERIOD_LIMIT_DAYS - 1)->startOfDay();
+
+        if ($from->lt($minFrom)) {
+            $from = $minFrom;
+        }
+
+        return [$from, $to];
     }
 
     private function links(AmoAccount $amoAccount, Request $request): array

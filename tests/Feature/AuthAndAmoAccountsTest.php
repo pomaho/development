@@ -582,14 +582,14 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->actingAs($admin)
             ->post("/amo-accounts/{$account->id}/task-statistics/sync", [
-                'from' => '2026-06-01',
+                'from' => '2026-01-01',
                 'to' => '2026-06-09',
             ])
-            ->assertRedirect("/amo-accounts/{$account->id}/task-statistics?from=2026-06-01&to=2026-06-09");
+            ->assertRedirect("/amo-accounts/{$account->id}/task-statistics?from=2026-01-01&to=2026-06-09");
 
         $run = TaskStatisticsSyncRun::query()->firstOrFail();
         $this->assertSame(TaskStatisticsSyncRun::STATUS_PENDING, $run->status);
-        $this->assertSame('2026-06-01', $run->period_from->toDateString());
+        $this->assertSame('2026-04-26', $run->period_from->toDateString());
         $this->assertSame('2026-06-09', $run->period_to->toDateString());
         Queue::assertPushed(SyncAmoTaskStatisticsJob::class);
 
@@ -788,7 +788,7 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->artisan('amo:sync-task-statistics', [
             'accountId' => $account->id,
-            '--from' => '2026-06-01',
+            '--from' => '2026-01-01',
             '--to' => '2026-06-10',
         ])->assertExitCode(0);
 
@@ -796,11 +796,13 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertDatabaseHas('task_statistics_sync_runs', [
             'amo_account_id' => $account->id,
             'status' => TaskStatisticsSyncRun::STATUS_PENDING,
+            'period_from' => '2026-04-27 00:00:00',
+            'period_to' => '2026-06-10 23:59:59',
         ]);
 
         $this->artisan('amo:sync-task-statistics', [
             'accountId' => $account->id,
-            '--from' => '2026-06-01',
+            '--from' => '2026-01-01',
             '--to' => '2026-06-10',
         ])->assertExitCode(0);
 

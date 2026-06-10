@@ -10,6 +10,8 @@ use Illuminate\Support\Carbon;
 
 class AmoSyncTaskStatisticsCommand extends Command
 {
+    private const SYNC_PERIOD_LIMIT_DAYS = 45;
+
     protected $signature = 'amo:sync-task-statistics {accountId?} {--from=} {--to=} {--days=45}';
     protected $description = 'Queue amoCRM task statistics sync for one or all active accounts.';
 
@@ -55,7 +57,12 @@ class AmoSyncTaskStatisticsCommand extends Command
 
         $from = $this->option('from')
             ? Carbon::parse((string) $this->option('from'))->startOfDay()
-            : $to->copy()->subDays(max(1, (int) $this->option('days')))->startOfDay();
+            : $to->copy()->subDays(max(1, (int) $this->option('days')) - 1)->startOfDay();
+        $minFrom = $to->copy()->subDays(self::SYNC_PERIOD_LIMIT_DAYS - 1)->startOfDay();
+
+        if ($from->lt($minFrom)) {
+            $from = $minFrom;
+        }
 
         return [$from, $to];
     }
