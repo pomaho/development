@@ -53,7 +53,16 @@ class AmoServicesTest extends TestCase
         $http->shouldReceive('get')->with($account, '/api/v4/users', Mockery::on(fn ($query) => $query['page'] === 1))->andReturn([
             '_page' => 1,
             '_page_count' => 2,
-            '_embedded' => ['users' => [['id' => 1, 'name' => 'Admin', 'rights' => ['is_admin' => true], 'is_active' => true]]],
+            '_embedded' => ['users' => [[
+                'id' => 1,
+                'name' => 'Admin',
+                'rights' => ['is_admin' => true],
+                'is_active' => true,
+                '_embedded' => [
+                    'group' => ['id' => 30, 'name' => 'Авито рекрутинг'],
+                    'role' => ['id' => 40, 'name' => 'Рекрутер'],
+                ],
+            ]]],
         ]);
         $http->shouldReceive('get')->with($account, '/api/v4/users', Mockery::on(fn ($query) => $query['page'] === 2))->andReturn([
             '_page' => 2,
@@ -71,6 +80,7 @@ class AmoServicesTest extends TestCase
         $this->assertSame(2, AmoUsersSnapshot::query()->count());
         $this->assertSame(1, AmoRolesSnapshot::query()->count());
         $this->assertDatabaseHas('amo_users_snapshots', ['amo_user_id' => 1, 'is_admin' => true]);
+        $this->assertDatabaseHas('amo_users_snapshots', ['amo_user_id' => 1, 'group_id' => 30, 'role_id' => 40]);
     }
 
     public function test_pipelines_service_creates_pipeline_with_statuses(): void

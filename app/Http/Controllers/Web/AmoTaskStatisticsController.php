@@ -168,9 +168,12 @@ class AmoTaskStatisticsController extends Controller
 
         $data = $request->validate([
             'avito_recruiting_group_id' => ['nullable', 'integer'],
+            'avito_recruiting_group_id_manual' => ['nullable', 'integer'],
         ]);
+        $groupId = $data['avito_recruiting_group_id_manual']
+            ?: ($data['avito_recruiting_group_id'] ?? null);
         $settings = $amoAccount->settings ?? [];
-        data_set($settings, 'reports.avito_recruiting_group_id', $data['avito_recruiting_group_id'] ?: null);
+        data_set($settings, 'reports.avito_recruiting_group_id', $groupId ?: null);
 
         $amoAccount->forceFill(['settings' => $settings])->save();
         $statisticsService = app(AmoTaskStatisticsService::class);

@@ -122,11 +122,11 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                     <div>
                         <h2 className="font-semibold">Настройки отчетов по событиям</h2>
                         <div className="mt-1 text-sm text-slate-500">
-                            Если amoCRM не отдает название группы в пользователях, выберите нужный group_id явно.
+                            Если список групп пустой, запустите синхронизацию пользователей или введите group_id вручную.
                         </div>
                     </div>
                 </div>
-                <form action={links.events_sync_settings} className="mt-4 grid gap-3 text-sm md:grid-cols-[1fr_auto]" method="post">
+                <form action={links.events_sync_settings} className="mt-4 grid gap-3 text-sm md:grid-cols-[1fr_220px_auto]" method="post">
                     <input name="_token" type="hidden" value={csrf} />
                     <label className="block">
                         <span>Отдел для отчета “Авито рекрутинг”</span>
@@ -138,6 +138,19 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                                 </option>
                             ))}
                         </select>
+                        {groups.length === 0 && (
+                            <span className="mt-1 block text-xs text-amber-700">Группы пока не найдены в snapshots пользователей.</span>
+                        )}
+                    </label>
+                    <label className="block">
+                        <span>group_id вручную</span>
+                        <input
+                            className="mt-1 w-full rounded border-slate-300"
+                            min="1"
+                            name="avito_recruiting_group_id_manual"
+                            placeholder="например 12345"
+                            type="number"
+                        />
                     </label>
                     <div className="flex items-end">
                         <button

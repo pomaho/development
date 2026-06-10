@@ -84,8 +84,14 @@ class AmoUsersService
             'email' => $user['email'] ?? null,
             'lang' => $user['lang'] ?? null,
             'rights' => $rights,
-            'role_id' => $user['role_id'] ?? $user['role']['id'] ?? null,
-            'group_id' => $user['group_id'] ?? $user['group']['id'] ?? null,
+            'role_id' => $user['role_id']
+                ?? $user['_embedded']['role']['id']
+                ?? $user['role']['id']
+                ?? null,
+            'group_id' => $user['group_id']
+                ?? $user['_embedded']['group']['id']
+                ?? $user['group']['id']
+                ?? null,
             'is_admin' => (bool) ($rights['is_admin'] ?? $user['is_admin'] ?? false),
             'is_active' => (bool) ($user['is_active'] ?? true),
             'raw' => $user,

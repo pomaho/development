@@ -662,7 +662,7 @@ class AuthAndAmoAccountsTest extends TestCase
 
             $this->actingAs($admin)
                 ->post("/amo-accounts/{$account->id}/events-sync/settings", [
-                    'avito_recruiting_group_id' => 30,
+                    'avito_recruiting_group_id_manual' => 30,
                 ])
                 ->assertRedirect("/amo-accounts/{$account->id}/events-sync");
 
