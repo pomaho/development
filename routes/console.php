@@ -11,7 +11,9 @@ Schedule::call(function (): void {
     AmoAccount::query()->active()->pluck('id')->each(
         fn (int $id) => SyncAmoUsersAndRolesJob::dispatch($id)
     );
-})->dailyAt('02:00');
+})->hourlyAt(0);
+
+Schedule::command('amo:sync-task-statistics --days=45')->hourlyAt(10);
 
 Schedule::call(function (): void {
     ApiRequestLog::query()

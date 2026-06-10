@@ -780,6 +780,34 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }
 
+    public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
+    {
+        Queue::fake();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $this->artisan('amo:sync-task-statistics', [
+            'accountId' => $account->id,
+            '--from' => '2026-06-01',
+            '--to' => '2026-06-10',
+        ])->assertExitCode(0);
+
+        Queue::assertPushed(SyncAmoTaskStatisticsJob::class, 1);
+        $this->assertDatabaseHas('task_statistics_sync_runs', [
+            'amo_account_id' => $account->id,
+            'status' => TaskStatisticsSyncRun::STATUS_PENDING,
+        ]);
+
+        $this->artisan('amo:sync-task-statistics', [
+            'accountId' => $account->id,
+            '--from' => '2026-06-01',
+            '--to' => '2026-06-10',
+        ])->assertExitCode(0);
+
+        Queue::assertPushed(SyncAmoTaskStatisticsJob::class, 1);
+        $this->assertSame(1, TaskStatisticsSyncRun::query()->where('amo_account_id', $account->id)->count());
+    }
+
     public function test_api_logs_page_renders_inertia_and_hides_secret_headers(): void
     {
         $viewer = User::factory()->create();

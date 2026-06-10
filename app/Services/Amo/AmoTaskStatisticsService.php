@@ -6,6 +6,7 @@ use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\TaskStatisticsSyncRun;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
 
 class AmoTaskStatisticsService
@@ -35,6 +36,7 @@ class AmoTaskStatisticsService
             'status' => TaskStatisticsSyncRun::STATUS_COMPLETED,
             'finished_at' => now(),
         ])->save();
+        $this->refreshDashboardCacheVersion($account);
 
         return [
             'completed' => $completed,
@@ -119,6 +121,20 @@ class AmoTaskStatisticsService
 
     public function completedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
+        return Cache::remember(
+            $this->dashboardCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildCompletedOverdueDashboard($account, $from, $to),
+        );
+    }
+
+    public function refreshDashboardCacheVersion(AmoAccount $account): void
+    {
+        Cache::put($this->dashboardCacheVersionKey($account), now()->timestamp, now()->addDays(2));
+    }
+
+    private function buildCompletedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
         $users = AmoUsersSnapshot::query()
             ->where('amo_account_id', $account->id)
             ->get()
@@ -190,6 +206,24 @@ class AmoTaskStatisticsService
             ->sortBy('group_name')
             ->values()
             ->all();
+    }
+
+    private function dashboardCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_task_overdue_dashboard',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
+    private function dashboardCacheVersionKey(AmoAccount $account): string
+    {
+        return "amo_task_overdue_dashboard_version:{$account->id}";
     }
 
     private function syncTaskQuery(AmoAccount $account, array $query, Carbon $syncedAt, ?TaskStatisticsSyncRun $run, string $type): int
@@ -297,6 +331,8 @@ class AmoTaskStatisticsService
 
                 $this->saveTask($account, $task, $syncedAt);
             }
+
+            usleep(160000);
         }
     }
 

@@ -20,6 +20,7 @@ use App\Services\Amo\AmoTokenManager;
 use App\Services\Amo\AmoUsersService;
 use App\Services\Amo\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Mockery;
 use Tests\TestCase;
 
@@ -777,6 +778,40 @@ class AmoServicesTest extends TestCase
         $this->assertSame(100.0, $groups[0]['users'][0]['overdue_rate']);
     }
 
+    public function test_task_dashboard_cache_refreshes_by_version(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 10,
+            'name' => 'Manager',
+            'rights' => [],
+            'group_id' => 20,
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => ['_embedded' => ['group' => ['name' => 'Sales']]],
+            'synced_at' => now(),
+        ]);
+
+        $service = new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class));
+        $from = now()->subDays(3)->startOfDay();
+        $to = now()->endOfDay();
+
+        $this->completedTaskSnapshot($account, '100', 10);
+        $first = $service->completedOverdueDashboard($account, $from, $to);
+        $this->assertSame(1, $first[0]['completed_count']);
+
+        $this->completedTaskSnapshot($account, '101', 10);
+        $cached = $service->completedOverdueDashboard($account, $from, $to);
+        $this->assertSame(1, $cached[0]['completed_count']);
+
+        $service->refreshDashboardCacheVersion($account);
+        $fresh = $service->completedOverdueDashboard($account, $from, $to);
+        $this->assertSame(2, $fresh[0]['completed_count']);
+    }
+
     public function test_crm_audit_service_can_sync_selected_pipeline(): void
     {
         $account = $this->accountWithToken('abcdef123456');
@@ -853,5 +888,25 @@ class AmoServicesTest extends TestCase
         $signature = rtrim(strtr(base64_encode('signature'), '+/', '-_'), '=');
 
         return $header.'.'.$payload.'.'.$signature;
+    }
+
+    private function completedTaskSnapshot(AmoAccount $account, string $externalId, int $responsibleUserId): CrmEntitySnapshot
+    {
+        return CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'tasks',
+            'external_id' => $externalId,
+            'name' => 'Task',
+            'responsible_user_id' => $responsibleUserId,
+            'entity_created_at' => now()->subDays(2),
+            'entity_updated_at' => now()->subDay(),
+            'raw' => [
+                'id' => (int) $externalId,
+                'is_completed' => true,
+                'complete_till' => now()->subDays(2)->timestamp,
+                '_task_statistics' => ['completed_at' => now()->subDay()->timestamp],
+            ],
+            'synced_at' => now(),
+        ]);
     }
 }
