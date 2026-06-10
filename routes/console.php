@@ -14,7 +14,7 @@ Schedule::call(function (): void {
 })->hourlyAt(0);
 
 Schedule::command('amo:sync-task-statistics --mode=incremental')->hourlyAt(10);
-Schedule::command('amo:sync-task-statistics --mode=refresh --days=45')->twiceDaily(1, 13);
+Schedule::command('amo:sync-task-statistics --mode=refresh --days=3')->dailyAt('01:20');
 
 Schedule::call(function (): void {
     ApiRequestLog::query()
