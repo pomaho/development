@@ -151,7 +151,7 @@ class AmoTaskStatisticsService
         $users = AmoUsersSnapshot::query()
             ->where('amo_account_id', $account->id)
             ->get()
-            ->filter(fn (AmoUsersSnapshot $user): bool => mb_strtolower($this->groupName($user)) === mb_strtolower(self::AVITO_RECRUITING_GROUP_NAME))
+            ->filter(fn (AmoUsersSnapshot $user): bool => $this->isAvitoRecruitingUser($account, $user))
             ->keyBy('amo_user_id');
         $rows = $users
             ->mapWithKeys(fn (AmoUsersSnapshot $user): array => [(int) $user->amo_user_id => [
@@ -585,5 +585,16 @@ class AmoTaskStatisticsService
         return data_get($user->raw, '_embedded.group.name')
             ?: data_get($user->raw, 'group.name')
             ?: ($user->group_id ? "Группа {$user->group_id}" : 'Без группы');
+    }
+
+    private function isAvitoRecruitingUser(AmoAccount $account, AmoUsersSnapshot $user): bool
+    {
+        $configuredGroupId = (int) data_get($account->settings, 'reports.avito_recruiting_group_id', 0);
+
+        if ($configuredGroupId > 0) {
+            return (int) $user->group_id === $configuredGroupId;
+        }
+
+        return mb_strtolower($this->groupName($user)) === mb_strtolower(self::AVITO_RECRUITING_GROUP_NAME);
     }
 }

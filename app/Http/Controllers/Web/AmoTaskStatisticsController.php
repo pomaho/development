@@ -125,6 +125,23 @@ class AmoTaskStatisticsController extends Controller
                 'last_synced_at' => (clone $eventsQuery)->max('synced_at'),
                 'cursor' => $amoAccount->taskStatisticsLastSuccessfulSyncAt()?->format('Y-m-d H:i:s'),
             ],
+            'reportSettings' => [
+                'avito_recruiting_group_id' => data_get($amoAccount->settings, 'reports.avito_recruiting_group_id'),
+            ],
+            'groups' => $amoAccount->usersSnapshots()
+                ->whereNotNull('group_id')
+                ->get()
+                ->groupBy('group_id')
+                ->map(fn ($users, $groupId): array => [
+                    'id' => (int) $groupId,
+                    'name' => data_get($users->first()?->raw, '_embedded.group.name')
+                        ?: data_get($users->first()?->raw, 'group.name')
+                        ?: "Группа {$groupId}",
+                    'users_count' => $users->count(),
+                ])
+                ->sortBy('name')
+                ->values()
+                ->all(),
             'runs' => $amoAccount->taskStatisticsSyncRuns()
                 ->latest()
                 ->limit(10)
@@ -143,6 +160,25 @@ class AmoTaskStatisticsController extends Controller
             ],
             'links' => $this->links($amoAccount, $request),
         ]);
+    }
+
+    public function updateEventSettings(Request $request, AmoAccount $amoAccount): RedirectResponse
+    {
+        $this->authorize('update', $amoAccount);
+
+        $data = $request->validate([
+            'avito_recruiting_group_id' => ['nullable', 'integer'],
+        ]);
+        $settings = $amoAccount->settings ?? [];
+        data_set($settings, 'reports.avito_recruiting_group_id', $data['avito_recruiting_group_id'] ?: null);
+
+        $amoAccount->forceFill(['settings' => $settings])->save();
+        $statisticsService = app(AmoTaskStatisticsService::class);
+        $statisticsService->refreshDashboardCacheVersion($amoAccount);
+
+        return redirect()
+            ->route('amo-accounts.events-sync.index', $amoAccount)
+            ->with('status', 'Настройки отчета сохранены.');
     }
 
     public function syncEvents(Request $request, AmoAccount $amoAccount): RedirectResponse
@@ -196,6 +232,7 @@ class AmoTaskStatisticsController extends Controller
             'sync' => route('amo-accounts.task-statistics.sync', $amoAccount),
             'events_sync' => route('amo-accounts.events-sync.index', $amoAccount),
             'events_sync_start' => route('amo-accounts.events-sync.sync', $amoAccount),
+            'events_sync_settings' => route('amo-accounts.events-sync.settings', $amoAccount),
             'export' => route('amo-accounts.task-statistics.export', array_merge(['amo_account' => $amoAccount], $request->query())),
             'reset' => route('amo-accounts.task-statistics.index', $amoAccount),
             'current_account' => [

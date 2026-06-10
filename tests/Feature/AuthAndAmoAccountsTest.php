@@ -612,6 +612,17 @@ class AuthAndAmoAccountsTest extends TestCase
             $viewer = User::factory()->create();
             $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
             $account->markTaskStatisticsSyncedUntil(Carbon::parse('2026-06-10 10:00:00'));
+            AmoUsersSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'amo_user_id' => 10,
+                'name' => 'Avito Manager',
+                'rights' => [],
+                'group_id' => 30,
+                'is_admin' => false,
+                'is_active' => true,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
 
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -645,7 +656,17 @@ class AuthAndAmoAccountsTest extends TestCase
                     ->where('coverage.period_from', '2026-06-01 10:00:00')
                     ->where('coverage.period_to', '2026-06-05 11:00:00')
                     ->where('coverage.cursor', '2026-06-10 10:00:00')
+                    ->where('groups.0.id', 30)
+                    ->where('groups.0.name', 'Группа 30')
                     ->where('can.sync', true));
+
+            $this->actingAs($admin)
+                ->post("/amo-accounts/{$account->id}/events-sync/settings", [
+                    'avito_recruiting_group_id' => 30,
+                ])
+                ->assertRedirect("/amo-accounts/{$account->id}/events-sync");
+
+            $this->assertSame(30, (int) data_get($account->refresh()->settings, 'reports.avito_recruiting_group_id'));
 
             $this->actingAs($admin)
                 ->post("/amo-accounts/{$account->id}/events-sync")
@@ -792,6 +813,7 @@ class AuthAndAmoAccountsTest extends TestCase
     public function test_public_task_overdue_widget_uses_account_installation_key(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $account->forceFill(['settings' => ['reports' => ['avito_recruiting_group_id' => 30]]])->save();
         $widget = DashboardWidget::query()->create([
             'code' => 'task_overdue_dashboard',
             'name' => 'Просроченные выполненные задачи',
@@ -824,7 +846,7 @@ class AuthAndAmoAccountsTest extends TestCase
             'group_id' => 30,
             'is_admin' => false,
             'is_active' => true,
-            'raw' => ['_embedded' => ['group' => ['name' => 'Авито рекрутинг']]],
+            'raw' => [],
             'synced_at' => now(),
         ]);
         CrmEntitySnapshot::query()->create([
