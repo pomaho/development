@@ -754,6 +754,17 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => ['_embedded' => ['group' => ['name' => 'Sales']]],
             'synced_at' => now(),
         ]);
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 11,
+            'name' => 'Avito Manager',
+            'rights' => [],
+            'group_id' => 30,
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => ['_embedded' => ['group' => ['name' => 'Авито рекрутинг']]],
+            'synced_at' => now(),
+        ]);
         CrmEntitySnapshot::query()->create([
             'amo_account_id' => $account->id,
             'entity_type' => 'tasks',
@@ -770,13 +781,36 @@ class AuthAndAmoAccountsTest extends TestCase
             ],
             'synced_at' => now(),
         ]);
+        foreach (['lead-event-1' => 501, 'lead-event-2' => 501, 'lead-event-3' => 502] as $eventId => $leadId) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'events',
+                'external_id' => $eventId,
+                'name' => 'lead_status_changed',
+                'responsible_user_id' => 11,
+                'entity_created_at' => now()->subDay(),
+                'entity_updated_at' => now()->subDay(),
+                'raw' => [
+                    'id' => $eventId,
+                    'entity_id' => $leadId,
+                    'entity_type' => 'lead',
+                    'created_by' => 11,
+                    'created_at' => now()->subDay()->timestamp,
+                ],
+                'synced_at' => now(),
+            ]);
+        }
 
         $this->get("/api/widgets/amo/{$installation->public_key}/task-overdue-dashboard")
             ->assertOk()
             ->assertJsonPath('account.name', 'Client')
             ->assertJsonPath('groups.0.group_name', 'Sales')
             ->assertJsonPath('groups.0.users.0.name', 'Manager')
-            ->assertJsonPath('groups.0.users.0.completed_overdue_count', 1);
+            ->assertJsonPath('groups.0.users.0.completed_overdue_count', 1)
+            ->assertJsonPath('avitoRecruiting.group_name', 'Авито рекрутинг')
+            ->assertJsonPath('avitoRecruiting.total_leads_count', 2)
+            ->assertJsonPath('avitoRecruiting.users.0.name', 'Avito Manager')
+            ->assertJsonPath('avitoRecruiting.users.0.leads_count', 2);
 
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }
@@ -844,6 +878,17 @@ class AuthAndAmoAccountsTest extends TestCase
             $refreshRun = TaskStatisticsSyncRun::query()->latest('id')->firstOrFail();
             $this->assertSame('2026-06-04 00:00:00', $refreshRun->period_from->format('Y-m-d H:i:s'));
             $this->assertSame('2026-06-10 23:59:59', $refreshRun->period_to->format('Y-m-d H:i:s'));
+
+            $refreshRun->forceFill(['status' => TaskStatisticsSyncRun::STATUS_COMPLETED, 'created_at' => now()->subHours(3)])->save();
+            $this->artisan('amo:sync-task-statistics', [
+                'accountId' => $account->id,
+                '--mode' => 'refresh',
+                '--days' => 45,
+            ])->assertExitCode(0);
+
+            $fullRefreshRun = TaskStatisticsSyncRun::query()->latest('id')->firstOrFail();
+            $this->assertSame('2026-04-27 00:00:00', $fullRefreshRun->period_from->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-06-10 23:59:59', $fullRefreshRun->period_to->format('Y-m-d H:i:s'));
         } finally {
             Carbon::setTestNow();
         }

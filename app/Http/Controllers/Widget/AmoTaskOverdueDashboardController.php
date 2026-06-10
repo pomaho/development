@@ -31,6 +31,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'to' => $to->toDateString(),
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
+            'avitoRecruiting' => $statisticsService->avitoRecruitingLeadTouches($installation->account, $from, $to),
             'links' => [
                 'self' => route('widgets.amo.task-overdue-dashboard.show', $publicKey),
                 'api' => route('api.widgets.amo.task-overdue-dashboard.show', $publicKey),
@@ -57,6 +58,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'to' => $to->toDateString(),
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
+            'avitoRecruiting' => $statisticsService->avitoRecruitingLeadTouches($installation->account, $from, $to),
         ]);
     }
 

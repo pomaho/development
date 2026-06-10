@@ -11,6 +11,8 @@ use Illuminate\Support\Carbon;
 
 class AmoTaskStatisticsService
 {
+    private const AVITO_RECRUITING_GROUP_NAME = 'Авито рекрутинг';
+
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
     }
@@ -31,6 +33,7 @@ class AmoTaskStatisticsService
         $open = $this->syncTaskQuery($account, [
             'filter[is_completed]' => 0,
         ], $syncedAt, $run, 'open');
+        $events = $this->syncEvents($account, $from, $to, $syncedAt);
 
         $run?->forceFill([
             'status' => TaskStatisticsSyncRun::STATUS_COMPLETED,
@@ -42,6 +45,7 @@ class AmoTaskStatisticsService
             'completed' => $completed,
             'completion_events' => $completionEvents,
             'open' => $open,
+            'events' => $events,
         ];
     }
 
@@ -131,6 +135,89 @@ class AmoTaskStatisticsService
     public function refreshDashboardCacheVersion(AmoAccount $account): void
     {
         Cache::put($this->dashboardCacheVersionKey($account), now()->timestamp, now()->addDays(2));
+    }
+
+    public function avitoRecruitingLeadTouches(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->avitoRecruitingCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildAvitoRecruitingLeadTouches($account, $from, $to),
+        );
+    }
+
+    private function buildAvitoRecruitingLeadTouches(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $users = AmoUsersSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->get()
+            ->filter(fn (AmoUsersSnapshot $user): bool => mb_strtolower($this->groupName($user)) === mb_strtolower(self::AVITO_RECRUITING_GROUP_NAME))
+            ->keyBy('amo_user_id');
+        $rows = $users
+            ->mapWithKeys(fn (AmoUsersSnapshot $user): array => [(int) $user->amo_user_id => [
+                'id' => (int) $user->amo_user_id,
+                'name' => $user->name,
+                'leads_count' => 0,
+            ]])
+            ->all();
+        $leadIdsByUser = [];
+
+        if ($users->isEmpty()) {
+            return [
+                'group_name' => self::AVITO_RECRUITING_GROUP_NAME,
+                'total_leads_count' => 0,
+                'users' => [],
+            ];
+        }
+
+        CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'events')
+            ->orderBy('id')
+            ->chunkById(500, function ($events) use (&$leadIdsByUser, $users, $from, $to): void {
+                foreach ($events as $event) {
+                    $userId = (int) ($event->responsible_user_id ?? 0);
+                    $leadId = (int) data_get($event->raw, 'entity_id');
+                    $entityType = data_get($event->raw, 'entity_type') ?: data_get($event->raw, 'entity');
+
+                    if ($entityType !== 'lead' || ! $users->has($userId) || $leadId <= 0 || ! $this->inPeriod($event->entity_created_at, $from, $to)) {
+                        continue;
+                    }
+
+                    $leadIdsByUser[$userId][$leadId] = true;
+                }
+            });
+
+        foreach ($leadIdsByUser as $userId => $leadIds) {
+            $rows[$userId]['leads_count'] = count($leadIds);
+        }
+
+        $usersRows = collect($rows)
+            ->sortByDesc('leads_count')
+            ->values()
+            ->all();
+
+        return [
+            'group_name' => self::AVITO_RECRUITING_GROUP_NAME,
+            'total_leads_count' => collect($leadIdsByUser)
+                ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
+                ->unique()
+                ->count(),
+            'users' => $usersRows,
+        ];
+    }
+
+    private function avitoRecruitingCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_avito_recruiting_lead_touches',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
     }
 
     private function buildCompletedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
@@ -334,6 +421,56 @@ class AmoTaskStatisticsService
 
             usleep(160000);
         }
+    }
+
+    private function syncEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, Carbon $syncedAt): int
+    {
+        $page = 1;
+        $total = 0;
+        $query = $this->createdAtQuery($from, $to);
+
+        do {
+            $payload = $this->http->get($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
+            $events = $payload['_embedded']['events'] ?? [];
+            $events = is_array($events) ? $events : [];
+
+            foreach ($events as $event) {
+                $this->saveEvent($account, $event, $syncedAt);
+            }
+
+            $count = count($events);
+            $total += $count;
+
+            $currentPage = (int) ($payload['_page'] ?? $page);
+            $pageCount = (int) ($payload['_page_count'] ?? 0);
+            $hasNext = isset($payload['_links']['next']['href']);
+            $page++;
+
+            if ($hasNext) {
+                usleep(160000);
+            }
+        } while (($pageCount > 0 && $currentPage < $pageCount) || ($pageCount === 0 && $hasNext));
+
+        return $total;
+    }
+
+    private function saveEvent(AmoAccount $account, array $event, Carbon $syncedAt): void
+    {
+        CrmEntitySnapshot::query()->updateOrCreate(
+            ['amo_account_id' => $account->id, 'entity_type' => 'events', 'external_id' => (string) ($event['id'] ?? md5(json_encode($event)))],
+            [
+                'name' => $event['type'] ?? 'event',
+                'responsible_user_id' => $event['created_by'] ?? null,
+                'entity_created_at' => $this->timestamp($event['created_at'] ?? null),
+                'entity_updated_at' => $this->timestamp($event['created_at'] ?? null),
+                'embedded' => [
+                    'entity_id' => $event['entity_id'] ?? null,
+                    'entity_type' => $event['entity_type'] ?? $event['entity'] ?? null,
+                ],
+                'raw' => $event,
+                'synced_at' => $syncedAt,
+            ]
+        );
     }
 
     private function updateRunProgress(?TaskStatisticsSyncRun $run, string $type, int $count): void

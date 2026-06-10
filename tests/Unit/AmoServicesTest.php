@@ -739,6 +739,25 @@ class AmoServicesTest extends TestCase
                     ],
                 ]],
             ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/events', Mockery::on(fn (array $query): bool =>
+                ! isset($query['filter[entity][]'])
+                && $query['filter[created_at][from]'] === $from->timestamp
+                && $query['filter[created_at][to]'] === $to->timestamp
+            ))
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['events' => [[
+                    'id' => 'lead-event-100',
+                    'entity_id' => 500,
+                    'entity_type' => 'lead',
+                    'type' => 'lead_status_changed',
+                    'created_by' => 10,
+                    'created_at' => now()->subDay()->timestamp,
+                ]]],
+            ]);
 
         $run = TaskStatisticsSyncRun::query()->create([
             'amo_account_id' => $account->id,
@@ -750,7 +769,7 @@ class AmoServicesTest extends TestCase
         $run->refresh();
         $rows = $service->statistics($account, $from, $to);
 
-        $this->assertSame(['completed' => 1, 'completion_events' => 1, 'open' => 2], $syncCounts);
+        $this->assertSame(['completed' => 1, 'completion_events' => 1, 'open' => 2, 'events' => 1], $syncCounts);
         $this->assertSame(TaskStatisticsSyncRun::STATUS_COMPLETED, $run->status);
         $this->assertSame(1, $run->completed_found);
         $this->assertSame(1, $run->completed_synced);
