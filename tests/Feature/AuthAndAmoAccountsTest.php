@@ -602,6 +602,68 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_can_view_event_sync_coverage_and_start_45_day_sync(): void
+    {
+        Queue::fake();
+        Carbon::setTestNow(Carbon::parse('2026-06-10 12:00:00'));
+
+        try {
+            $admin = User::factory()->admin()->create();
+            $viewer = User::factory()->create();
+            $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+            $account->markTaskStatisticsSyncedUntil(Carbon::parse('2026-06-10 10:00:00'));
+
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'events',
+                'external_id' => 'event-1',
+                'name' => 'lead_status_changed',
+                'responsible_user_id' => 10,
+                'entity_created_at' => Carbon::parse('2026-06-01 10:00:00'),
+                'entity_updated_at' => Carbon::parse('2026-06-01 10:00:00'),
+                'raw' => ['id' => 'event-1', 'entity_id' => 100, 'entity_type' => 'lead'],
+                'synced_at' => Carbon::parse('2026-06-01 10:01:00'),
+            ]);
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'events',
+                'external_id' => 'event-2',
+                'name' => 'lead_status_changed',
+                'responsible_user_id' => 11,
+                'entity_created_at' => Carbon::parse('2026-06-05 11:00:00'),
+                'entity_updated_at' => Carbon::parse('2026-06-05 11:00:00'),
+                'raw' => ['id' => 'event-2', 'entity_id' => 101, 'entity_type' => 'lead'],
+                'synced_at' => Carbon::parse('2026-06-05 11:01:00'),
+            ]);
+
+            $this->actingAs($admin)
+                ->get("/amo-accounts/{$account->id}/events-sync")
+                ->assertOk()
+                ->assertInertia(fn (AssertableInertia $page) => $page
+                    ->component('AmoAccounts/EventsSync/Index')
+                    ->where('coverage.events_count', 2)
+                    ->where('coverage.period_from', '2026-06-01 10:00:00')
+                    ->where('coverage.period_to', '2026-06-05 11:00:00')
+                    ->where('coverage.cursor', '2026-06-10 10:00:00')
+                    ->where('can.sync', true));
+
+            $this->actingAs($admin)
+                ->post("/amo-accounts/{$account->id}/events-sync")
+                ->assertRedirect("/amo-accounts/{$account->id}/events-sync");
+
+            $run = TaskStatisticsSyncRun::query()->firstOrFail();
+            $this->assertSame('2026-04-27 00:00:00', $run->period_from->format('Y-m-d H:i:s'));
+            $this->assertSame('2026-06-10 23:59:59', $run->period_to->format('Y-m-d H:i:s'));
+            Queue::assertPushed(SyncAmoTaskStatisticsJob::class);
+
+            $this->actingAs($viewer)
+                ->post("/amo-accounts/{$account->id}/events-sync")
+                ->assertForbidden();
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_users_export_respects_current_filters(): void
     {
         $viewer = User::factory()->create();

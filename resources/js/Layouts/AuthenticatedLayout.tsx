@@ -51,6 +51,7 @@ type Props = {
             catalogs?: string;
             responsibility_redistribution?: string;
             task_statistics?: string;
+            events_sync?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -70,6 +71,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const catalogsHref = currentAccount ? currentLinks?.catalogs || `/amo-accounts/${currentAccount.id}/catalogs` : null;
     const responsibilityHref = currentAccount ? currentLinks?.responsibility_redistribution || `/amo-accounts/${currentAccount.id}/responsibility-redistribution` : null;
     const taskStatisticsHref = currentAccount ? currentLinks?.task_statistics || `/amo-accounts/${currentAccount.id}/task-statistics` : null;
+    const eventsSyncHref = currentAccount ? currentLinks?.events_sync || `/amo-accounts/${currentAccount.id}/events-sync` : null;
     const navLinks: NavLink[] = [
         {
             label: 'Dashboard',
@@ -97,6 +99,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
             ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree size={16} />, active: url.includes('/catalogs') }] : []),
             ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog size={16} />, active: url.includes('/responsibility-redistribution') }] : []),
             ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig size={16} />, active: url.includes('/task-statistics') }] : []),
+            ...(eventsSyncHref ? [{ label: 'События', href: eventsSyncHref, icon: <Activity size={16} />, active: url.includes('/events-sync') }] : []),
             { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck size={16} />, active: url.includes('/crm-audit') },
             { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 size={16} />, active: url.endsWith('/integrations') },
             { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks size={16} />, active: url.endsWith('/widgets') },

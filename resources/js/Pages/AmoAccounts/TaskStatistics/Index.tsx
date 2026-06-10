@@ -65,6 +65,7 @@ type Props = {
             catalogs: string;
             responsibility_redistribution: string;
             task_statistics: string;
+            events_sync: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
