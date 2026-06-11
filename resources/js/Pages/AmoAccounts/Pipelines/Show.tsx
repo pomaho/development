@@ -54,7 +54,7 @@ type Props = {
 function EmptyRow({ colSpan, children }: { colSpan: number; children: string }) {
     return (
         <tr>
-            <td className="py-4 text-slate-500" colSpan={colSpan}>{children}</td>
+            <td className="px-5 py-6 text-gray-500" colSpan={colSpan}>{children}</td>
         </tr>
     );
 }
@@ -70,6 +70,7 @@ export default function PipelineShow({ account, pipelineId, details, error, can,
     const lossReasons = details.loss_reasons || [];
     const detailErrors = details.errors || {};
     const limitations = details.limitations || [];
+    const actionLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
 
     return (
         <AuthenticatedLayout
@@ -85,24 +86,24 @@ export default function PipelineShow({ account, pipelineId, details, error, can,
         >
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <a className="text-sm text-blue-700 hover:text-blue-900" href={links.current_account.pipelines}>← Все воронки</a>
-                    <h1 className="mt-2 text-2xl font-semibold">{pipeline.name || `Воронка ${pipelineId}`}</h1>
-                    <div className="text-sm text-slate-500">{account.name} · {account.base_domain}</div>
+                    <a className="text-theme-sm font-medium text-brand-600 hover:text-brand-700" href={links.current_account.pipelines}>← Все воронки</a>
+                    <h1 className="mt-2 text-2xl font-semibold text-gray-900">{pipeline.name || `Воронка ${pipelineId}`}</h1>
+                    <div className="mt-1 text-theme-sm text-gray-500">{account.name} · {account.base_domain}</div>
                 </div>
                 {can.sync ? (
                     <div className="flex flex-wrap gap-2">
-                        <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.clone}>Клонировать</a>
-                        <a className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" href={links.create}>Создать воронку</a>
+                        <a className={actionLinkClass} href={links.clone}>Клонировать</a>
+                        <a className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" href={links.create}>Создать воронку</a>
                     </div>
                 ) : null}
             </div>
 
-            {error ? <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Не удалось загрузить настройки воронки: {error}</div> : null}
+            {error ? <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-theme-sm text-amber-800">Не удалось загрузить настройки воронки: {error}</div> : null}
 
             {Object.keys(detailErrors).length > 0 ? (
-                <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-theme-sm text-amber-800">
                     <div className="font-medium">Часть разделов amoCRM не отдала данные.</div>
-                    <div className="mt-1 text-xs text-amber-700">Страница продолжает показывать все, что удалось получить.</div>
+                    <div className="mt-1 text-theme-xs text-amber-700">Страница продолжает показывать все, что удалось получить.</div>
                     <ul className="mt-2 list-disc space-y-1 pl-5">
                         {Object.entries(detailErrors).map(([section, message]) => (
                             <li key={section}><span className="font-medium">{section}:</span> {message}</li>
@@ -111,7 +112,7 @@ export default function PipelineShow({ account, pipelineId, details, error, can,
                 </div>
             ) : null}
 
-            <div className="mb-6 grid gap-4 md:grid-cols-5">
+            <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
                 <DashboardMetric label="ID воронки" value={pipeline.id || pipelineId} />
                 <DashboardMetric label="Этапов" value={statuses.length} />
                 <DashboardMetric label="Источников" value={sources.length} />
@@ -119,65 +120,65 @@ export default function PipelineShow({ account, pipelineId, details, error, can,
                 <DashboardMetric label="Причин отказа" value={lossReasons.length} />
             </div>
 
-            <section className="mb-6 overflow-x-auto rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mb-6 overflow-x-auto rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold">Схема этапов</h2>
-                    <div className="text-sm text-slate-500">
+                    <h2 className="text-lg font-semibold text-gray-900">Схема этапов</h2>
+                    <div className="text-theme-sm text-gray-500">
                         Главная: {pipeline.is_main ? 'да' : 'нет'} · Неразобранное: {pipeline.is_unsorted_on ? 'включено' : 'выключено'} · Архив: {pipeline.is_archive ? 'да' : 'нет'}
                     </div>
                 </div>
                 <div className="flex min-w-max gap-3">
                     {statuses.length > 0 ? statuses.map((status, index) => (
-                        <div className="w-56 rounded border border-slate-200 bg-slate-50" key={status.id || `${status.name}-${index}`} style={{ borderTop: `5px solid ${status.color || '#94a3b8'}` }}>
+                        <div className="w-56 rounded-xl border border-gray-200 bg-gray-50" key={status.id || `${status.name}-${index}`} style={{ borderTop: `5px solid ${status.color || '#94a3b8'}` }}>
                             <div className="p-3">
-                                <div className="font-medium">{status.name || '-'}</div>
-                                <div className="mt-2 text-xs text-slate-500">ID {status.id || '-'} · sort {status.sort || '-'}</div>
-                                <div className="mt-1 text-xs text-slate-500">type {status.type || 'regular'}</div>
+                                <div className="font-medium text-gray-900">{status.name || '-'}</div>
+                                <div className="mt-2 text-theme-xs text-gray-500">ID {status.id || '-'} · sort {status.sort || '-'}</div>
+                                <div className="mt-1 text-theme-xs text-gray-500">type {status.type || 'regular'}</div>
                             </div>
                         </div>
-                    )) : <div className="text-sm text-slate-500">Этапы не загружены.</div>}
+                    )) : <div className="text-theme-sm text-gray-500">Этапы не загружены.</div>}
                 </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold">Настройки этапов</h2>
-                    <div className="text-sm text-slate-500">Таблица собрана по данным pipeline statuses, descriptions, sources и required_statuses полей сделок.</div>
+                    <h2 className="px-5 pt-5 text-lg font-semibold text-gray-900">Настройки этапов</h2>
+                    <div className="px-5 pt-5 text-theme-sm text-gray-500">Таблица собрана по данным pipeline statuses, descriptions, sources и required_statuses полей сделок.</div>
                 </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
-                            <tr><th className="py-2">Порядок</th><th>Цвет</th><th>Этап</th><th>ID</th><th>Тип</th><th>Описание</th><th>Обязательные поля</th><th>Источники</th><th>JSON</th></tr>
+                    <table className="w-full text-left text-theme-sm">
+                        <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
+                            <tr>{['Порядок', 'Цвет', 'Этап', 'ID', 'Тип', 'Описание', 'Обязательные поля', 'Источники', 'JSON'].map((heading) => <th className="px-5 py-3" key={heading}>{heading}</th>)}</tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {stageRows.length > 0 ? stageRows.map((row, index) => {
                                 const status = row.status || {};
                                 const requiredFields = row.required_fields || [];
                                 const rowSources = row.sources || [];
 
                                 return (
-                                    <tr className="border-t border-slate-100 align-top" key={status.id || index}>
-                                        <td className="py-3">{status.sort || '-'}</td>
-                                        <td><span className="inline-block h-5 w-10 rounded border border-slate-200" style={{ background: status.color || '#94a3b8' }} /></td>
-                                        <td className="font-medium">{status.name || '-'}</td>
-                                        <td>{status.id || '-'}</td>
-                                        <td>{status.type || 'regular'}</td>
-                                        <td className="max-w-xs text-slate-600">{row.description || '-'}</td>
-                                        <td className="max-w-sm">
+                                    <tr className="align-top" key={status.id || index}>
+                                        <td className="px-5 py-3 text-gray-700">{status.sort || '-'}</td>
+                                        <td className="px-5 py-3"><span className="inline-block h-5 w-10 rounded border border-gray-200" style={{ background: status.color || '#94a3b8' }} /></td>
+                                        <td className="px-5 py-3 font-medium text-gray-900">{status.name || '-'}</td>
+                                        <td className="px-5 py-3 text-gray-600">{status.id || '-'}</td>
+                                        <td className="px-5 py-3 text-gray-600">{status.type || 'regular'}</td>
+                                        <td className="max-w-xs px-5 py-3 text-gray-600">{row.description || '-'}</td>
+                                        <td className="max-w-sm px-5 py-3">
                                             {requiredFields.length > 0 ? requiredFields.map((field: AnyRecord, fieldIndex: number) => (
-                                                <div className="mb-1 rounded bg-slate-100 px-2 py-1 text-xs" key={field.id || fieldIndex}>
-                                                    {field.name || `Поле ${field.id}`} <span className="text-slate-500">({field.type || '-'})</span>
+                                                <div className="mb-1 rounded-full bg-gray-100 px-2.5 py-1 text-theme-xs text-gray-700" key={field.id || fieldIndex}>
+                                                    {field.name || `Поле ${field.id}`} <span className="text-gray-500">({field.type || '-'})</span>
                                                 </div>
-                                            )) : <span className="text-slate-400">-</span>}
+                                            )) : <span className="text-gray-400">-</span>}
                                         </td>
-                                        <td className="max-w-sm">
+                                        <td className="max-w-sm px-5 py-3">
                                             {rowSources.length > 0 ? rowSources.map((source: AnyRecord, sourceIndex: number) => (
-                                                <div className="mb-1 rounded bg-slate-100 px-2 py-1 text-xs" key={source.id || sourceIndex}>
+                                                <div className="mb-1 rounded-full bg-gray-100 px-2.5 py-1 text-theme-xs text-gray-700" key={source.id || sourceIndex}>
                                                     {source.name || source.type || `Источник ${source.id}`}
                                                 </div>
-                                            )) : <span className="text-slate-400">-</span>}
+                                            )) : <span className="text-gray-400">-</span>}
                                         </td>
-                                        <td><JsonDetails data={status} /></td>
+                                        <td className="px-5 py-3"><JsonDetails data={status} /></td>
                                     </tr>
                                 );
                             }) : <EmptyRow colSpan={9}>Настройки этапов не загружены.</EmptyRow>}
@@ -197,16 +198,16 @@ export default function PipelineShow({ account, pipelineId, details, error, can,
             </div>
 
             {limitations.length > 0 ? (
-                <div className="mt-6 rounded border border-slate-200 bg-white p-4">
-                    <h2 className="text-lg font-semibold">Что amoCRM не отдает напрямую</h2>
-                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-slate-600">
+                <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm">
+                    <h2 className="text-lg font-semibold text-gray-900">Что amoCRM не отдает напрямую</h2>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-theme-sm text-gray-600">
                         {limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
                     </ul>
                 </div>
             ) : null}
 
-            <div className="mt-6 rounded border border-slate-200 bg-white p-4">
-                <h2 className="mb-3 text-lg font-semibold">Raw JSON воронки</h2>
+            <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm">
+                <h2 className="mb-3 text-lg font-semibold text-gray-900">Raw JSON воронки</h2>
                 <JsonDetails data={pipeline} label="Показать JSON" />
             </div>
         </AuthenticatedLayout>
@@ -215,18 +216,18 @@ export default function PipelineShow({ account, pipelineId, details, error, can,
 
 function DataTable({ title, rows, columns, empty, pick }: { title: string; rows: AnyRecord[]; columns: string[]; empty: string; pick: (row: AnyRecord) => Array<string | number> }) {
     return (
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="mb-3 text-lg font-semibold">{title}</h2>
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
+            <h2 className="border-b border-gray-200 px-5 py-4 text-lg font-semibold text-gray-900">{title}</h2>
             <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                    <thead className="text-slate-500">
-                        <tr>{columns.map((column) => <th className="py-2" key={column}>{column}</th>)}<th>JSON</th></tr>
+                <table className="w-full text-left text-theme-sm">
+                    <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
+                        <tr>{columns.map((column) => <th className="px-5 py-3" key={column}>{column}</th>)}<th className="px-5 py-3">JSON</th></tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-gray-100">
                         {rows.length > 0 ? rows.map((row, index) => (
-                            <tr className="border-t border-slate-100 align-top" key={row.id || index}>
-                                {pick(row).map((value, valueIndex) => <td className={valueIndex === 0 ? 'py-2' : ''} key={valueIndex}>{value}</td>)}
-                                <td><JsonDetails data={row} /></td>
+                            <tr className="align-top" key={row.id || index}>
+                                {pick(row).map((value, valueIndex) => <td className="px-5 py-3 text-gray-600" key={valueIndex}>{value}</td>)}
+                                <td className="px-5 py-3"><JsonDetails data={row} /></td>
                             </tr>
                         )) : <EmptyRow colSpan={columns.length + 1}>{empty}</EmptyRow>}
                     </tbody>

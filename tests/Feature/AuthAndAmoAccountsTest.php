@@ -1317,6 +1317,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('rounded-full border border-gray-200 bg-gray-50', $pipelines);
     }
 
+    public function test_pipeline_show_uses_tailadmin_settings_tables(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/AmoAccounts/Pipelines/Show.tsx'));
+
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm', $source);
+        $this->assertStringContainsString('bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500', $source);
+        $this->assertStringContainsString('rounded-full bg-gray-100 px-2.5 py-1 text-theme-xs text-gray-700', $source);
+        $this->assertStringContainsString('DataTable', $source);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
