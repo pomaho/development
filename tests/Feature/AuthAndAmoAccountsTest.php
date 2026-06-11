@@ -1227,6 +1227,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('Авто: поле “Источник”', $source);
     }
 
+    public function test_authenticated_layout_uses_tailadmin_shell(): void
+    {
+        $source = file_get_contents(resource_path('js/Layouts/AuthenticatedLayout.tsx'));
+
+        $this->assertStringContainsString('lg:ml-[290px]', $source);
+        $this->assertStringContainsString('menu-item-active', $source);
+        $this->assertStringContainsString('custom-scrollbar', $source);
+        $this->assertStringContainsString('aria-label="Toggle sidebar"', $source);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
