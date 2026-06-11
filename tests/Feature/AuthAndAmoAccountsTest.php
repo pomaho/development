@@ -1193,6 +1193,7 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('Отчет по задачам', $source);
         $this->assertStringContainsString('Выполненные просроченные задачи', $source);
         $this->assertStringContainsString('Отчет по сделкам', $source);
+        $this->assertStringContainsString('className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"', $source);
         $this->assertLessThan(
             strpos($source, 'Отчет по сделкам'),
             strpos($source, 'Отчет по задачам')

@@ -388,7 +388,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     </div>
                 </section>
 
-                <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <section className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                     <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center">
                         <div>
                             <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Передачи рекрутеров</div>
