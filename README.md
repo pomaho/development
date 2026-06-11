@@ -21,6 +21,8 @@ npm install
 npm run dev
 ```
 
+Для локальной сборки frontend нужен Node.js 20 или новее. Docker-сборка уже использует Node 22.
+
 ## Запуск через Docker
 
 Docker-вариант поднимает PHP-FPM, Nginx, MySQL, queue worker и scheduler.
