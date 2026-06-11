@@ -10,6 +10,7 @@ use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
 use App\Models\ApiRequestLog;
 use App\Models\CrmEntitySnapshot;
+use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\DashboardWidget;
@@ -838,17 +839,44 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => ['_embedded' => ['group' => ['name' => 'Sales']]],
             'synced_at' => now(),
         ]);
-        AmoUsersSnapshot::query()->create([
+        CrmCustomFieldSnapshot::query()->create([
             'amo_account_id' => $account->id,
-            'amo_user_id' => 11,
-            'name' => 'Avito Manager',
-            'rights' => [],
-            'group_id' => 30,
-            'is_admin' => false,
-            'is_active' => true,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 1001, 'value' => 'Иван Рекрутер', 'sort' => 0],
+                ['id' => 1002, 'value' => 'Мария Рекрутер', 'sort' => 1],
+                ['id' => 1003, 'value' => 'Пустой рекрутер', 'sort' => 2],
+            ],
             'raw' => [],
             'synced_at' => now(),
         ]);
+        foreach ([
+            ['id' => 501, 'name' => 'Lead 1', 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
+            ['id' => 502, 'name' => 'Lead 2', 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
+            ['id' => 503, 'name' => 'Lead 3', 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер'],
+        ] as $lead) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => (string) $lead['id'],
+                'name' => $lead['name'],
+                'status_id' => $lead['status_id'],
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => [[
+                    'field_id' => 777,
+                    'field_name' => 'Рекрутер',
+                    'values' => [[
+                        'enum_id' => $lead['recruiter_enum_id'],
+                        'value' => $lead['recruiter'],
+                    ]],
+                ]],
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
         CrmEntitySnapshot::query()->create([
             'amo_account_id' => $account->id,
             'entity_type' => 'tasks',
@@ -865,25 +893,6 @@ class AuthAndAmoAccountsTest extends TestCase
             ],
             'synced_at' => now(),
         ]);
-        foreach (['lead-event-1' => 501, 'lead-event-2' => 501, 'lead-event-3' => 502] as $eventId => $leadId) {
-            CrmEntitySnapshot::query()->create([
-                'amo_account_id' => $account->id,
-                'entity_type' => 'events',
-                'external_id' => $eventId,
-                'name' => 'lead_status_changed',
-                'responsible_user_id' => 11,
-                'entity_created_at' => now()->subDay(),
-                'entity_updated_at' => now()->subDay(),
-                'raw' => [
-                    'id' => $eventId,
-                    'entity_id' => $leadId,
-                    'entity_type' => 'lead',
-                    'created_by' => 11,
-                    'created_at' => now()->subDay()->timestamp,
-                ],
-                'synced_at' => now(),
-            ]);
-        }
 
         $this->get("/api/widgets/amo/{$installation->public_key}/task-overdue-dashboard")
             ->assertOk()
@@ -891,10 +900,15 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertJsonPath('groups.0.group_name', 'Sales')
             ->assertJsonPath('groups.0.users.0.name', 'Manager')
             ->assertJsonPath('groups.0.users.0.completed_overdue_count', 1)
-            ->assertJsonPath('avitoRecruiting.group_name', 'Авито рекрутинг')
-            ->assertJsonPath('avitoRecruiting.total_leads_count', 2)
-            ->assertJsonPath('avitoRecruiting.users.0.name', 'Avito Manager')
-            ->assertJsonPath('avitoRecruiting.users.0.leads_count', 2);
+            ->assertJsonPath('recruiterLeads.field_name', 'Рекрутер')
+            ->assertJsonPath('recruiterLeads.total_leads_count', 3)
+            ->assertJsonPath('recruiterLeads.assigned_leads_count', 3)
+            ->assertJsonPath('recruiterLeads.recruiters.0.name', 'Иван Рекрутер')
+            ->assertJsonPath('recruiterLeads.recruiters.0.leads_count', 2)
+            ->assertJsonPath('recruiterLeads.recruiters.1.name', 'Мария Рекрутер')
+            ->assertJsonPath('recruiterLeads.recruiters.1.leads_count', 1)
+            ->assertJsonPath('recruiterLeads.recruiters.2.name', 'Пустой рекрутер')
+            ->assertJsonPath('recruiterLeads.recruiters.2.leads_count', 0);
 
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }

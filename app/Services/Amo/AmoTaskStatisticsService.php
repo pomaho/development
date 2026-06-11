@@ -4,6 +4,7 @@ namespace App\Services\Amo;
 
 use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
+use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\TaskStatisticsSyncRun;
 use Illuminate\Support\Facades\Cache;
@@ -11,7 +12,7 @@ use Illuminate\Support\Carbon;
 
 class AmoTaskStatisticsService
 {
-    private const AVITO_RECRUITING_GROUP_NAME = 'Авито рекрутинг';
+    private const RECRUITER_FIELD_NAME = 'Рекрутер';
 
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
@@ -137,87 +138,126 @@ class AmoTaskStatisticsService
         Cache::put($this->dashboardCacheVersionKey($account), now()->timestamp, now()->addDays(2));
     }
 
-    public function avitoRecruitingLeadTouches(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function recruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
         return Cache::remember(
-            $this->avitoRecruitingCacheKey($account, $from, $to),
+            $this->recruiterLeadDistributionCacheKey($account, $from, $to),
             now()->addMinutes(10),
-            fn (): array => $this->buildAvitoRecruitingLeadTouches($account, $from, $to),
+            fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to),
         );
     }
 
-    private function buildAvitoRecruitingLeadTouches(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
-        $users = AmoUsersSnapshot::query()
+        $field = CrmCustomFieldSnapshot::query()
             ->where('amo_account_id', $account->id)
-            ->get()
-            ->filter(fn (AmoUsersSnapshot $user): bool => $this->isAvitoRecruitingUser($account, $user))
-            ->keyBy('amo_user_id');
-        $rows = $users
-            ->mapWithKeys(fn (AmoUsersSnapshot $user): array => [(int) $user->amo_user_id => [
-                'id' => (int) $user->amo_user_id,
-                'name' => $user->name,
+            ->where('entity_type', 'leads')
+            ->where('name', self::RECRUITER_FIELD_NAME)
+            ->first();
+        $enums = collect($field?->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->mapWithKeys(fn (array $enum): array => [(int) $enum['id'] => [
+                'enum_id' => (int) $enum['id'],
+                'name' => (string) $enum['value'],
                 'leads_count' => 0,
             ]])
             ->all();
-        $leadIdsByUser = [];
 
-        if ($users->isEmpty()) {
+        if ($field === null) {
             return [
-                'group_name' => self::AVITO_RECRUITING_GROUP_NAME,
+                'field_name' => self::RECRUITER_FIELD_NAME,
+                'field_id' => null,
+                'field_found' => false,
                 'total_leads_count' => 0,
-                'users' => [],
+                'assigned_leads_count' => 0,
+                'recruiters' => [],
             ];
         }
 
+        $leadIdsByEnum = [];
+        $totalLeads = 0;
+
         CrmEntitySnapshot::query()
             ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'events')
+            ->where('entity_type', 'leads')
             ->orderBy('id')
-            ->chunkById(500, function ($events) use (&$leadIdsByUser, $users, $from, $to): void {
-                foreach ($events as $event) {
-                    $userId = (int) ($event->responsible_user_id ?? 0);
-                    $leadId = (int) data_get($event->raw, 'entity_id');
-                    $entityType = data_get($event->raw, 'entity_type') ?: data_get($event->raw, 'entity');
-
-                    if ($entityType !== 'lead' || ! $users->has($userId) || $leadId <= 0 || ! $this->inPeriod($event->entity_created_at, $from, $to)) {
+            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $from, $to): void {
+                foreach ($leads as $lead) {
+                    if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
                         continue;
                     }
 
-                    $leadIdsByUser[$userId][$leadId] = true;
+                    $totalLeads++;
+                    $leadId = (string) $lead->external_id;
+
+                    foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, self::RECRUITER_FIELD_NAME) as $enumId) {
+                        $leadIdsByEnum[$enumId][$leadId] = true;
+                    }
                 }
             });
 
-        foreach ($leadIdsByUser as $userId => $leadIds) {
-            $rows[$userId]['leads_count'] = count($leadIds);
+        foreach ($leadIdsByEnum as $enumId => $leadIds) {
+            $enums[$enumId] ??= [
+                'enum_id' => $enumId,
+                'name' => "Значение {$enumId}",
+                'leads_count' => 0,
+            ];
+            $enums[$enumId]['leads_count'] = count($leadIds);
         }
 
-        $usersRows = collect($rows)
+        $rows = collect($enums)
             ->sortByDesc('leads_count')
             ->values()
             ->all();
 
         return [
-            'group_name' => self::AVITO_RECRUITING_GROUP_NAME,
-            'total_leads_count' => collect($leadIdsByUser)
+            'field_name' => self::RECRUITER_FIELD_NAME,
+            'field_id' => (int) $field->amo_field_id,
+            'field_found' => true,
+            'total_leads_count' => $totalLeads,
+            'assigned_leads_count' => collect($leadIdsByEnum)
                 ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
                 ->unique()
                 ->count(),
-            'users' => $usersRows,
+            'recruiters' => $rows,
         ];
     }
 
-    private function avitoRecruitingCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
         return implode(':', [
-            'amo_avito_recruiting_lead_touches',
+            'amo_recruiter_lead_distribution',
             $account->id,
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
         ]);
+    }
+
+    private function recruiterEnumIds(array $customFields, int $fieldId, string $fieldName): array
+    {
+        $enumIds = [];
+
+        foreach ($customFields as $customField) {
+            $currentFieldId = (int) ($customField['field_id'] ?? $customField['id'] ?? 0);
+            $currentFieldName = (string) ($customField['field_name'] ?? $customField['name'] ?? '');
+
+            if ($currentFieldId !== $fieldId && $currentFieldName !== $fieldName) {
+                continue;
+            }
+
+            foreach (($customField['values'] ?? []) as $value) {
+                $enumId = (int) ($value['enum_id'] ?? $value['enum'] ?? 0);
+
+                if ($enumId > 0) {
+                    $enumIds[$enumId] = true;
+                }
+            }
+        }
+
+        return array_keys($enumIds);
     }
 
     private function buildCompletedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
@@ -587,14 +627,4 @@ class AmoTaskStatisticsService
             ?: ($user->group_id ? "Группа {$user->group_id}" : 'Без группы');
     }
 
-    private function isAvitoRecruitingUser(AmoAccount $account, AmoUsersSnapshot $user): bool
-    {
-        $configuredGroupId = (int) data_get($account->settings, 'reports.avito_recruiting_group_id', 0);
-
-        if ($configuredGroupId > 0) {
-            return (int) $user->group_id === $configuredGroupId;
-        }
-
-        return mb_strtolower($this->groupName($user)) === mb_strtolower(self::AVITO_RECRUITING_GROUP_NAME);
-    }
 }

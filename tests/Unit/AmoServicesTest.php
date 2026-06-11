@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
+use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\AmoRolesSnapshot;
@@ -840,6 +841,65 @@ class AmoServicesTest extends TestCase
         $service->refreshDashboardCacheVersion($account);
         $fresh = $service->completedOverdueDashboard($account, $from, $to);
         $this->assertSame(2, $fresh[0]['completed_count']);
+    }
+
+    public function test_recruiter_lead_distribution_counts_leads_by_recruiter_field_enum(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 1001, 'value' => 'Иван Рекрутер'],
+                ['id' => 1002, 'value' => 'Мария Рекрутер'],
+                ['id' => 1003, 'value' => 'Без сделок'],
+            ],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        foreach ([
+            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111],
+            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142],
+            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143],
+        ] as $lead) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'status_id' => $lead['status_id'],
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => [[
+                    'field_id' => 777,
+                    'field_name' => 'Рекрутер',
+                    'values' => [[
+                        'enum_id' => $lead['enum_id'],
+                        'value' => $lead['value'],
+                    ]],
+                ]],
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $distribution = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
+            ->recruiterLeadDistribution($account, now()->subDays(7), now());
+
+        $this->assertTrue($distribution['field_found']);
+        $this->assertSame(3, $distribution['total_leads_count']);
+        $this->assertSame(3, $distribution['assigned_leads_count']);
+        $this->assertSame('Иван Рекрутер', $distribution['recruiters'][0]['name']);
+        $this->assertSame(2, $distribution['recruiters'][0]['leads_count']);
+        $this->assertSame('Мария Рекрутер', $distribution['recruiters'][1]['name']);
+        $this->assertSame(1, $distribution['recruiters'][1]['leads_count']);
+        $this->assertSame('Без сделок', $distribution['recruiters'][2]['name']);
+        $this->assertSame(0, $distribution['recruiters'][2]['leads_count']);
     }
 
     public function test_task_statistics_job_updates_incremental_cursor(): void

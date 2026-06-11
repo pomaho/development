@@ -21,16 +21,19 @@ type GroupRow = {
     users: UserRow[];
 };
 
-type AvitoRecruitingRow = {
-    id: number;
+type RecruiterLeadRow = {
+    enum_id: number;
     name: string;
     leads_count: number;
 };
 
-type AvitoRecruiting = {
-    group_name: string;
+type RecruiterLeads = {
+    field_name: string;
+    field_id: number | null;
+    field_found: boolean;
     total_leads_count: number;
-    users: AvitoRecruitingRow[];
+    assigned_leads_count: number;
+    recruiters: RecruiterLeadRow[];
 };
 
 type Props = {
@@ -40,14 +43,14 @@ type Props = {
         to: string;
     };
     groups: GroupRow[];
-    avitoRecruiting: AvitoRecruiting;
+    recruiterLeads: RecruiterLeads;
     links: {
         self: string;
         api: string;
     };
 };
 
-export default function TaskOverdueDashboard({ account, period, groups, avitoRecruiting, links }: Props) {
+export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, links }: Props) {
     const totalCompleted = groups.reduce((sum, group) => sum + group.completed_count, 0);
     const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
     const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
@@ -62,8 +65,8 @@ export default function TaskOverdueDashboard({ account, period, groups, avitoRec
                         <div className="flex min-w-0 items-start gap-4">
                             <img className="h-14 w-14 shrink-0 rounded-md border border-amber-100 bg-slate-950 object-contain p-1.5" src="/assets/anyservice-logo.png" alt="AnyService" />
                             <div>
-                                <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">BI аналитика задач</div>
-                                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Выполненные просроченные задачи</h1>
+                                <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">BI аналитика CRM</div>
+                                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">Задачи и сделки по рекрутерам</h1>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
                                     <span>{account.name}</span>
                                     <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-block" />
@@ -135,36 +138,36 @@ export default function TaskOverdueDashboard({ account, period, groups, avitoRec
                 <section className="mb-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                     <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center">
                         <div>
-                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Сделки по отделу</div>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-950">{avitoRecruiting.group_name}</h2>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Сделки по рекрутеру</div>
+                            <h2 className="mt-1 text-lg font-semibold text-slate-950">Поле “{recruiterLeads.field_name}”</h2>
                             <p className="mt-1 text-sm text-slate-500">
-                                Уникальные сделки, по которым сотрудники отдела выполняли действия в выбранном периоде.
+                                Количество сделок, в которых выбрано каждое значение списка. Учитываются все этапы, включая успешные и закрытые нереализованные.
                             </p>
                         </div>
                         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-right">
-                            <div className="text-xs font-medium uppercase tracking-wide text-amber-700">Всего сделок</div>
-                            <div className="mt-1 text-3xl font-semibold text-slate-950">{avitoRecruiting.total_leads_count}</div>
+                            <div className="text-xs font-medium uppercase tracking-wide text-amber-700">Сделок с рекрутером</div>
+                            <div className="mt-1 text-3xl font-semibold text-slate-950">{recruiterLeads.assigned_leads_count}</div>
                         </div>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
                             <thead className="bg-white text-xs uppercase tracking-wide text-slate-500">
                                 <tr>
-                                    <th className="px-4 py-3 font-semibold">Сотрудник</th>
-                                    <th className="px-3 py-3 font-semibold">Сделок прошло</th>
+                                    <th className="px-4 py-3 font-semibold">Рекрутер из списка</th>
+                                    <th className="px-3 py-3 font-semibold">Сделок</th>
                                     <th className="px-3 py-3 font-semibold">Доля</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {avitoRecruiting.users.length > 0 ? avitoRecruiting.users.map((user) => {
-                                    const rate = avitoRecruiting.total_leads_count > 0
-                                        ? Math.round((user.leads_count / avitoRecruiting.total_leads_count) * 1000) / 10
+                                {recruiterLeads.recruiters.length > 0 ? recruiterLeads.recruiters.map((recruiter) => {
+                                    const rate = recruiterLeads.assigned_leads_count > 0
+                                        ? Math.round((recruiter.leads_count / recruiterLeads.assigned_leads_count) * 1000) / 10
                                         : 0;
 
                                     return (
-                                        <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={user.id}>
-                                            <td className="px-4 py-3 font-medium text-slate-950">{user.name}</td>
-                                            <td className="px-3 py-3 tabular-nums">{user.leads_count}</td>
+                                        <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={recruiter.enum_id}>
+                                            <td className="px-4 py-3 font-medium text-slate-950">{recruiter.name}</td>
+                                            <td className="px-3 py-3 tabular-nums">{recruiter.leads_count}</td>
                                             <td className="px-3 py-3">
                                                 <div className="flex min-w-40 items-center gap-2">
                                                     <div className="h-2 flex-1 rounded-full bg-slate-100">
@@ -178,7 +181,9 @@ export default function TaskOverdueDashboard({ account, period, groups, avitoRec
                                 }) : (
                                     <tr>
                                         <td className="px-4 py-5 text-sm text-slate-500" colSpan={3}>
-                                            Нет данных по отделу за выбранный период. Проверьте, что сотрудники состоят в группе “Авито рекрутинг” и выполнена синхронизация событий сделок.
+                                            {recruiterLeads.field_found
+                                                ? 'В поле “Рекрутер” пока нет значений списка или нет сделок с заполненным рекрутером за выбранный период.'
+                                                : 'Поле сделки “Рекрутер” не найдено в CRM-аудите. Запустите синхронизацию структуры CRM.'}
                                         </td>
                                     </tr>
                                 )}
