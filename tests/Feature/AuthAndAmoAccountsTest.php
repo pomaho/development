@@ -1250,6 +1250,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('shadow-theme-xs', $form);
     }
 
+    public function test_dashboard_page_uses_tailadmin_table_and_actions(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Dashboard/Index.tsx'));
+
+        $this->assertStringContainsString('Operations overview', $source);
+        $this->assertStringContainsString('actionLinkClass', $source);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
+        $this->assertStringContainsString('bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500', $source);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();

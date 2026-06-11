@@ -58,31 +58,33 @@ export default function DashboardIndex({ currentAccount, widgets, summary, recen
         : [{ label: 'Dashboard' }];
 
     const accountLinks = links.current_account;
+    const actionLinkClass = 'inline-flex h-10 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
 
     return (
         <AuthenticatedLayout title="amo Integrator Hub" breadcrumbs={breadcrumbs} links={links}>
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-semibold">
+                    <p className="text-theme-sm font-medium text-brand-600">Operations overview</p>
+                    <h1 className="mt-1 text-2xl font-semibold text-gray-900">
                         {currentAccount ? `Dashboard: ${currentAccount.name}` : 'Dashboard: все аккаунты'}
                     </h1>
-                    {currentAccount ? <div className="text-sm text-slate-500">{currentAccount.base_domain}</div> : null}
+                    {currentAccount ? <div className="mt-1 text-theme-sm text-gray-500">{currentAccount.base_domain}</div> : null}
                 </div>
             </div>
 
             {currentAccount && accountLinks ? (
-                <div className="mb-6 flex flex-wrap gap-3 text-sm">
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.show}>Карточка клиента</a>
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.users}>Пользователи</a>
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.roles}>Роли</a>
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines}>Воронки</a>
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.crm_audit}>CRM-аудит</a>
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.integrations}>Интеграции</a>
-                    <a className="rounded border border-slate-300 bg-white px-3 py-2 hover:border-blue-400" href={accountLinks.widgets}>Dashboard-блоки</a>
+                <div className="mb-6 flex flex-wrap gap-3">
+                    <a className={actionLinkClass} href={accountLinks.show}>Карточка клиента</a>
+                    <a className={actionLinkClass} href={accountLinks.users}>Пользователи</a>
+                    <a className={actionLinkClass} href={accountLinks.roles}>Роли</a>
+                    <a className={actionLinkClass} href={accountLinks.pipelines}>Воронки</a>
+                    <a className={actionLinkClass} href={accountLinks.crm_audit}>CRM-аудит</a>
+                    <a className={actionLinkClass} href={accountLinks.integrations}>Интеграции</a>
+                    <a className={actionLinkClass} href={accountLinks.widgets}>Dashboard-блоки</a>
                 </div>
             ) : null}
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 <DashboardMetric label="Подключено аккаунтов" value={summary.accounts_count} />
                 <DashboardMetric label="Активные аккаунты" value={summary.active_accounts_count} />
                 <DashboardMetric label="Последняя синхронизация" value={summary.last_sync || 'нет'} />
@@ -91,29 +93,35 @@ export default function DashboardIndex({ currentAccount, widgets, summary, recen
                 <DashboardMetric label="Dashboard-блоки" value={widgets.length} />
             </div>
 
-            <div className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="mb-3 font-semibold">Последние ошибки API</h2>
+            <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
+                <div className="border-b border-gray-200 px-5 py-4">
+                    <h2 className="text-lg font-semibold text-gray-900">Последние ошибки API</h2>
+                </div>
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                    <table className="w-full text-left text-theme-sm">
+                        <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                             <tr>
-                                <th className="py-2">Дата</th>
-                                <th>Аккаунт</th>
-                                <th>Status</th>
-                                <th>Ошибка</th>
+                                <th className="px-5 py-3">Дата</th>
+                                <th className="px-5 py-3">Аккаунт</th>
+                                <th className="px-5 py-3">Status</th>
+                                <th className="px-5 py-3">Ошибка</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {recentErrors.length > 0 ? recentErrors.map((log) => (
-                                <tr className="border-t border-slate-100" key={log.id}>
-                                    <td className="py-2">{log.created_at || '-'}</td>
-                                    <td>{log.account_name || '-'}</td>
-                                    <td>{log.status_code || '-'}</td>
-                                    <td>{log.error_message || '-'}</td>
+                                <tr key={log.id}>
+                                    <td className="px-5 py-3 text-gray-700">{log.created_at || '-'}</td>
+                                    <td className="px-5 py-3 font-medium text-gray-900">{log.account_name || '-'}</td>
+                                    <td className="px-5 py-3">
+                                        <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-theme-xs font-medium text-red-600">
+                                            {log.status_code || '-'}
+                                        </span>
+                                    </td>
+                                    <td className="px-5 py-3 text-gray-600">{log.error_message || '-'}</td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={4}>Ошибок пока нет.</td>
+                                    <td className="px-5 py-6 text-gray-500" colSpan={4}>Ошибок пока нет.</td>
                                 </tr>
                             )}
                         </tbody>
