@@ -71,6 +71,9 @@ type Props = {
     period: {
         from: string;
         to: string;
+        source: string;
+        preset: string | null;
+        label: string;
     };
     groups: GroupRow[];
     recruiterLeads: RecruiterLeads;
@@ -89,6 +92,16 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
 
         return new URLSearchParams(window.location.search).get('debug_iframe') === '1';
     }, []);
+    const preservedIframeParams = useMemo(() => {
+        if (typeof window === 'undefined') {
+            return [] as Array<[string, string]>;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const keys = ['currency', 'date_from', 'date_to', 'lang', 'period', 't'];
+
+        return keys.flatMap((key) => params.getAll(key).map((value) => [key, value] as [string, string]));
+    }, []);
     const [iframeMessages, setIframeMessages] = useState<Array<{
         received_at: string;
         origin: string;
@@ -98,7 +111,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
     const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
     const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
     const totalUsers = groups.reduce((sum, group) => sum + group.users.length, 0);
-    const periodLabel = `${period.from} - ${period.to}`;
+    const periodLabel = `${period.label}: ${period.from} - ${period.to}`;
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') {
@@ -143,9 +156,17 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
 
                         <form className="rounded-md border border-slate-200 bg-slate-50 p-3" method="get" action={links.self}>
                             {debugIframe ? <input type="hidden" name="debug_iframe" value="1" /> : null}
+                            {preservedIframeParams.map(([key, value], index) => (
+                                <input key={`${key}-${index}`} type="hidden" name={key} value={value} />
+                            ))}
                             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                 <CalendarDays className="h-4 w-4 text-amber-500" />
                                 Период
+                            </div>
+                            <div className="mb-2 text-xs text-slate-500">
+                                {period.source === 'amo_period' || period.source === 'amo_dates'
+                                    ? 'Выбран на рабочем столе amoCRM'
+                                    : 'Выбран вручную в отчете'}
                             </div>
                             <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-sm">
                                 <input className="h-9 rounded-md border-slate-300 bg-white text-slate-900 focus:border-amber-500 focus:ring-amber-500" name="from" type="date" defaultValue={period.from} />

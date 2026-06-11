@@ -16,7 +16,7 @@ class AmoTaskOverdueDashboardController extends Controller
     public function show(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): Response
     {
         $installation = $this->installation($publicKey);
-        [$from, $to] = $this->period($request);
+        [$from, $to, $periodMeta] = $this->period($request);
 
         return Inertia::render('Widgets/Amo/TaskOverdueDashboard', [
             'account' => [
@@ -30,6 +30,7 @@ class AmoTaskOverdueDashboardController extends Controller
             'period' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
+                ...$periodMeta,
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
@@ -44,7 +45,7 @@ class AmoTaskOverdueDashboardController extends Controller
     public function json(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey);
-        [$from, $to] = $this->period($request);
+        [$from, $to, $periodMeta] = $this->period($request);
 
         return response()->json([
             'account' => [
@@ -58,6 +59,7 @@ class AmoTaskOverdueDashboardController extends Controller
             'period' => [
                 'from' => $from->toDateString(),
                 'to' => $to->toDateString(),
+                ...$periodMeta,
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
@@ -79,24 +81,38 @@ class AmoTaskOverdueDashboardController extends Controller
 
     private function period(Request $request): array
     {
-        $from = $this->dateValue($request->query('from')) ?? $this->dateValue($request->query('date_from'));
-        $to = $this->dateValue($request->query('to')) ?? $this->dateValue($request->query('date_to'));
+        $from = $this->dateValue($request->query('from'));
+        $to = $this->dateValue($request->query('to'));
 
         if ($from !== null || $to !== null) {
             return [
                 ($from ?? now()->startOfMonth())->startOfDay(),
                 ($to ?? now())->endOfDay(),
+                ['source' => 'manual', 'preset' => null, 'label' => 'Выбранный период'],
             ];
         }
 
-        return match ((string) $request->query('period', '')) {
-            'today', 'day' => [now()->startOfDay(), now()->endOfDay()],
-            'yesterday' => [now()->subDay()->startOfDay(), now()->subDay()->endOfDay()],
-            'week' => [now()->startOfWeek()->startOfDay(), now()->endOfWeek()->endOfDay()],
-            'month' => [now()->startOfMonth()->startOfDay(), now()->endOfMonth()->endOfDay()],
-            'quarter' => [now()->startOfQuarter()->startOfDay(), now()->endOfQuarter()->endOfDay()],
-            'year' => [now()->startOfYear()->startOfDay(), now()->endOfYear()->endOfDay()],
-            default => [now()->startOfMonth(), now()->endOfDay()],
+        $from = $this->dateValue($request->query('date_from'));
+        $to = $this->dateValue($request->query('date_to'));
+
+        if ($from !== null || $to !== null) {
+            return [
+                ($from ?? now()->startOfMonth())->startOfDay(),
+                ($to ?? now())->endOfDay(),
+                ['source' => 'amo_dates', 'preset' => null, 'label' => 'Период рабочего стола'],
+            ];
+        }
+
+        $preset = (string) $request->query('period', '');
+
+        return match ($preset) {
+            'today', 'day' => [now()->startOfDay(), now()->endOfDay(), ['source' => 'amo_period', 'preset' => $preset, 'label' => 'Сегодня']],
+            'yesterday' => [now()->subDay()->startOfDay(), now()->subDay()->endOfDay(), ['source' => 'amo_period', 'preset' => $preset, 'label' => 'Вчера']],
+            'week' => [now()->startOfWeek()->startOfDay(), now()->endOfWeek()->endOfDay(), ['source' => 'amo_period', 'preset' => $preset, 'label' => 'Эта неделя']],
+            'month' => [now()->startOfMonth()->startOfDay(), now()->endOfMonth()->endOfDay(), ['source' => 'amo_period', 'preset' => $preset, 'label' => 'Этот месяц']],
+            'quarter' => [now()->startOfQuarter()->startOfDay(), now()->endOfQuarter()->endOfDay(), ['source' => 'amo_period', 'preset' => $preset, 'label' => 'Этот квартал']],
+            'year' => [now()->startOfYear()->startOfDay(), now()->endOfYear()->endOfDay(), ['source' => 'amo_period', 'preset' => $preset, 'label' => 'Этот год']],
+            default => [now()->startOfMonth(), now()->endOfDay(), ['source' => 'default', 'preset' => null, 'label' => 'Текущий месяц']],
         };
     }
 

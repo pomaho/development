@@ -1173,7 +1173,10 @@ class AuthAndAmoAccountsTest extends TestCase
             $this->get("/api/widgets/amo/{$installation->public_key}/task-overdue-dashboard?currency=RUB&date_from=false&date_to=false&lang=ru&period=week&t=0.1768444589890391")
                 ->assertOk()
                 ->assertJsonPath('period.from', '2026-06-08')
-                ->assertJsonPath('period.to', '2026-06-14');
+                ->assertJsonPath('period.to', '2026-06-14')
+                ->assertJsonPath('period.source', 'amo_period')
+                ->assertJsonPath('period.preset', 'week')
+                ->assertJsonPath('period.label', 'Эта неделя');
         } finally {
             Carbon::setTestNow();
         }
@@ -1186,6 +1189,7 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('BI-отчеты рабочего стола', $source);
         $this->assertStringContainsString('debug_iframe', $source);
         $this->assertStringContainsString('postMessage events', $source);
+        $this->assertStringContainsString('Выбран на рабочем столе amoCRM', $source);
         $this->assertStringContainsString('Отчет по задачам', $source);
         $this->assertStringContainsString('Выполненные просроченные задачи', $source);
         $this->assertStringContainsString('Отчет по сделкам', $source);
