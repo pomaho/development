@@ -982,6 +982,20 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }
 
+    public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));
+
+        $this->assertStringContainsString('BI-отчеты рабочего стола', $source);
+        $this->assertStringContainsString('Отчет по задачам', $source);
+        $this->assertStringContainsString('Выполненные просроченные задачи', $source);
+        $this->assertStringContainsString('Отчет по сделкам', $source);
+        $this->assertLessThan(
+            strpos($source, 'Отчет по сделкам'),
+            strpos($source, 'Отчет по задачам')
+        );
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
