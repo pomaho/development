@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout';
+import JsonDetails from '../../Components/JsonDetails';
+import Pagination from '../../Components/Pagination';
 
 type Account = {
     id: number;
@@ -64,11 +66,10 @@ type Props = {
 
 const jsonValue = (value: unknown) => JSON.stringify(value ?? null);
 
-const paginationLabel = (label: string) => label
-    .replace('&laquo; Previous', 'Назад')
-    .replace('Next &raquo;', 'Вперед');
-
 export default function AmoAccountUsers({ account, users, roles, groups, filters, links }: Props) {
+    const inputClass = 'h-10 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10';
+    const actionLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
+
     return (
         <AuthenticatedLayout
             title="amo Integrator Hub"
@@ -81,111 +82,77 @@ export default function AmoAccountUsers({ account, users, roles, groups, filters
             links={links}
         >
             <div className="mb-6">
-                <h1 className="text-2xl font-semibold">Пользователи: {account.name}</h1>
-                <div className="flex flex-wrap gap-3 text-sm">
-                    <a className="text-blue-700 hover:text-blue-900" href={links.current_account.show}>Назад к аккаунту</a>
-                    <a className="text-blue-700 hover:text-blue-900" href={links.export}>Экспорт в Excel</a>
+                <p className="text-theme-sm font-medium text-brand-600">Users audit</p>
+                <h1 className="mt-1 text-2xl font-semibold text-gray-900">Пользователи: {account.name}</h1>
+                <div className="mt-4 flex flex-wrap gap-3">
+                    <a className={actionLinkClass} href={links.current_account.show}>Назад к аккаунту</a>
+                    <a className={actionLinkClass} href={links.export}>Экспорт в Excel</a>
                 </div>
             </div>
 
-            <form className="mb-4 flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm" method="get">
-                <input className="rounded border-slate-300" defaultValue={filters.search} name="search" placeholder="Имя или email" />
-                <select className="rounded border-slate-300" defaultValue={filters.active} name="active">
+            <form className="mb-4 flex flex-wrap gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm" method="get">
+                <input className={inputClass} defaultValue={filters.search} name="search" placeholder="Имя или email" />
+                <select className={inputClass} defaultValue={filters.active} name="active">
                     <option value="">Любая активность</option>
                     <option value="1">Только активные</option>
                     <option value="0">Только неактивные</option>
                 </select>
-                <select className="rounded border-slate-300" defaultValue={filters.role_id} name="role_id">
+                <select className={inputClass} defaultValue={filters.role_id} name="role_id">
                     <option value="">Все роли</option>
                     {roles.map((role) => <option key={role} value={role}>{role}</option>)}
                 </select>
-                <select className="rounded border-slate-300" defaultValue={filters.group_id} name="group_id">
+                <select className={inputClass} defaultValue={filters.group_id} name="group_id">
                     <option value="">Все группы</option>
                     {groups.map((group) => <option key={group} value={group}>{group}</option>)}
                 </select>
-                <label className="flex items-center gap-2">
-                    <input className="rounded border-slate-300" defaultChecked={filters.admins} name="admins" type="checkbox" value="1" />
+                <label className="flex h-10 items-center gap-2 text-theme-sm font-medium text-gray-700">
+                    <input className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" defaultChecked={filters.admins} name="admins" type="checkbox" value="1" />
                     Только админы
                 </label>
-                <button className="rounded bg-blue-700 px-3 py-2 text-white hover:bg-blue-800" type="submit">Фильтр</button>
+                <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Фильтр</button>
             </form>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs">
-                        <thead className="text-slate-500">
+                    <table className="w-full text-left text-theme-xs">
+                        <thead className="bg-gray-50 font-semibold uppercase text-gray-500">
                             <tr>
-                                <th className="py-2">ID</th>
-                                <th>Имя</th>
-                                <th>Email</th>
-                                <th>Активен</th>
-                                <th>Админ</th>
-                                <th>Role</th>
-                                <th>Group</th>
-                                <th>Сделки</th>
-                                <th>Контакты</th>
-                                <th>Компании</th>
-                                <th>Задачи</th>
-                                <th>Почта</th>
-                                <th>Каталоги</th>
-                                <th>Sync</th>
-                                <th>Raw</th>
+                                {['ID', 'Имя', 'Email', 'Активен', 'Админ', 'Role', 'Group', 'Сделки', 'Контакты', 'Компании', 'Задачи', 'Почта', 'Каталоги', 'Sync', 'Raw'].map((heading) => (
+                                    <th className="px-5 py-3" key={heading}>{heading}</th>
+                                ))}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {users.data.length > 0 ? users.data.map((user) => (
-                                <tr className="border-t border-slate-100 align-top" key={user.id}>
-                                    <td className="py-2">{user.amo_user_id}</td>
-                                    <td className="font-medium">{user.name}</td>
-                                    <td>{user.email || '-'}</td>
-                                    <td>{user.is_active ? 'да' : 'нет'}</td>
-                                    <td>{user.is_admin ? 'да' : 'нет'}</td>
-                                    <td>{user.role_id || '-'}</td>
-                                    <td>{user.group_id || '-'}</td>
-                                    <td>{jsonValue(user.rights.leads)}</td>
-                                    <td>{jsonValue(user.rights.contacts)}</td>
-                                    <td>{jsonValue(user.rights.companies)}</td>
-                                    <td>{jsonValue(user.rights.tasks)}</td>
-                                    <td>{jsonValue(user.rights.mail_access ?? user.rights.mail)}</td>
-                                    <td>{jsonValue(user.rights.catalogs)}</td>
-                                    <td>{user.synced_at || '-'}</td>
-                                    <td>
-                                        <details>
-                                            <summary className="cursor-pointer text-blue-700">JSON</summary>
-                                            <pre className="mt-2 max-w-md overflow-auto rounded bg-slate-950 p-3 text-[11px] text-slate-50">
-                                                {JSON.stringify(user.raw, null, 2)}
-                                            </pre>
-                                        </details>
-                                    </td>
+                                <tr className="align-top" key={user.id}>
+                                    <td className="px-5 py-3 text-gray-700">{user.amo_user_id}</td>
+                                    <td className="px-5 py-3 font-medium text-gray-900">{user.name}</td>
+                                    <td className="px-5 py-3 text-gray-600">{user.email || '-'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{user.is_active ? 'да' : 'нет'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{user.is_admin ? 'да' : 'нет'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{user.role_id || '-'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{user.group_id || '-'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{jsonValue(user.rights.leads)}</td>
+                                    <td className="px-5 py-3 text-gray-600">{jsonValue(user.rights.contacts)}</td>
+                                    <td className="px-5 py-3 text-gray-600">{jsonValue(user.rights.companies)}</td>
+                                    <td className="px-5 py-3 text-gray-600">{jsonValue(user.rights.tasks)}</td>
+                                    <td className="px-5 py-3 text-gray-600">{jsonValue(user.rights.mail_access ?? user.rights.mail)}</td>
+                                    <td className="px-5 py-3 text-gray-600">{jsonValue(user.rights.catalogs)}</td>
+                                    <td className="px-5 py-3 text-gray-600">{user.synced_at || '-'}</td>
+                                    <td className="px-5 py-3"><JsonDetails data={user.raw} /></td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={15}>Пользователи не найдены.</td>
+                                    <td className="px-5 py-6 text-gray-500" colSpan={15}>Пользователи не найдены.</td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
 
-                {users.links.length > 3 ? (
-                    <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                        {users.links.map((link, index) => link.url ? (
-                            <a
-                                className={link.active
-                                    ? 'rounded bg-blue-700 px-3 py-1 text-white'
-                                    : 'rounded border border-slate-300 px-3 py-1 text-slate-700 hover:border-blue-400'}
-                                href={link.url}
-                                key={`${link.label}-${index}`}
-                            >
-                                {paginationLabel(link.label)}
-                            </a>
-                        ) : (
-                            <span className="rounded border border-slate-200 px-3 py-1 text-slate-400" key={`${link.label}-${index}`}>
-                                {paginationLabel(link.label)}
-                            </span>
-                        ))}
-                    </div>
-                ) : null}
+                <div className="border-t border-gray-100 px-5 pb-5">
+                    <Pagination links={users.links} />
+                </div>
             </div>
         </AuthenticatedLayout>
     );

@@ -1290,6 +1290,21 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('text-theme-xs font-medium text-red-600', $source);
     }
 
+    public function test_users_roles_and_api_logs_use_tailadmin_tables(): void
+    {
+        $users = file_get_contents(resource_path('js/Pages/AmoAccounts/Users.tsx'));
+        $roles = file_get_contents(resource_path('js/Pages/AmoAccounts/Roles.tsx'));
+        $logs = file_get_contents(resource_path('js/Pages/Logs/Api.tsx'));
+
+        $this->assertStringContainsString('Users audit', $users);
+        $this->assertStringContainsString('<Pagination links={users.links} />', $users);
+        $this->assertStringContainsString('<JsonDetails data={user.raw} />', $users);
+        $this->assertStringContainsString('Roles audit', $roles);
+        $this->assertStringContainsString('<JsonDetails data={role.rights} />', $roles);
+        $this->assertStringContainsString('System logs', $logs);
+        $this->assertStringContainsString('<JsonDetails data={log.response_payload} />', $logs);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();

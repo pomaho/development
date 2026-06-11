@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout';
+import JsonDetails from '../../Components/JsonDetails';
 import Pagination from '../../Components/Pagination';
 
 type ApiLog = {
@@ -46,49 +47,42 @@ export default function ApiLogs({ logs, links }: Props) {
             links={links}
         >
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-                <h1 className="text-2xl font-semibold">API-логи</h1>
-                <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.export}>Экспорт в Excel</a>
+                <div>
+                    <p className="text-theme-sm font-medium text-brand-600">System logs</p>
+                    <h1 className="mt-1 text-2xl font-semibold text-gray-900">API-логи</h1>
+                </div>
+                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500" href={links.export}>Экспорт в Excel</a>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                    <table className="w-full text-left text-theme-sm">
+                        <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                             <tr>
-                                <th className="py-2">Дата</th>
-                                <th>Аккаунт</th>
-                                <th>Method</th>
-                                <th>URL</th>
-                                <th>Status</th>
-                                <th>Duration</th>
-                                <th>Error</th>
-                                <th>Response</th>
+                                {['Дата', 'Аккаунт', 'Method', 'URL', 'Status', 'Duration', 'Error', 'Response'].map((heading) => (
+                                    <th className="px-5 py-3" key={heading}>{heading}</th>
+                                ))}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {logs.data.map((log) => (
-                                <tr className="border-t border-slate-100 align-top" key={log.id}>
-                                    <td className="py-2">{log.created_at || '-'}</td>
-                                    <td>{log.account_name || '-'}</td>
-                                    <td>{log.method}</td>
-                                    <td className="max-w-md break-all">{log.url}</td>
-                                    <td>{log.status_code || '-'}</td>
-                                    <td>{log.duration_ms ? `${log.duration_ms} ms` : '-'}</td>
-                                    <td>{log.error_message || '-'}</td>
-                                    <td>
-                                        <details>
-                                            <summary className="cursor-pointer text-blue-700">JSON</summary>
-                                            <pre className="mt-2 max-w-md overflow-auto rounded bg-slate-950 p-3 text-[11px] text-slate-50">
-                                                {JSON.stringify(log.response_payload, null, 2)}
-                                            </pre>
-                                        </details>
-                                    </td>
+                                <tr className="align-top" key={log.id}>
+                                    <td className="px-5 py-3 text-gray-700">{log.created_at || '-'}</td>
+                                    <td className="px-5 py-3 font-medium text-gray-900">{log.account_name || '-'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{log.method}</td>
+                                    <td className="max-w-md break-all px-5 py-3 text-gray-600">{log.url}</td>
+                                    <td className="px-5 py-3 text-gray-600">{log.status_code || '-'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{log.duration_ms ? `${log.duration_ms} ms` : '-'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{log.error_message || '-'}</td>
+                                    <td className="px-5 py-3"><JsonDetails data={log.response_payload} /></td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
-                <Pagination links={logs.links} />
+                <div className="border-t border-gray-100 px-5 pb-5">
+                    <Pagination links={logs.links} />
+                </div>
             </div>
         </AuthenticatedLayout>
     );
