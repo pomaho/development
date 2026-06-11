@@ -1270,6 +1270,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('<Pagination links={accounts.links} />', $source);
     }
 
+    public function test_amo_account_show_uses_tailadmin_detail_layout(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/AmoAccounts/Show.tsx'));
+
+        $this->assertStringContainsString('Client profile', $source);
+        $this->assertStringContainsString('primaryButtonClass', $source);
+        $this->assertStringContainsString('quickLinkClass', $source);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
