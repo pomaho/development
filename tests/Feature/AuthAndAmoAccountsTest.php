@@ -1214,10 +1214,8 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('Источник:', $source);
         $this->assertStringContainsString('source_columns.map', $source);
         $this->assertStringContainsString('city.sources[source]', $source);
-        $this->assertLessThan(
-            strpos($source, 'Отчет по сделкам'),
-            strpos($source, 'Отчет по задачам')
-        );
+        $this->assertLessThan(strpos($source, 'Отчет по задачам'), strpos($source, 'Передачи рекрутеров'));
+        $this->assertLessThan(strpos($source, 'Отчет по задачам'), strpos($source, 'Отчет по сделкам'));
     }
 
     public function test_widget_settings_ui_allows_source_field_selection(): void
