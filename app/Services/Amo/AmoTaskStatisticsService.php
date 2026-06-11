@@ -13,6 +13,7 @@ use Illuminate\Support\Carbon;
 class AmoTaskStatisticsService
 {
     private const RECRUITER_FIELD_NAME = 'Рекрутер';
+    private const MANAGER_FIELD_NAME = 'Менеджер';
 
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
@@ -151,6 +152,8 @@ class AmoTaskStatisticsService
     {
         $fieldId = (int) data_get($config, 'recruiter_field_id', 0);
         $fieldName = (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME);
+        $managerFieldId = (int) data_get($config, 'manager_field_id', 0);
+        $managerFieldName = (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME);
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $pipelineName = data_get($config, 'pipeline_name');
         $fieldQuery = CrmCustomFieldSnapshot::query()
@@ -158,7 +161,7 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads');
         $field = $fieldId > 0
             ? (clone $fieldQuery)->where('amo_field_id', $fieldId)->first()
-            : $fieldQuery->where('name', $fieldName)->first();
+            : (clone $fieldQuery)->where('name', $fieldName)->first();
         $enumIdsByValue = collect($field?->enums ?? [])
             ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
             ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
@@ -252,6 +255,8 @@ class AmoTaskStatisticsService
     {
         $fieldId = (int) data_get($config, 'recruiter_field_id', 0);
         $fieldName = (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME);
+        $managerFieldId = (int) data_get($config, 'manager_field_id', 0);
+        $managerFieldName = (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME);
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $pipelineName = data_get($config, 'pipeline_name');
         $fieldQuery = CrmCustomFieldSnapshot::query()
@@ -259,16 +264,24 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads');
         $field = $fieldId > 0
             ? (clone $fieldQuery)->where('amo_field_id', $fieldId)->first()
-            : $fieldQuery->where('name', $fieldName)->first();
+            : (clone $fieldQuery)->where('name', $fieldName)->first();
         $enums = collect($field?->enums ?? [])
             ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
             ->mapWithKeys(fn (array $enum): array => [(int) $enum['id'] => [
                 'enum_id' => (int) $enum['id'],
                 'name' => (string) $enum['value'],
                 'leads_count' => 0,
+                'transferred_to_manager_count' => 0,
             ]])
             ->all();
         $enumIdsByValue = collect($field?->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
+            ->all();
+        $managerField = $managerFieldId > 0
+            ? (clone $fieldQuery)->where('amo_field_id', $managerFieldId)->first()
+            : (clone $fieldQuery)->where('name', $managerFieldName)->first();
+        $managerEnumIdsByValue = collect($managerField?->enums ?? [])
             ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
             ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
             ->all();
@@ -278,15 +291,20 @@ class AmoTaskStatisticsService
                 'field_name' => $fieldName,
                 'field_id' => null,
                 'field_found' => false,
+                'manager_field_name' => $managerFieldName,
+                'manager_field_id' => null,
+                'manager_field_found' => false,
                 'pipeline_id' => $pipelineId ?: null,
                 'pipeline_name' => $pipelineName,
                 'total_leads_count' => 0,
                 'assigned_leads_count' => 0,
+                'transferred_to_manager_count' => 0,
                 'recruiters' => [],
             ];
         }
 
         $leadIdsByEnum = [];
+        $transferredLeadIdsByEnum = [];
         $totalLeads = 0;
 
         CrmEntitySnapshot::query()
@@ -294,7 +312,7 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue, $from, $to): void {
+            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$transferredLeadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue, $managerField, $managerFieldName, $managerEnumIdsByValue, $from, $to): void {
                 foreach ($leads as $lead) {
                     if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
                         continue;
@@ -302,9 +320,15 @@ class AmoTaskStatisticsService
 
                     $totalLeads++;
                     $leadId = (string) $lead->external_id;
+                    $hasManager = $managerField !== null
+                        && $this->fieldHasAnyValue($lead->custom_fields_values ?? [], (int) $managerField->amo_field_id, $managerFieldName, $managerEnumIdsByValue);
 
                     foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, $fieldName, $enumIdsByValue) as $enumId) {
                         $leadIdsByEnum[$enumId][$leadId] = true;
+
+                        if ($hasManager) {
+                            $transferredLeadIdsByEnum[$enumId][$leadId] = true;
+                        }
                     }
                 }
             });
@@ -314,8 +338,10 @@ class AmoTaskStatisticsService
                 'enum_id' => $enumId,
                 'name' => "Значение {$enumId}",
                 'leads_count' => 0,
+                'transferred_to_manager_count' => 0,
             ];
             $enums[$enumId]['leads_count'] = count($leadIds);
+            $enums[$enumId]['transferred_to_manager_count'] = count($transferredLeadIdsByEnum[$enumId] ?? []);
         }
 
         $rows = collect($enums)
@@ -327,10 +353,17 @@ class AmoTaskStatisticsService
             'field_name' => $field->name,
             'field_id' => (int) $field->amo_field_id,
             'field_found' => true,
+            'manager_field_name' => $managerField?->name ?? $managerFieldName,
+            'manager_field_id' => $managerField?->amo_field_id,
+            'manager_field_found' => $managerField !== null,
             'pipeline_id' => $pipelineId ?: null,
             'pipeline_name' => $pipelineName,
             'total_leads_count' => $totalLeads,
             'assigned_leads_count' => collect($leadIdsByEnum)
+                ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
+                ->unique()
+                ->count(),
+            'transferred_to_manager_count' => collect($transferredLeadIdsByEnum)
                 ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
                 ->unique()
                 ->count(),
@@ -350,6 +383,7 @@ class AmoTaskStatisticsService
             $to?->timestamp ?? 'null',
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
+            data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
         ]);
     }
 
@@ -395,6 +429,12 @@ class AmoTaskStatisticsService
         }
 
         return $fieldValues;
+    }
+
+    private function fieldHasAnyValue(array $customFields, int $fieldId, string $fieldName, array $enumIdsByValue): bool
+    {
+        return collect($this->recruiterFieldValues($customFields, $fieldId, $fieldName, $enumIdsByValue))
+            ->contains(fn (array $value): bool => (int) $value['enum_id'] > 0 || trim((string) $value['value']) !== '');
     }
 
     private function normaliseRecruiterValue(mixed $value): string

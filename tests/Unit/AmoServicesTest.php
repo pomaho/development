@@ -863,14 +863,27 @@ class AmoServicesTest extends TestCase
             'raw' => [],
             'synced_at' => now(),
         ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 778,
+            'name' => 'Менеджер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 2001, 'value' => 'Первый менеджер'],
+                ['id' => 2002, 'value' => 'Второй менеджер'],
+            ],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
 
         foreach ([
-            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
-            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
-            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
-            ['id' => '504', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 20, 'created_at' => now()->subDay()],
-            ['id' => '505', 'enum_id' => null, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
-            ['id' => '506', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subYear()],
+            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay(), 'manager' => 'Первый менеджер'],
+            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142, 'pipeline_id' => 10, 'created_at' => now()->subDay(), 'manager' => null],
+            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143, 'pipeline_id' => 10, 'created_at' => now()->subDay(), 'manager' => 'Второй менеджер'],
+            ['id' => '504', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 20, 'created_at' => now()->subDay(), 'manager' => 'Второй менеджер'],
+            ['id' => '505', 'enum_id' => null, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay(), 'manager' => 'Второй менеджер'],
+            ['id' => '506', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subYear(), 'manager' => 'Второй менеджер'],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -887,6 +900,12 @@ class AmoServicesTest extends TestCase
                         'enum_id' => $lead['enum_id'],
                         'value' => $lead['value'],
                     ], fn ($value): bool => $value !== null)],
+                ], [
+                    'field_id' => 778,
+                    'field_name' => 'Менеджер',
+                    'values' => $lead['manager'] === null ? [] : [[
+                        'value' => $lead['manager'],
+                    ]],
                 ]],
                 'raw' => [],
                 'synced_at' => now(),
@@ -899,19 +918,26 @@ class AmoServicesTest extends TestCase
                 'pipeline_name' => 'Массовый подбор',
                 'recruiter_field_id' => 777,
                 'recruiter_field_name' => 'Рекрутер',
+                'manager_field_id' => 778,
+                'manager_field_name' => 'Менеджер',
             ]);
 
         $this->assertTrue($distribution['field_found']);
+        $this->assertTrue($distribution['manager_field_found']);
         $this->assertSame(10, $distribution['pipeline_id']);
         $this->assertSame('Массовый подбор', $distribution['pipeline_name']);
         $this->assertSame(4, $distribution['total_leads_count']);
         $this->assertSame(4, $distribution['assigned_leads_count']);
+        $this->assertSame(3, $distribution['transferred_to_manager_count']);
         $this->assertSame('Иван Рекрутер', $distribution['recruiters'][0]['name']);
         $this->assertSame(2, $distribution['recruiters'][0]['leads_count']);
+        $this->assertSame(1, $distribution['recruiters'][0]['transferred_to_manager_count']);
         $this->assertSame('Мария Рекрутер', $distribution['recruiters'][1]['name']);
         $this->assertSame(2, $distribution['recruiters'][1]['leads_count']);
+        $this->assertSame(2, $distribution['recruiters'][1]['transferred_to_manager_count']);
         $this->assertSame('Без сделок', $distribution['recruiters'][2]['name']);
         $this->assertSame(0, $distribution['recruiters'][2]['leads_count']);
+        $this->assertSame(0, $distribution['recruiters'][2]['transferred_to_manager_count']);
     }
 
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void

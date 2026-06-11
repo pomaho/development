@@ -65,6 +65,7 @@ type Props = {
     config: {
         pipeline_id: number | string | null;
         recruiter_field_id: number | string | null;
+        manager_field_id: number | string | null;
     };
     diagnostics: Diagnostics;
     pipelines: Pipeline[];
@@ -159,6 +160,21 @@ export default function WidgetSettings({ account, widget, config, diagnostics, p
                         </select>
                         <span className="mt-1 block text-xs text-slate-500">
                             Если поле не видно, обновите CRM-аудит структуры и проверьте список полей.
+                        </span>
+                    </label>
+
+                    <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Поле сделки с менеджером</span>
+                        <select className="mt-1 w-full rounded border-slate-300" defaultValue={config.manager_field_id || ''} name="manager_field_id">
+                            <option value="">Авто: поле “Менеджер”</option>
+                            {leadFields.map((field) => (
+                                <option key={field.id} value={field.id}>
+                                    {field.name} · ID {field.id} · {field.field_type || 'без типа'}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="mt-1 block text-xs text-slate-500">
+                            Колонка “Передано менеджеру” считает сделки, где заполнены и рекрутер, и менеджер.
                         </span>
                     </label>
 

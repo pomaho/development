@@ -25,6 +25,7 @@ type RecruiterLeadRow = {
     enum_id: number;
     name: string;
     leads_count: number;
+    transferred_to_manager_count: number;
 };
 
 type RecruiterLeads = {
@@ -35,6 +36,7 @@ type RecruiterLeads = {
     pipeline_name: string | null;
     total_leads_count: number;
     assigned_leads_count: number;
+    transferred_to_manager_count: number;
     recruiters: RecruiterLeadRow[];
 };
 
@@ -211,6 +213,9 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-right">
                             <div className="text-xs font-medium uppercase tracking-wide text-amber-700">Сделок с рекрутером</div>
                             <div className="mt-1 text-3xl font-semibold text-slate-950">{recruiterLeads.assigned_leads_count}</div>
+                            <div className="mt-1 text-xs text-amber-800">
+                                Передано менеджеру: {recruiterLeads.transferred_to_manager_count}
+                            </div>
                         </div>
                     </div>
                     <div className="overflow-x-auto">
@@ -219,6 +224,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                 <tr>
                                     <th className="px-4 py-3 font-semibold">Рекрутер из списка</th>
                                     <th className="px-3 py-3 font-semibold">Сделок</th>
+                                    <th className="px-3 py-3 font-semibold">Передано менеджеру</th>
                                     <th className="px-3 py-3 font-semibold">Доля</th>
                                 </tr>
                             </thead>
@@ -232,6 +238,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                         <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={recruiter.enum_id}>
                                             <td className="px-4 py-3 font-medium text-slate-950">{recruiter.name}</td>
                                             <td className="px-3 py-3 tabular-nums">{recruiter.leads_count}</td>
+                                            <td className="px-3 py-3 tabular-nums">{recruiter.transferred_to_manager_count}</td>
                                             <td className="px-3 py-3">
                                                 <div className="flex min-w-40 items-center gap-2">
                                                     <div className="h-2 flex-1 rounded-full bg-slate-100">
@@ -244,7 +251,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                     );
                                 }) : (
                                     <tr>
-                                        <td className="px-4 py-5 text-sm text-slate-500" colSpan={3}>
+                                        <td className="px-4 py-5 text-sm text-slate-500" colSpan={4}>
                                             {recruiterLeads.field_found
                                                 ? 'В поле “Рекрутер” пока нет значений списка или нет сделок с заполненным рекрутером за выбранный период.'
                                                 : 'Поле сделки “Рекрутер” не найдено в CRM-аудите. Запустите синхронизацию структуры CRM.'}

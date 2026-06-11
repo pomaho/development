@@ -841,6 +841,16 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => [],
             'synced_at' => now(),
         ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 778,
+            'name' => 'Менеджер',
+            'field_type' => 'select',
+            'enums' => [['id' => 2001, 'value' => 'Первый менеджер']],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
         CrmEntitySnapshot::query()->create([
             'amo_account_id' => $account->id,
             'entity_type' => 'leads',
@@ -864,7 +874,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('AmoAccounts/Widgets/Settings')
                 ->where('pipelines.0.id', 10)
-                ->where('leadFields.0.id', 777)
+                ->has('leadFields', 2)
                 ->where('diagnostics.synced_leads_total', 1)
                 ->where('diagnostics.field_found', true));
 
@@ -872,6 +882,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
                 'pipeline_id' => 10,
                 'recruiter_field_id' => 777,
+                'manager_field_id' => 778,
             ])
             ->assertRedirect("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings");
 
@@ -880,11 +891,14 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertSame('Массовый подбор', $installation->config['pipeline_name']);
         $this->assertSame(777, $installation->config['recruiter_field_id']);
         $this->assertSame('Рекрутер', $installation->config['recruiter_field_name']);
+        $this->assertSame(778, $installation->config['manager_field_id']);
+        $this->assertSame('Менеджер', $installation->config['manager_field_name']);
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
                 'pipeline_id' => 10,
                 'recruiter_field_id' => 777,
+                'manager_field_id' => 778,
             ])
             ->assertForbidden();
     }
@@ -909,6 +923,8 @@ class AuthAndAmoAccountsTest extends TestCase
                 'pipeline_name' => 'Массовый подбор',
                 'recruiter_field_id' => 777,
                 'recruiter_field_name' => 'Рекрутер',
+                'manager_field_id' => 778,
+                'manager_field_name' => 'Менеджер',
             ],
         ]);
         CrmCustomFieldSnapshot::query()->create([
@@ -993,11 +1009,24 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => [],
             'synced_at' => now(),
         ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 778,
+            'name' => 'Менеджер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 2001, 'value' => 'Первый менеджер', 'sort' => 0],
+                ['id' => 2002, 'value' => 'Второй менеджер', 'sort' => 1],
+            ],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
         foreach ([
-            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
-            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
-            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер'],
-            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер'],
+            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер'],
+            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => null],
+            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер'],
+            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер'],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -1013,6 +1042,12 @@ class AuthAndAmoAccountsTest extends TestCase
                     'values' => [[
                         'enum_id' => $lead['recruiter_enum_id'],
                         'value' => $lead['recruiter'],
+                    ]],
+                ], [
+                    'field_id' => 778,
+                    'field_name' => 'Менеджер',
+                    'values' => $lead['manager'] === null ? [] : [[
+                        'value' => $lead['manager'],
                     ]],
                 ]],
                 'raw' => [],
@@ -1047,10 +1082,13 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertJsonPath('recruiterLeads.pipeline_name', 'Массовый подбор')
             ->assertJsonPath('recruiterLeads.total_leads_count', 3)
             ->assertJsonPath('recruiterLeads.assigned_leads_count', 3)
+            ->assertJsonPath('recruiterLeads.transferred_to_manager_count', 2)
             ->assertJsonPath('recruiterLeads.recruiters.0.name', 'Иван Рекрутер')
             ->assertJsonPath('recruiterLeads.recruiters.0.leads_count', 2)
+            ->assertJsonPath('recruiterLeads.recruiters.0.transferred_to_manager_count', 1)
             ->assertJsonPath('recruiterLeads.recruiters.1.name', 'Мария Рекрутер')
             ->assertJsonPath('recruiterLeads.recruiters.1.leads_count', 1)
+            ->assertJsonPath('recruiterLeads.recruiters.1.transferred_to_manager_count', 1)
             ->assertJsonPath('recruiterLeads.recruiters.2.name', 'Пустой рекрутер')
             ->assertJsonPath('recruiterLeads.recruiters.2.leads_count', 0);
 

@@ -89,6 +89,8 @@ class AmoAccountWidgetsController extends Controller
             'pipeline_name' => data_get($installation->config, 'pipeline_name'),
             'recruiter_field_id' => data_get($installation->config, 'recruiter_field_id'),
             'recruiter_field_name' => data_get($installation->config, 'recruiter_field_name'),
+            'manager_field_id' => data_get($installation->config, 'manager_field_id'),
+            'manager_field_name' => data_get($installation->config, 'manager_field_name'),
         ];
 
         return Inertia::render('AmoAccounts/Widgets/Settings', [
@@ -105,6 +107,7 @@ class AmoAccountWidgetsController extends Controller
             'config' => [
                 'pipeline_id' => $config['pipeline_id'],
                 'recruiter_field_id' => $config['recruiter_field_id'],
+                'manager_field_id' => $config['manager_field_id'],
             ],
             'diagnostics' => $statisticsService->recruiterLeadDistributionDiagnostics($amoAccount, null, null, $config),
             'pipelines' => CrmPipelineSnapshot::query()
@@ -143,6 +146,7 @@ class AmoAccountWidgetsController extends Controller
         $data = $request->validate([
             'pipeline_id' => ['nullable', 'integer', 'min:1'],
             'recruiter_field_id' => ['nullable', 'integer', 'min:1'],
+            'manager_field_id' => ['nullable', 'integer', 'min:1'],
         ]);
         $pipeline = isset($data['pipeline_id'])
             ? CrmPipelineSnapshot::query()
@@ -157,6 +161,13 @@ class AmoAccountWidgetsController extends Controller
                 ->where('amo_field_id', (int) $data['recruiter_field_id'])
                 ->first()
             : null;
+        $managerField = isset($data['manager_field_id'])
+            ? CrmCustomFieldSnapshot::query()
+                ->where('amo_account_id', $amoAccount->id)
+                ->where('entity_type', 'leads')
+                ->where('amo_field_id', (int) $data['manager_field_id'])
+                ->first()
+            : null;
 
         if (isset($data['pipeline_id']) && $pipeline === null) {
             throw ValidationException::withMessages(['pipeline_id' => 'Выберите воронку из списка синхронизированных воронок.']);
@@ -166,6 +177,10 @@ class AmoAccountWidgetsController extends Controller
             throw ValidationException::withMessages(['recruiter_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
         }
 
+        if (isset($data['manager_field_id']) && $managerField === null) {
+            throw ValidationException::withMessages(['manager_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
+        }
+
         $installation = $this->installation($amoAccount, $dashboardWidget);
         $installation->forceFill([
             'config' => [
@@ -173,6 +188,8 @@ class AmoAccountWidgetsController extends Controller
                 'pipeline_name' => $pipeline?->name,
                 'recruiter_field_id' => $field?->amo_field_id,
                 'recruiter_field_name' => $field?->name,
+                'manager_field_id' => $managerField?->amo_field_id,
+                'manager_field_name' => $managerField?->name,
             ],
         ])->save();
 
