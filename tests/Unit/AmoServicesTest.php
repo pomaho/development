@@ -868,7 +868,8 @@ class AmoServicesTest extends TestCase
             ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
             ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
             ['id' => '504', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 20, 'created_at' => now()->subDay()],
-            ['id' => '505', 'enum_id' => null, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subYear()],
+            ['id' => '505', 'enum_id' => null, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '506', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subYear()],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,

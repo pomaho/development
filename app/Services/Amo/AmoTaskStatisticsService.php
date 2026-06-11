@@ -193,8 +193,12 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue, $from, $to): void {
                 foreach ($leads as $lead) {
+                    if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
+                        continue;
+                    }
+
                     $totalLeads++;
                     $leadId = (string) $lead->external_id;
 
