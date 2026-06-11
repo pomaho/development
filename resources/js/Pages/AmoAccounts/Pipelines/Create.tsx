@@ -165,29 +165,29 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
         >
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold">Создать воронку: {account.name}</h1>
-                <div className="text-sm text-slate-500">{account.base_domain}</div>
+                <div className="text-theme-sm text-gray-500">{account.base_domain}</div>
             </div>
 
-            <form action={links.store} className="space-y-6 rounded-lg border border-slate-200 bg-white p-5 shadow-sm" method="post">
+            <form action={links.store} className="space-y-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm" method="post">
                 <input name="_token" type="hidden" value={csrf} />
 
                 <div className="grid gap-4 md:grid-cols-2">
                     <label className="block text-sm">
                         <span>Название воронки</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue="Продажи B2B" name="name" required />
+                        <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue="Продажи B2B" name="name" required />
                         <FieldError name="name" />
                     </label>
                     <label className="block text-sm">
                         <span>Сортировка</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={20} max={10000} min={1} name="sort" required type="number" />
+                        <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={20} max={10000} min={1} name="sort" required type="number" />
                         <FieldError name="sort" />
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                        <input className="rounded border-slate-300" name="is_main" type="checkbox" value="1" />
+                        <input className="rounded border-gray-200" name="is_main" type="checkbox" value="1" />
                         <span>Сделать главной</span>
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                        <input className="rounded border-slate-300" defaultChecked name="is_unsorted_on" type="checkbox" value="1" />
+                        <input className="rounded border-gray-200" defaultChecked name="is_unsorted_on" type="checkbox" value="1" />
                         <span>Включить неразобранное</span>
                     </label>
                 </div>
@@ -196,16 +196,16 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                         <div>
                             <h2 className="font-semibold">Этапы</h2>
-                            <div className="text-sm text-slate-500">Обычные этапы можно добавлять, удалять, перетаскивать и снабжать подсказками для менеджеров.</div>
+                            <div className="text-theme-sm text-gray-500">Обычные этапы можно добавлять, удалять, перетаскивать и снабжать подсказками для менеджеров.</div>
                         </div>
-                        <button className="inline-flex items-center gap-2 rounded border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:border-blue-400 hover:text-blue-700" onClick={addRowToEnd} type="button">
+                        <button className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-theme-sm text-gray-700 hover:border-brand-300 hover:text-brand-500" onClick={addRowToEnd} type="button">
                             <Plus size={16} />
                             Добавить этап
                         </button>
                     </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            <thead className="text-slate-500">
+                            <thead className="text-gray-500">
                                 <tr>
                                     <th className="py-2">Порядок</th>
                                     <th>Тип</th>
@@ -222,7 +222,7 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
 
                                     return (
                                         <tr
-                                            className={`align-top border-t border-slate-100 ${draggedIndex === index ? 'bg-blue-50/60' : ''}`}
+                                            className={`align-top border-t border-gray-100 ${draggedIndex === index ? 'bg-brand-50/60' : ''}`}
                                             draggable={! isSystem}
                                             key={`${status.id || 'custom'}-${index}`}
                                             onDragEnd={() => setDraggedIndex(null)}
@@ -244,7 +244,7 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                                             <td className="py-3 pr-3">
                                                 <button
                                                     aria-label={isSystem ? 'Системный этап нельзя перетаскивать' : 'Перетащить этап'}
-                                                    className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-200 text-slate-400 hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-brand-300 hover:text-brand-500 disabled:cursor-not-allowed disabled:opacity-40"
                                                     disabled={isSystem}
                                                     title={isSystem ? 'Системный этап нельзя перетаскивать' : 'Перетащить этап'}
                                                     type="button"
@@ -256,38 +256,38 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                                                 {isSystem ? (
                                                     <>
                                                         <input name={`statuses[${index}][id]`} type="hidden" value={status.id} />
-                                                        <span className="rounded bg-slate-100 px-2 py-1 text-xs">{status.id}</span>
+                                                        <span className="rounded bg-gray-100 px-2 py-1 text-xs">{status.id}</span>
                                                     </>
-                                                ) : <span className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">обычный</span>}
+                                                ) : <span className="rounded bg-brand-50 px-2 py-1 text-xs text-brand-600">обычный</span>}
                                             </td>
                                             <td className="py-3 pr-3">
-                                                <input className="w-full rounded border-slate-300" name={`statuses[${index}][name]`} onChange={(event) => updateRow(index, 'name', event.target.value)} placeholder={status.name ? undefined : 'Дополнительный этап'} value={status.name} />
+                                                <input className="w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" name={`statuses[${index}][name]`} onChange={(event) => updateRow(index, 'name', event.target.value)} placeholder={status.name ? undefined : 'Дополнительный этап'} value={status.name} />
                                                 <FieldError name={`statuses.${index}.name`} />
                                             </td>
                                             <td className="py-3 pr-3">
-                                                {isSystem ? <span className="inline-block rounded bg-slate-50 px-2 py-1 text-xs text-slate-400">системная</span> : (
+                                                {isSystem ? <span className="inline-block rounded bg-gray-50 px-2 py-1 text-theme-xs text-gray-400">системная</span> : (
                                                     <>
-                                                        <textarea className="min-w-72 rounded border-slate-300" name={`statuses[${index}][hint]`} onChange={(event) => updateRow(index, 'hint', event.target.value)} placeholder="Подсказка для менеджера" rows={2} value={status.hint || ''} />
+                                                        <textarea className="min-w-72 rounded-lg border-gray-200 bg-white px-3 py-2 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" name={`statuses[${index}][hint]`} onChange={(event) => updateRow(index, 'hint', event.target.value)} placeholder="Подсказка для менеджера" rows={2} value={status.hint || ''} />
                                                         <FieldError name={`statuses.${index}.hint`} />
                                                     </>
                                                 )}
                                             </td>
                                             <td className="py-3 pr-3">
-                                                {isSystem ? <span className="inline-block rounded bg-slate-50 px-2 py-1 text-xs text-slate-400">системная</span> : (
-                                                    <input className="w-28 rounded border-slate-300" max={9999} min={1} name={`statuses[${index}][sort]`} onChange={(event) => updateRow(index, 'sort', event.target.value)} type="number" value={status.sort || ''} />
+                                                {isSystem ? <span className="inline-block rounded bg-gray-50 px-2 py-1 text-theme-xs text-gray-400">системная</span> : (
+                                                    <input className="w-28 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" max={9999} min={1} name={`statuses[${index}][sort]`} onChange={(event) => updateRow(index, 'sort', event.target.value)} type="number" value={status.sort || ''} />
                                                 )}
                                             </td>
                                             <td className="py-3 pr-3">
-                                                {isSystem ? <span className="inline-block rounded bg-slate-50 px-2 py-1 text-xs text-slate-400">amoCRM</span> : (
-                                                    <input className="h-9 w-16 rounded border-slate-300" name={`statuses[${index}][color]`} onChange={(event) => updateRow(index, 'color', event.target.value)} type="color" value={status.color || '#98cbff'} />
+                                                {isSystem ? <span className="inline-block rounded bg-gray-50 px-2 py-1 text-theme-xs text-gray-400">amoCRM</span> : (
+                                                    <input className="h-9 w-16 rounded border-gray-200" name={`statuses[${index}][color]`} onChange={(event) => updateRow(index, 'color', event.target.value)} type="color" value={status.color || '#98cbff'} />
                                                 )}
                                             </td>
                                             <td className="py-3 text-right">
                                                 <div className="inline-flex items-start gap-2">
-                                                    <button aria-label="Добавить этап после этой строки" className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-slate-600 hover:border-blue-400 hover:text-blue-700" onClick={() => addRowAfter(index)} title="Добавить этап после этой строки" type="button">
+                                                    <button aria-label="Добавить этап после этой строки" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:border-brand-300 hover:text-brand-500" onClick={() => addRowAfter(index)} title="Добавить этап после этой строки" type="button">
                                                         <Plus size={16} />
                                                     </button>
-                                                    <button aria-label="Удалить этап" className="inline-flex h-9 w-9 items-center justify-center rounded border border-slate-300 text-slate-500 hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSystem} onClick={() => removeRow(index)} title={isSystem ? 'Системный этап нельзя удалить' : 'Удалить этап'} type="button">
+                                                    <button aria-label="Удалить этап" className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:border-red-300 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40" disabled={isSystem} onClick={() => removeRow(index)} title={isSystem ? 'Системный этап нельзя удалить' : 'Удалить этап'} type="button">
                                                         <Trash2 size={16} />
                                                     </button>
                                                 </div>
@@ -301,8 +301,8 @@ export default function PipelineCreate({ account, defaultStatuses, links }: Prop
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                    <button className="rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800" type="submit">Создать в amoCRM</button>
-                    <a className="rounded border border-slate-300 px-4 py-2" href={links.current_account.pipelines}>Отмена</a>
+                    <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Создать в amoCRM</button>
+                    <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500" href={links.current_account.pipelines}>Отмена</a>
                 </div>
             </form>
         </AuthenticatedLayout>

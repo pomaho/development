@@ -1327,6 +1327,19 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('DataTable', $source);
     }
 
+    public function test_pipeline_forms_use_tailadmin_controls(): void
+    {
+        $create = file_get_contents(resource_path('js/Pages/AmoAccounts/Pipelines/Create.tsx'));
+        $clone = file_get_contents(resource_path('js/Pages/AmoAccounts/Pipelines/Clone.tsx'));
+        $transfer = file_get_contents(resource_path('js/Pages/AmoAccounts/Pipelines/TransferLeads.tsx'));
+
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm', $create);
+        $this->assertStringContainsString('focus:border-brand-300 focus:ring-brand-500/10', $create);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm', $clone);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm', $transfer);
+        $this->assertStringContainsString('inline-flex h-10 items-center rounded-lg bg-brand-500', $transfer);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();

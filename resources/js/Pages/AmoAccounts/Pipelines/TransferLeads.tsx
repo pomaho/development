@@ -86,40 +86,40 @@ export default function TransferLeads({ account, pipelines, statuses, filters, p
             links={links}
         >
             <div className="mb-6">
-                <a className="text-sm text-blue-700 hover:text-blue-900" href={links.current_account.pipelines}>← Все воронки</a>
+                <a className="text-theme-sm font-medium text-brand-600 hover:text-brand-700" href={links.current_account.pipelines}>← Все воронки</a>
                 <h1 className="mt-2 text-2xl font-semibold">Перенос сделок между воронками</h1>
-                <div className="text-sm text-slate-500">{account.name} · {account.base_domain}</div>
+                <div className="text-theme-sm text-gray-500">{account.name} · {account.base_domain}</div>
             </div>
 
-            <form action={links.preview} className="mb-4 grid gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:grid-cols-[1fr_1fr_auto]" method="get">
+            <form action={links.preview} className="mb-4 grid gap-4 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm md:grid-cols-[1fr_1fr_auto]" method="get">
                 <label className="block text-sm">
                     <span>Исходная воронка</span>
-                    <select className="mt-1 w-full rounded border-slate-300" defaultValue={filters.source_pipeline_id} name="source_pipeline_id" required>
+                    <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.source_pipeline_id} name="source_pipeline_id" required>
                         <option value="">Выберите воронку</option>
                         {pipelines.map((pipeline) => <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>)}
                     </select>
                 </label>
                 <label className="block text-sm">
                     <span>Целевая воронка</span>
-                    <select className="mt-1 w-full rounded border-slate-300" defaultValue={filters.target_pipeline_id} name="target_pipeline_id" required>
+                    <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.target_pipeline_id} name="target_pipeline_id" required>
                         <option value="">Выберите воронку</option>
                         {pipelines.map((pipeline) => <option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>)}
                     </select>
                 </label>
                 <div className="flex items-end">
-                    <button className="w-full rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" type="submit">Показать план</button>
+                    <button className="w-full inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Показать план</button>
                 </div>
             </form>
 
             {plan ? (
-                <form action={links.submit} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" method="post">
+                <form action={links.submit} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm" method="post">
                     <input name="_token" type="hidden" value={csrf} />
                     <input name="source_pipeline_id" type="hidden" value={filters.source_pipeline_id} />
                     <input name="target_pipeline_id" type="hidden" value={filters.target_pipeline_id} />
 
                     <div className="mb-4 grid gap-3 md:grid-cols-3">
-                        <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                            <div className="text-sm text-slate-500">Всего в исходной воронке</div>
+                        <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                            <div className="text-theme-sm text-gray-500">Всего в исходной воронке</div>
                             <div className="mt-1 text-2xl font-semibold">{plan.total_leads}</div>
                         </div>
                         <div className="rounded border border-emerald-200 bg-emerald-50 p-3">
@@ -134,7 +134,7 @@ export default function TransferLeads({ account, pipelines, statuses, filters, p
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left text-sm">
-                            <thead className="text-slate-500">
+                            <thead className="text-gray-500">
                                 <tr>
                                     <th className="py-2">Исходный этап</th>
                                     <th>Сделок</th>
@@ -144,14 +144,14 @@ export default function TransferLeads({ account, pipelines, statuses, filters, p
                             </thead>
                             <tbody>
                                 {plan.rows.map((row) => (
-                                    <tr className="align-top border-t border-slate-100" key={row.source_status_id}>
+                                    <tr className="align-top border-t border-gray-100" key={row.source_status_id}>
                                         <td className="py-3">
                                             <div className="font-medium">{row.source_status_name}</div>
-                                            <div className="text-xs text-slate-500">ID {row.source_status_id}</div>
+                                            <div className="text-theme-xs text-gray-500">ID {row.source_status_id}</div>
                                         </td>
                                         <td className="py-3">{row.lead_count}</td>
                                         <td className="py-3">
-                                            <select className="w-full rounded border-slate-300" defaultValue={row.target_status_id || ''} name={`status_map[${row.source_status_id}]`}>
+                                            <select className="w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={row.target_status_id || ''} name={`status_map[${row.source_status_id}]`}>
                                                 <option value="">Не переносить</option>
                                                 {targetStatuses.map((status) => <option key={status.id} value={status.id}>{status.name}</option>)}
                                             </select>
@@ -170,12 +170,12 @@ export default function TransferLeads({ account, pipelines, statuses, filters, p
                     </div>
 
                     <div className="mt-4 flex flex-wrap items-center gap-3">
-                        <button className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50" disabled={! can.sync || plan.transferable_leads === 0} type="submit">Перенести сделки</button>
-                        <div className="text-sm text-slate-500">Перед переносом проверьте маппинг этапов. Сделки без целевого этапа не будут изменены.</div>
+                        <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50" disabled={! can.sync || plan.transferable_leads === 0} type="submit">Перенести сделки</button>
+                        <div className="text-theme-sm text-gray-500">Перед переносом проверьте маппинг этапов. Сделки без целевого этапа не будут изменены.</div>
                     </div>
                 </form>
             ) : (
-                <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-500 shadow-sm">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 text-theme-sm text-gray-500 shadow-theme-sm">
                     Выберите исходную и целевую воронку, чтобы увидеть план переноса. Данные берутся из последнего CRM-аудита/снимка сделок.
                 </div>
             )}
