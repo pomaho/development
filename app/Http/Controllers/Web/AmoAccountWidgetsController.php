@@ -8,6 +8,7 @@ use App\Models\AmoAccountDashboardWidget;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\DashboardWidget;
+use App\Services\Amo\AmoTaskStatisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -78,11 +79,17 @@ class AmoAccountWidgetsController extends Controller
         ]);
     }
 
-    public function settings(AmoAccount $amoAccount, DashboardWidget $dashboardWidget): Response
+    public function settings(AmoAccount $amoAccount, DashboardWidget $dashboardWidget, AmoTaskStatisticsService $statisticsService): Response
     {
         $this->authorize('update', $amoAccount);
 
         $installation = $this->installation($amoAccount, $dashboardWidget);
+        $config = [
+            'pipeline_id' => data_get($installation->config, 'pipeline_id'),
+            'pipeline_name' => data_get($installation->config, 'pipeline_name'),
+            'recruiter_field_id' => data_get($installation->config, 'recruiter_field_id'),
+            'recruiter_field_name' => data_get($installation->config, 'recruiter_field_name'),
+        ];
 
         return Inertia::render('AmoAccounts/Widgets/Settings', [
             'account' => [
@@ -96,9 +103,10 @@ class AmoAccountWidgetsController extends Controller
                 'name' => $dashboardWidget->name,
             ],
             'config' => [
-                'pipeline_id' => data_get($installation->config, 'pipeline_id'),
-                'recruiter_field_id' => data_get($installation->config, 'recruiter_field_id'),
+                'pipeline_id' => $config['pipeline_id'],
+                'recruiter_field_id' => $config['recruiter_field_id'],
             ],
+            'diagnostics' => $statisticsService->recruiterLeadDistributionDiagnostics($amoAccount, null, null, $config),
             'pipelines' => CrmPipelineSnapshot::query()
                 ->where('amo_account_id', $amoAccount->id)
                 ->orderBy('sort')

@@ -837,6 +837,23 @@ class AuthAndAmoAccountsTest extends TestCase
             'amo_field_id' => 777,
             'name' => 'Рекрутер',
             'field_type' => 'select',
+            'enums' => [['id' => 1001, 'value' => 'Иван Рекрутер']],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '501',
+            'name' => 'Lead 501',
+            'pipeline_id' => 10,
+            'status_id' => 111,
+            'entity_created_at' => now()->subDay(),
+            'custom_fields_values' => [[
+                'field_id' => 777,
+                'field_name' => 'Рекрутер',
+                'values' => [['enum_id' => 1001, 'value' => 'Иван Рекрутер']],
+            ]],
             'raw' => [],
             'synced_at' => now(),
         ]);
@@ -847,7 +864,9 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('AmoAccounts/Widgets/Settings')
                 ->where('pipelines.0.id', 10)
-                ->where('leadFields.0.id', 777));
+                ->where('leadFields.0.id', 777)
+                ->where('diagnostics.synced_leads_total', 1)
+                ->where('diagnostics.field_found', true));
 
         $this->actingAs($admin)
             ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
@@ -868,6 +887,62 @@ class AuthAndAmoAccountsTest extends TestCase
                 'recruiter_field_id' => 777,
             ])
             ->assertForbidden();
+    }
+
+    public function test_recruiter_report_debug_command_outputs_local_diagnostics(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $widget = DashboardWidget::query()->create([
+            'code' => 'task_overdue_dashboard',
+            'name' => 'Просроченные выполненные задачи',
+            'component_key' => 'amo_iframe_task_overdue_dashboard',
+            'sort_order' => 70,
+            'is_enabled' => true,
+        ]);
+        AmoAccountDashboardWidget::query()->create([
+            'amo_account_id' => $account->id,
+            'dashboard_widget_id' => $widget->id,
+            'public_key' => 'public-widget-key',
+            'is_enabled' => true,
+            'config' => [
+                'pipeline_id' => 10,
+                'pipeline_name' => 'Массовый подбор',
+                'recruiter_field_id' => 777,
+                'recruiter_field_name' => 'Рекрутер',
+            ],
+        ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'enums' => [['id' => 1001, 'value' => 'Иван Рекрутер']],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '501',
+            'name' => 'Lead 501',
+            'pipeline_id' => 10,
+            'status_id' => 111,
+            'entity_created_at' => now()->subDay(),
+            'custom_fields_values' => [[
+                'field_id' => 777,
+                'field_name' => 'Рекрутер',
+                'values' => [['enum_id' => 1001, 'value' => 'Иван Рекрутер']],
+            ]],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->artisan('amo:debug-recruiter-report', ['accountId' => $account->id])
+            ->expectsOutputToContain('Client')
+            ->expectsOutputToContain('pipeline_period_leads_total')
+            ->expectsOutputToContain('Иван Рекрутер')
+            ->assertSuccessful();
     }
 
     public function test_public_task_overdue_widget_uses_account_installation_key(): void

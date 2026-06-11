@@ -147,6 +147,107 @@ class AmoTaskStatisticsService
         );
     }
 
+    public function recruiterLeadDistributionDiagnostics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    {
+        $fieldId = (int) data_get($config, 'recruiter_field_id', 0);
+        $fieldName = (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME);
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $pipelineName = data_get($config, 'pipeline_name');
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+        $field = $fieldId > 0
+            ? (clone $fieldQuery)->where('amo_field_id', $fieldId)->first()
+            : $fieldQuery->where('name', $fieldName)->first();
+        $enumIdsByValue = collect($field?->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
+            ->all();
+        $baseLeadsQuery = CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+        $periodLeadsQuery = (clone $baseLeadsQuery)
+            ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to));
+        $pipelineLeadsQuery = (clone $periodLeadsQuery)
+            ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId));
+        $pipelineAllTimeQuery = (clone $baseLeadsQuery)
+            ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId));
+        $fieldValues = [];
+        $sampleLeads = [];
+        $leadsWithField = 0;
+        $assignedLeads = 0;
+        $scannedLeads = 0;
+
+        $pipelineLeadsQuery
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$fieldValues, &$sampleLeads, &$leadsWithField, &$assignedLeads, &$scannedLeads, $field, $fieldName, $enumIdsByValue): void {
+                foreach ($leads as $lead) {
+                    $scannedLeads++;
+
+                    if ($field === null) {
+                        continue;
+                    }
+
+                    $values = $this->recruiterFieldValues($lead->custom_fields_values ?? [], (int) $field->amo_field_id, $fieldName, $enumIdsByValue);
+
+                    if ($values === []) {
+                        continue;
+                    }
+
+                    $leadsWithField++;
+
+                    if (collect($values)->contains(fn (array $value): bool => (int) $value['enum_id'] > 0)) {
+                        $assignedLeads++;
+                    }
+
+                    foreach ($values as $value) {
+                        $key = (int) $value['enum_id'] > 0
+                            ? 'enum:'.$value['enum_id']
+                            : 'value:'.$this->normaliseRecruiterValue($value['value']);
+                        $fieldValues[$key] ??= [
+                            'enum_id' => (int) $value['enum_id'] ?: null,
+                            'value' => $value['value'],
+                            'count' => 0,
+                            'matched_enum' => (int) $value['enum_id'] > 0,
+                        ];
+                        $fieldValues[$key]['count']++;
+                    }
+
+                    if (count($sampleLeads) < 10) {
+                        $sampleLeads[] = [
+                            'id' => $lead->external_id,
+                            'name' => $lead->name,
+                            'pipeline_id' => $lead->pipeline_id,
+                            'status_id' => $lead->status_id,
+                            'created_at' => $lead->entity_created_at?->toDateTimeString(),
+                            'field_values' => $values,
+                        ];
+                    }
+                }
+            });
+
+        return [
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
+            'field_id' => $field?->amo_field_id,
+            'field_name' => $field?->name ?? $fieldName,
+            'field_found' => $field !== null,
+            'field_type' => $field?->field_type,
+            'field_enum_count' => count($field?->enums ?? []),
+            'synced_leads_total' => (clone $baseLeadsQuery)->count(),
+            'period_leads_total' => (clone $periodLeadsQuery)->count(),
+            'pipeline_leads_total' => (clone $pipelineAllTimeQuery)->count(),
+            'pipeline_period_leads_total' => $scannedLeads,
+            'pipeline_first_lead_created_at' => (clone $pipelineAllTimeQuery)->min('entity_created_at'),
+            'pipeline_last_lead_created_at' => (clone $pipelineAllTimeQuery)->max('entity_created_at'),
+            'leads_with_field' => $leadsWithField,
+            'assigned_leads' => $assignedLeads,
+            'field_values' => collect($fieldValues)->sortByDesc('count')->values()->all(),
+            'sample_leads' => $sampleLeads,
+        ];
+    }
+
     private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
         $fieldId = (int) data_get($config, 'recruiter_field_id', 0);
@@ -256,6 +357,21 @@ class AmoTaskStatisticsService
     {
         $enumIds = [];
 
+        foreach ($this->recruiterFieldValues($customFields, $fieldId, $fieldName, $enumIdsByValue) as $value) {
+            $enumId = (int) $value['enum_id'];
+
+            if ($enumId > 0) {
+                $enumIds[$enumId] = true;
+            }
+        }
+
+        return array_keys($enumIds);
+    }
+
+    private function recruiterFieldValues(array $customFields, int $fieldId, string $fieldName, array $enumIdsByValue): array
+    {
+        $fieldValues = [];
+
         foreach ($customFields as $customField) {
             $currentFieldId = (int) ($customField['field_id'] ?? $customField['id'] ?? 0);
             $currentFieldName = (string) ($customField['field_name'] ?? $customField['name'] ?? '');
@@ -271,13 +387,14 @@ class AmoTaskStatisticsService
                     $enumId = $enumIdsByValue[$this->normaliseRecruiterValue($value['value'])] ?? 0;
                 }
 
-                if ($enumId > 0) {
-                    $enumIds[$enumId] = true;
-                }
+                $fieldValues[] = [
+                    'enum_id' => $enumId ?: null,
+                    'value' => (string) ($value['value'] ?? ''),
+                ];
             }
         }
 
-        return array_keys($enumIds);
+        return $fieldValues;
     }
 
     private function normaliseRecruiterValue(mixed $value): string

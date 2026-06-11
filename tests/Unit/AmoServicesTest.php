@@ -913,6 +913,70 @@ class AmoServicesTest extends TestCase
         $this->assertSame(0, $distribution['recruiters'][2]['leads_count']);
     }
 
+    public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 1001, 'value' => 'Иван Рекрутер'],
+                ['id' => 1002, 'value' => 'Мария Рекрутер'],
+            ],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '501',
+            'name' => 'Lead 501',
+            'pipeline_id' => 10,
+            'status_id' => 111,
+            'entity_created_at' => now()->subDay(),
+            'custom_fields_values' => [[
+                'field_id' => 777,
+                'field_name' => 'Рекрутер',
+                'values' => [['value' => 'Иван Рекрутер']],
+            ]],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '502',
+            'name' => 'Lead 502',
+            'pipeline_id' => 20,
+            'status_id' => 222,
+            'entity_created_at' => now()->subDay(),
+            'custom_fields_values' => [],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $diagnostics = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
+            ->recruiterLeadDistributionDiagnostics($account, now()->subDays(7), now(), [
+                'pipeline_id' => 10,
+                'pipeline_name' => 'Массовый подбор',
+                'recruiter_field_id' => 777,
+                'recruiter_field_name' => 'Рекрутер',
+            ]);
+
+        $this->assertTrue($diagnostics['field_found']);
+        $this->assertSame(2, $diagnostics['synced_leads_total']);
+        $this->assertSame(1, $diagnostics['pipeline_leads_total']);
+        $this->assertSame(1, $diagnostics['pipeline_period_leads_total']);
+        $this->assertSame(1, $diagnostics['leads_with_field']);
+        $this->assertSame(1, $diagnostics['assigned_leads']);
+        $this->assertSame(1001, $diagnostics['field_values'][0]['enum_id']);
+        $this->assertSame('Иван Рекрутер', $diagnostics['field_values'][0]['value']);
+        $this->assertSame('501', $diagnostics['sample_leads'][0]['id']);
+    }
+
     public function test_task_statistics_job_updates_incremental_cursor(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
