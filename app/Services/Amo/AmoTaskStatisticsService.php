@@ -16,6 +16,7 @@ class AmoTaskStatisticsService
     private const MANAGER_FIELD_NAME = 'Менеджер';
     private const TEAM_FIELD_NAME = 'Команда';
     private const CITY_FIELD_NAME = 'Город';
+    private const SOURCE_FIELD_NAME = 'Источник';
 
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
@@ -393,6 +394,7 @@ class AmoTaskStatisticsService
         $managerField = $this->leadField($fieldQuery, (int) data_get($config, 'manager_field_id', 0), (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME));
         $teamField = $this->leadField($fieldQuery, (int) data_get($config, 'team_field_id', 0), (string) (data_get($config, 'team_field_name') ?: self::TEAM_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
+        $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
         if ($recruiterField === null || $managerField === null || $teamField === null || $cityField === null) {
             return [
@@ -402,9 +404,12 @@ class AmoTaskStatisticsService
                 'manager_field_found' => $managerField !== null,
                 'team_field_found' => $teamField !== null,
                 'city_field_found' => $cityField !== null,
+                'source_field_found' => $sourceField !== null,
                 'team_field_name' => $teamField?->name ?? self::TEAM_FIELD_NAME,
                 'city_field_name' => $cityField?->name ?? self::CITY_FIELD_NAME,
+                'source_field_name' => $sourceField?->name ?? self::SOURCE_FIELD_NAME,
                 'total_leads_count' => 0,
+                'source_columns' => [],
                 'recruiters' => [],
             ];
         }
@@ -414,6 +419,16 @@ class AmoTaskStatisticsService
         $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
         $teamEnumIdsByValue = $this->enumIdsByValue($teamField);
         $cityEnumIdsByValue = $this->enumIdsByValue($cityField);
+        $sourceEnumIdsByValue = $sourceField !== null ? $this->enumIdsByValue($sourceField) : [];
+        $sourceColumns = $sourceField !== null
+            ? collect($sourceField->enums ?? [])
+                ->filter(fn (array $enum): bool => isset($enum['value']))
+                ->map(fn (array $enum): string => (string) $enum['value'])
+                ->filter(fn (string $value): bool => trim($value) !== '')
+                ->unique()
+                ->values()
+                ->all()
+            : [];
         $rows = [];
         $totalLeads = 0;
 
@@ -422,7 +437,7 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, $from, $to, $recruiterField, $managerField, $teamField, $cityField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$sourceColumns, $from, $to, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
                 foreach ($leads as $lead) {
                     if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
                         continue;
@@ -442,6 +457,9 @@ class AmoTaskStatisticsService
 
                     $teamValues = $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue);
                     $cityValues = $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue);
+                    $sourceValues = $sourceField !== null
+                        ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue)
+                        : [];
 
                     if ($teamValues === [] || $cityValues === []) {
                         continue;
@@ -470,19 +488,41 @@ class AmoTaskStatisticsService
                                 $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue] ??= [
                                     'name' => $cityValue,
                                     'leads_count' => 0,
+                                    'sources' => [],
                                 ];
                                 $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['leads_count']++;
+
+                                foreach ($sourceValues as $sourceValue) {
+                                    if (! in_array($sourceValue, $sourceColumns, true)) {
+                                        $sourceColumns[] = $sourceValue;
+                                    }
+
+                                    $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['sources'][$sourceValue] ??= 0;
+                                    $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['sources'][$sourceValue]++;
+                                }
                             }
                         }
                     }
                 }
             });
 
+        $sourceColumns = collect($sourceColumns)
+            ->filter(fn (string $value): bool => trim($value) !== '')
+            ->unique()
+            ->values()
+            ->all();
         $recruiters = collect($rows)
-            ->map(function (array $recruiter): array {
+            ->map(function (array $recruiter) use ($sourceColumns): array {
                 $recruiter['teams'] = collect($recruiter['teams'])
-                    ->map(function (array $team): array {
+                    ->map(function (array $team) use ($sourceColumns): array {
                         $team['cities'] = collect($team['cities'])
+                            ->map(function (array $city) use ($sourceColumns): array {
+                                $city['sources'] = collect($sourceColumns)
+                                    ->mapWithKeys(fn (string $source): array => [$source => (int) ($city['sources'][$source] ?? 0)])
+                                    ->all();
+
+                                return $city;
+                            })
                             ->sortByDesc('leads_count')
                             ->values()
                             ->all();
@@ -506,9 +546,12 @@ class AmoTaskStatisticsService
             'manager_field_found' => true,
             'team_field_found' => true,
             'city_field_found' => true,
+            'source_field_found' => $sourceField !== null,
             'team_field_name' => $teamField->name,
             'city_field_name' => $cityField->name,
+            'source_field_name' => $sourceField?->name ?? self::SOURCE_FIELD_NAME,
             'total_leads_count' => $totalLeads,
+            'source_columns' => $sourceColumns,
             'recruiters' => $recruiters,
         ];
     }
@@ -544,6 +587,7 @@ class AmoTaskStatisticsService
             data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
             data_get($config, 'team_field_id') ?: data_get($config, 'team_field_name', self::TEAM_FIELD_NAME),
             data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
+            data_get($config, 'source_field_id') ?: data_get($config, 'source_field_name', self::SOURCE_FIELD_NAME),
         ]);
     }
 

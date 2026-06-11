@@ -68,6 +68,7 @@ type Props = {
         manager_field_id: number | string | null;
         team_field_id: number | string | null;
         city_field_id: number | string | null;
+        source_field_id: number | string | null;
     };
     diagnostics: Diagnostics;
     pipelines: Pipeline[];
@@ -205,6 +206,21 @@ export default function WidgetSettings({ account, widget, config, diagnostics, p
                             </select>
                         </label>
                     </div>
+
+                    <label className="block">
+                        <span className="text-sm font-medium text-slate-700">Поле сделки с источником</span>
+                        <select className="mt-1 w-full rounded border-slate-300" defaultValue={config.source_field_id || ''} name="source_field_id">
+                            <option value="">Авто: поле “Источник”</option>
+                            {leadFields.map((field) => (
+                                <option key={field.id} value={field.id}>
+                                    {field.name} · ID {field.id} · {field.field_type || 'без типа'}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="mt-1 block text-xs text-slate-500">
+                            Значения этого поля будут показаны отдельными колонками в отчете по командам и городам.
+                        </span>
+                    </label>
 
                     <div className="flex flex-wrap items-center gap-3">
                         <button className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" type="submit">

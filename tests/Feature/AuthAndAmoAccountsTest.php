@@ -851,7 +851,7 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => [],
             'synced_at' => now(),
         ]);
-        foreach ([[779, 'Команда'], [780, 'Город']] as [$fieldId, $name]) {
+        foreach ([[779, 'Команда'], [780, 'Город'], [781, 'Источник']] as [$fieldId, $name]) {
             CrmCustomFieldSnapshot::query()->create([
                 'amo_account_id' => $account->id,
                 'entity_type' => 'leads',
@@ -885,7 +885,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('AmoAccounts/Widgets/Settings')
                 ->where('pipelines.0.id', 10)
-                ->has('leadFields', 4)
+                ->has('leadFields', 5)
                 ->where('diagnostics.synced_leads_total', 1)
                 ->where('diagnostics.field_found', true));
 
@@ -896,6 +896,7 @@ class AuthAndAmoAccountsTest extends TestCase
                 'manager_field_id' => 778,
                 'team_field_id' => 779,
                 'city_field_id' => 780,
+                'source_field_id' => 781,
             ])
             ->assertRedirect("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings");
 
@@ -910,6 +911,8 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertSame('Команда', $installation->config['team_field_name']);
         $this->assertSame(780, $installation->config['city_field_id']);
         $this->assertSame('Город', $installation->config['city_field_name']);
+        $this->assertSame(781, $installation->config['source_field_id']);
+        $this->assertSame('Источник', $installation->config['source_field_name']);
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
@@ -918,6 +921,7 @@ class AuthAndAmoAccountsTest extends TestCase
                 'manager_field_id' => 778,
                 'team_field_id' => 779,
                 'city_field_id' => 780,
+                'source_field_id' => 781,
             ])
             ->assertForbidden();
     }
@@ -1005,6 +1009,8 @@ class AuthAndAmoAccountsTest extends TestCase
                 'pipeline_name' => 'Массовый подбор',
                 'recruiter_field_id' => 777,
                 'recruiter_field_name' => 'Рекрутер',
+                'source_field_id' => 781,
+                'source_field_name' => 'Источник',
             ],
         ]);
         AmoUsersSnapshot::query()->create([
@@ -1048,6 +1054,7 @@ class AuthAndAmoAccountsTest extends TestCase
         foreach ([
             [779, 'Команда', [['id' => 3001, 'value' => 'Альфа'], ['id' => 3002, 'value' => 'Бетта']]],
             [780, 'Город', [['id' => 4001, 'value' => 'Москва'], ['id' => 4002, 'value' => 'Омск']]],
+            [781, 'Источник', [['id' => 5001, 'value' => 'Авито'], ['id' => 5002, 'value' => 'Сайт']]],
         ] as [$fieldId, $name, $enums]) {
             CrmCustomFieldSnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -1061,10 +1068,10 @@ class AuthAndAmoAccountsTest extends TestCase
             ]);
         }
         foreach ([
-            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва'],
-            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => null, 'team' => 'Альфа', 'city' => 'Москва'],
-            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер', 'team' => 'Бетта', 'city' => 'Омск'],
-            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер', 'team' => 'Бетта', 'city' => 'Омск'],
+            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва', 'source' => 'Авито'],
+            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => null, 'team' => 'Альфа', 'city' => 'Москва', 'source' => 'Сайт'],
+            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер', 'team' => 'Бетта', 'city' => 'Омск', 'source' => 'Сайт'],
+            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер', 'team' => 'Бетта', 'city' => 'Омск', 'source' => 'Авито'],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -1095,6 +1102,10 @@ class AuthAndAmoAccountsTest extends TestCase
                     'field_id' => 780,
                     'field_name' => 'Город',
                     'values' => [['value' => $lead['city']]],
+                ], [
+                    'field_id' => 781,
+                    'field_name' => 'Источник',
+                    'values' => [['value' => $lead['source']]],
                 ]],
                 'raw' => [],
                 'synced_at' => now(),
@@ -1138,14 +1149,20 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertJsonPath('recruiterLeads.recruiters.2.name', 'Пустой рекрутер')
             ->assertJsonPath('recruiterLeads.recruiters.2.leads_count', 0)
             ->assertJsonPath('recruiterTeamCityBreakdown.total_leads_count', 2)
+            ->assertJsonPath('recruiterTeamCityBreakdown.source_field_found', true)
+            ->assertJsonPath('recruiterTeamCityBreakdown.source_columns.0', 'Авито')
+            ->assertJsonPath('recruiterTeamCityBreakdown.source_columns.1', 'Сайт')
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.name', 'Иван Рекрутер')
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.name', 'Альфа')
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.cities.0.name', 'Москва')
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.cities.0.leads_count', 1)
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.cities.0.sources.Авито', 1)
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.cities.0.sources.Сайт', 0)
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.name', 'Мария Рекрутер')
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.name', 'Бетта')
             ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.cities.0.name', 'Омск')
-            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.cities.0.leads_count', 1);
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.cities.0.leads_count', 1)
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.cities.0.sources.Сайт', 1);
 
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }
@@ -1194,10 +1211,22 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('Выполненные просроченные задачи', $source);
         $this->assertStringContainsString('Отчет по сделкам', $source);
         $this->assertStringContainsString('className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"', $source);
+        $this->assertStringContainsString('Источник:', $source);
+        $this->assertStringContainsString('source_columns.map', $source);
+        $this->assertStringContainsString('city.sources[source]', $source);
         $this->assertLessThan(
             strpos($source, 'Отчет по сделкам'),
             strpos($source, 'Отчет по задачам')
         );
+    }
+
+    public function test_widget_settings_ui_allows_source_field_selection(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/AmoAccounts/Widgets/Settings.tsx'));
+
+        $this->assertStringContainsString('Поле сделки с источником', $source);
+        $this->assertStringContainsString('name="source_field_id"', $source);
+        $this->assertStringContainsString('Авто: поле “Источник”', $source);
     }
 
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void

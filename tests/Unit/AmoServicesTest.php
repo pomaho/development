@@ -1015,6 +1015,7 @@ class AmoServicesTest extends TestCase
             [778, 'Менеджер', [['id' => 2001, 'value' => 'Первый менеджер']]],
             [779, 'Команда', [['id' => 3001, 'value' => 'Альфа'], ['id' => 3002, 'value' => 'Бетта']]],
             [780, 'Город', [['id' => 4001, 'value' => 'Москва'], ['id' => 4002, 'value' => 'Омск'], ['id' => 4003, 'value' => 'Санкт-Петербург']]],
+            [781, 'Источник', [['id' => 5001, 'value' => 'Авито'], ['id' => 5002, 'value' => 'Сайт']]],
         ] as [$fieldId, $name, $enums]) {
             CrmCustomFieldSnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -1029,12 +1030,12 @@ class AmoServicesTest extends TestCase
         }
 
         foreach ([
-            ['id' => '501', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва'],
-            ['id' => '502', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва'],
-            ['id' => '503', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Омск'],
-            ['id' => '504', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Бетта', 'city' => 'Санкт-Петербург'],
-            ['id' => '505', 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Омск'],
-            ['id' => '506', 'recruiter' => 'Косыева Лилия', 'manager' => null, 'team' => 'Альфа', 'city' => 'Москва'],
+            ['id' => '501', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва', 'source' => 'Авито'],
+            ['id' => '502', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва', 'source' => 'Сайт'],
+            ['id' => '503', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Омск', 'source' => 'Авито'],
+            ['id' => '504', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Бетта', 'city' => 'Санкт-Петербург', 'source' => 'Сайт'],
+            ['id' => '505', 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Омск', 'source' => 'Авито'],
+            ['id' => '506', 'recruiter' => 'Косыева Лилия', 'manager' => null, 'team' => 'Альфа', 'city' => 'Москва', 'source' => 'Авито'],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -1049,6 +1050,7 @@ class AmoServicesTest extends TestCase
                     ['field_id' => 778, 'field_name' => 'Менеджер', 'values' => $lead['manager'] === null ? [] : [['value' => $lead['manager']]]],
                     ['field_id' => 779, 'field_name' => 'Команда', 'values' => [['value' => $lead['team']]]],
                     ['field_id' => 780, 'field_name' => 'Город', 'values' => [['value' => $lead['city']]]],
+                    ['field_id' => 781, 'field_name' => 'Источник', 'values' => [['value' => $lead['source']]]],
                 ],
                 'raw' => [],
                 'synced_at' => now(),
@@ -1062,17 +1064,24 @@ class AmoServicesTest extends TestCase
                 'manager_field_id' => 778,
                 'team_field_id' => 779,
                 'city_field_id' => 780,
+                'source_field_id' => 781,
             ]);
 
         $this->assertSame(5, $breakdown['total_leads_count']);
+        $this->assertSame(['Авито', 'Сайт'], $breakdown['source_columns']);
+        $this->assertTrue($breakdown['source_field_found']);
         $this->assertSame('Косыева Лилия', $breakdown['recruiters'][0]['name']);
         $this->assertSame(4, $breakdown['recruiters'][0]['total_leads_count']);
         $this->assertSame('Альфа', $breakdown['recruiters'][0]['teams'][0]['name']);
         $this->assertSame(3, $breakdown['recruiters'][0]['teams'][0]['total_leads_count']);
         $this->assertSame('Москва', $breakdown['recruiters'][0]['teams'][0]['cities'][0]['name']);
         $this->assertSame(2, $breakdown['recruiters'][0]['teams'][0]['cities'][0]['leads_count']);
+        $this->assertSame(1, $breakdown['recruiters'][0]['teams'][0]['cities'][0]['sources']['Авито']);
+        $this->assertSame(1, $breakdown['recruiters'][0]['teams'][0]['cities'][0]['sources']['Сайт']);
         $this->assertSame('Омск', $breakdown['recruiters'][0]['teams'][0]['cities'][1]['name']);
         $this->assertSame(1, $breakdown['recruiters'][0]['teams'][0]['cities'][1]['leads_count']);
+        $this->assertSame(1, $breakdown['recruiters'][0]['teams'][0]['cities'][1]['sources']['Авито']);
+        $this->assertSame(0, $breakdown['recruiters'][0]['teams'][0]['cities'][1]['sources']['Сайт']);
         $this->assertSame('Иван Рекрутер', $breakdown['recruiters'][1]['name']);
         $this->assertSame(1, $breakdown['recruiters'][1]['total_leads_count']);
     }

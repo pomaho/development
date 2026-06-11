@@ -48,9 +48,12 @@ type RecruiterTeamCityBreakdown = {
     manager_field_found: boolean;
     team_field_found: boolean;
     city_field_found: boolean;
+    source_field_found: boolean;
     team_field_name: string;
     city_field_name: string;
+    source_field_name: string;
     total_leads_count: number;
+    source_columns: string[];
     recruiters: Array<{
         enum_id: number;
         name: string;
@@ -61,6 +64,7 @@ type RecruiterTeamCityBreakdown = {
             cities: Array<{
                 name: string;
                 leads_count: number;
+                sources: Record<string, number>;
             }>;
         }>;
     }>;
@@ -396,7 +400,10 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                 {recruiterTeamCityBreakdown.team_field_name} / {recruiterTeamCityBreakdown.city_field_name}
                             </h2>
                             <p className="mt-1 text-sm text-slate-500">
-                                Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по команде и городу.
+                                Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по команде, городу и источнику.
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                                Источник: {recruiterTeamCityBreakdown.source_field_found ? recruiterTeamCityBreakdown.source_field_name : 'поле не найдено'}
                             </p>
                         </div>
                         <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-right">
@@ -405,33 +412,48 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                         </div>
                     </div>
 
-                    <div className="grid gap-4 p-4 lg:grid-cols-2">
+                    <div className="grid gap-4 p-4">
                         {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
-                            <article className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={recruiter.enum_id}>
-                                <div className="flex items-start justify-between gap-3">
+                            <article className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50" key={recruiter.enum_id}>
+                                <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
                                     <h3 className="text-base font-semibold text-slate-950">{recruiter.name}</h3>
                                     <span className="rounded bg-white px-2 py-1 text-xs font-medium tabular-nums text-slate-600">
                                         {recruiter.total_leads_count}
                                     </span>
                                 </div>
 
-                                <div className="mt-4 space-y-3">
-                                    {recruiter.teams.map((team) => (
-                                        <div className="rounded border border-slate-200 bg-white p-3" key={team.name}>
-                                            <div className="flex items-center justify-between gap-3">
-                                                <div className="text-sm font-semibold text-slate-900">Команда: {team.name}</div>
-                                                <div className="text-xs tabular-nums text-slate-500">{team.total_leads_count}</div>
-                                            </div>
-                                            <div className="mt-3 grid gap-2">
-                                                {team.cities.map((city) => (
-                                                    <div className="flex items-center justify-between gap-3 text-sm" key={city.name}>
-                                                        <span className="text-slate-600">{city.name}</span>
-                                                        <span className="font-semibold tabular-nums text-slate-950">{city.leads_count}</span>
-                                                    </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[760px] text-left text-sm">
+                                        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                                            <tr>
+                                                <th className="px-4 py-3 font-semibold">Команда</th>
+                                                <th className="px-3 py-3 font-semibold">Город</th>
+                                                <th className="px-3 py-3 text-right font-semibold">Всего</th>
+                                                {recruiterTeamCityBreakdown.source_columns.map((source) => (
+                                                    <th className="px-3 py-3 text-right font-semibold" key={source}>{source}</th>
                                                 ))}
-                                            </div>
-                                        </div>
-                                    ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {recruiter.teams.flatMap((team) => team.cities.map((city, index) => (
+                                                <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={`${team.name}-${city.name}`}>
+                                                    {index === 0 ? (
+                                                        <td className="px-4 py-3 align-top font-semibold text-slate-950" rowSpan={team.cities.length}>
+                                                            {team.name}
+                                                            <div className="mt-1 text-xs font-normal tabular-nums text-slate-500">{team.total_leads_count}</div>
+                                                        </td>
+                                                    ) : null}
+                                                    <td className="px-3 py-3 font-medium text-slate-900">{city.name}</td>
+                                                    <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-950">{city.leads_count}</td>
+                                                    {recruiterTeamCityBreakdown.source_columns.map((source) => (
+                                                        <td className="px-3 py-3 text-right tabular-nums" key={source}>
+                                                            {city.sources[source] || 0}
+                                                        </td>
+                                                    ))}
+                                                </tr>
+                                            )))}
+                                        </tbody>
+                                    </table>
                                 </div>
                             </article>
                         )) : (
