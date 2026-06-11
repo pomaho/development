@@ -1365,13 +1365,14 @@ class AuthAndAmoAccountsTest extends TestCase
                 'from' => '2026-01-01',
                 'to' => '2026-05-05',
                 'pipeline_id' => 10,
+                'ignore_period' => '1',
             ])
             ->assertRedirect();
 
         Queue::assertPushed(SyncCrmAuditJob::class, fn (SyncCrmAuditJob $job): bool =>
             $job->amoAccountId === $account->id
-            && $job->from === '2026-01-01'
-            && $job->to === '2026-05-05'
+            && $job->from === null
+            && $job->to === null
             && $job->pipelineId === 10
         );
 

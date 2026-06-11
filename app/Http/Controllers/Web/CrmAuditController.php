@@ -182,12 +182,14 @@ class CrmAuditController extends Controller
             'to' => ['nullable', 'date'],
             'pipeline_id' => ['nullable', 'integer', 'min:1'],
             'structure_only' => ['nullable', 'boolean'],
+            'ignore_period' => ['nullable', 'boolean'],
         ]);
+        $ignorePeriod = $request->boolean('ignore_period');
 
         SyncCrmAuditJob::dispatch(
             $amoAccount->id,
-            $data['from'] ?? null,
-            $data['to'] ?? null,
+            $ignorePeriod ? null : ($data['from'] ?? null),
+            $ignorePeriod ? null : ($data['to'] ?? null),
             $request->boolean('structure_only'),
             isset($data['pipeline_id']) ? (int) $data['pipeline_id'] : null
         );

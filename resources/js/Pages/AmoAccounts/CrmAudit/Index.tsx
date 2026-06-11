@@ -103,7 +103,7 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                     Все поля сделок и контактов
                 </a>
                 {can.sync ? (
-                    <form action={links.sync} className="grid gap-2 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-5" method="post">
+                    <form action={links.sync} className="grid gap-2 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-6" method="post">
                         <input name="_token" type="hidden" value={csrf} />
                         <label>
                             <span className="text-xs text-slate-500">Воронка</span>
@@ -125,6 +125,10 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                         <label className="flex items-end gap-2 pb-2">
                             <input className="rounded border-slate-300" name="structure_only" type="checkbox" value="1" />
                             <span>Только структура</span>
+                        </label>
+                        <label className="flex items-end gap-2 pb-2">
+                            <input className="rounded border-slate-300" name="ignore_period" type="checkbox" value="1" />
+                            <span>Все сделки воронки</span>
                         </label>
                         <button className="self-end rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800" type="submit">Запустить</button>
                     </form>
