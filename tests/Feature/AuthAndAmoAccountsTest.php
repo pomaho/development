@@ -1314,6 +1314,66 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_admin_can_view_lead_and_contact_field_ids(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 100,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'sort' => 10,
+            'enums' => [['id' => 1, 'value' => 'Иван']],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'contacts',
+            'amo_field_id' => 200,
+            'name' => 'Telegram',
+            'field_type' => 'text',
+            'sort' => 20,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'companies',
+            'amo_field_id' => 300,
+            'name' => 'ИНН',
+            'field_type' => 'text',
+            'sort' => 30,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/crm-audit/fields")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/CrmAudit/Fields')
+                ->where('summary.leads', 1)
+                ->where('summary.contacts', 1)
+                ->where('fields.0.amo_field_id', 100)
+                ->where('fields.0.name', 'Рекрутер')
+                ->where('fields.0.enums_count', 1)
+                ->where('fields.1.amo_field_id', 200)
+                ->missing('fields.2'));
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/crm-audit/fields?entity_type=contacts&search=Telegram")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('filters.entity_type', 'contacts')
+                ->where('filters.search', 'Telegram')
+                ->where('fields.0.amo_field_id', 200)
+                ->missing('fields.1'));
+    }
+
     public function test_public_install_page_creates_pending_oauth_connection(): void
     {
         $this->get('/install')

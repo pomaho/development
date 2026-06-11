@@ -80,6 +80,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/amo-accounts/{amo_account}/events-sync', [AmoTaskStatisticsController::class, 'syncEvents'])->name('amo-accounts.events-sync.sync');
     Route::post('/amo-accounts/{amo_account}/events-sync/settings', [AmoTaskStatisticsController::class, 'updateEventSettings'])->name('amo-accounts.events-sync.settings');
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
+    Route::get('/amo-accounts/{amo_account}/crm-audit/fields', [CrmAuditController::class, 'fields'])->name('amo-accounts.crm-audit.fields');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
     Route::get('/amo-accounts/{amo_account}/users-export', [AmoUsersController::class, 'export'])->name('amo-accounts.users.export');

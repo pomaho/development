@@ -82,6 +82,82 @@ class CrmAuditController extends Controller
                 'api_logs' => route('logs.api'),
                 'logout' => route('logout'),
                 'sync' => route('amo-accounts.crm-audit.sync', $amoAccount),
+                'fields' => route('amo-accounts.crm-audit.fields', $amoAccount),
+                'current_account' => [
+                    'dashboard' => route('amo-accounts.dashboard', $amoAccount),
+                    'show' => route('amo-accounts.show', $amoAccount),
+                    'users' => route('amo-accounts.users', $amoAccount),
+                    'roles' => route('amo-accounts.roles', $amoAccount),
+                    'leads' => route('amo-accounts.leads', $amoAccount),
+                    'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
+                    'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                    'integrations' => route('amo-accounts.integrations', $amoAccount),
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                ],
+            ],
+        ]);
+    }
+
+    public function fields(Request $request, AmoAccount $amoAccount): Response
+    {
+        $entityType = in_array($request->query('entity_type'), ['leads', 'contacts'], true)
+            ? (string) $request->query('entity_type')
+            : '';
+        $search = trim((string) $request->query('search', ''));
+        $query = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->whereIn('entity_type', ['leads', 'contacts'])
+            ->when($entityType !== '', fn ($fields) => $fields->where('entity_type', $entityType))
+            ->when($search !== '', fn ($fields) => $fields->where(function ($fields) use ($search): void {
+                $fields->where('name', 'like', "%{$search}%");
+
+                if (ctype_digit($search)) {
+                    $fields->orWhere('amo_field_id', (int) $search);
+                }
+            }))
+            ->orderByRaw("case entity_type when 'leads' then 0 when 'contacts' then 1 else 2 end")
+            ->orderBy('sort')
+            ->orderBy('name');
+
+        return Inertia::render('AmoAccounts/CrmAudit/Fields', [
+            'account' => [
+                'id' => $amoAccount->id,
+                'name' => $amoAccount->name,
+                'base_domain' => $amoAccount->base_domain,
+            ],
+            'filters' => [
+                'entity_type' => $entityType,
+                'search' => $search,
+            ],
+            'summary' => [
+                'leads' => CrmCustomFieldSnapshot::query()
+                    ->where('amo_account_id', $amoAccount->id)
+                    ->where('entity_type', 'leads')
+                    ->count(),
+                'contacts' => CrmCustomFieldSnapshot::query()
+                    ->where('amo_account_id', $amoAccount->id)
+                    ->where('entity_type', 'contacts')
+                    ->count(),
+            ],
+            'fields' => $query->get()->map(fn (CrmCustomFieldSnapshot $field): array => [
+                'id' => $field->id,
+                'entity_type' => $field->entity_type,
+                'amo_field_id' => $field->amo_field_id,
+                'name' => $field->name,
+                'field_type' => $field->field_type,
+                'code' => $field->code,
+                'sort' => $field->sort,
+                'enums_count' => count($field->enums ?? []),
+                'enums' => $field->enums ?? [],
+            ]),
+            'links' => [
+                'dashboard' => route('dashboard'),
+                'amo_accounts' => route('amo-accounts.index'),
+                'oauth' => route('amo-oauth.external.index'),
+                'api_logs' => route('logs.api'),
+                'logout' => route('logout'),
+                'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
+                'fields' => route('amo-accounts.crm-audit.fields', $amoAccount),
                 'current_account' => [
                     'dashboard' => route('amo-accounts.dashboard', $amoAccount),
                     'show' => route('amo-accounts.show', $amoAccount),

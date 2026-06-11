@@ -65,6 +65,7 @@ type Props = {
         api_logs: string;
         logout: string;
         sync: string;
+        fields: string;
         current_account: {
             dashboard: string;
             show: string;
@@ -98,6 +99,9 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                     <h1 className="text-2xl font-semibold">CRM-аудит: {account.name}</h1>
                     <div className="text-sm text-slate-500">{account.base_domain}</div>
                 </div>
+                <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.fields}>
+                    Все поля сделок и контактов
+                </a>
                 {can.sync ? (
                     <form action={links.sync} className="grid gap-2 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-5" method="post">
                         <input name="_token" type="hidden" value={csrf} />
