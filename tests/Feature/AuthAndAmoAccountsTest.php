@@ -17,6 +17,7 @@ use App\Models\DashboardWidget;
 use App\Models\IntegrationModule;
 use App\Jobs\SyncCrmAuditJob;
 use App\Jobs\SyncAmoTaskStatisticsJob;
+use App\Models\LeadSyncSchedule;
 use App\Models\ResponsibilityRedistributionRun;
 use App\Models\TaskStatisticsSyncRun;
 use App\Models\User;
@@ -28,6 +29,7 @@ use App\Services\Amo\AmoPipelinesService;
 use App\Services\Amo\AmoResponsibilityRedistributionService;
 use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\AmoUsersService;
+use App\Services\Amo\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;
@@ -1605,6 +1607,7 @@ class AuthAndAmoAccountsTest extends TestCase
             'amo_account_id' => $account->id,
             'amo_pipeline_id' => 10,
             'name' => 'Sales',
+            'sort' => 10,
             'raw' => [],
             'synced_at' => now(),
         ]);
@@ -1785,6 +1788,173 @@ class AuthAndAmoAccountsTest extends TestCase
                 'to' => '2026-05-05',
             ])
             ->assertForbidden();
+    }
+
+    public function test_admin_can_manage_lead_sync_schedules_for_account_pipeline(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Sales',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 20,
+            'name' => 'Hiring',
+            'sort' => 20,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/lead-sync-schedules")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/LeadSyncSchedules/Index')
+                ->where('account.name', 'Client')
+                ->where('can.manage', true)
+                ->where('pipelines.0.name', 'Sales')
+                ->has('intervals')
+                ->has('links.store'));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/lead-sync-schedules", [
+                'amo_pipeline_id' => 10,
+                'interval_minutes' => 60,
+                'lookback_days' => 45,
+                'is_enabled' => '1',
+            ])
+            ->assertRedirect();
+
+        $schedule = LeadSyncSchedule::query()->firstOrFail();
+        $this->assertSame('Sales', $schedule->pipeline_name);
+        $this->assertTrue($schedule->is_enabled);
+        $this->assertNotNull($schedule->next_run_at);
+
+        $this->actingAs($admin)
+            ->put("/amo-accounts/{$account->id}/lead-sync-schedules/{$schedule->id}", [
+                'amo_pipeline_id' => 20,
+                'interval_minutes' => 180,
+                'lookback_days' => 30,
+            ])
+            ->assertRedirect();
+
+        $schedule->refresh();
+        $this->assertSame(20, $schedule->amo_pipeline_id);
+        $this->assertSame('Hiring', $schedule->pipeline_name);
+        $this->assertSame(180, $schedule->interval_minutes);
+        $this->assertFalse($schedule->is_enabled);
+
+        $this->actingAs($admin)
+            ->delete("/amo-accounts/{$account->id}/lead-sync-schedules/{$schedule->id}")
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('lead_sync_schedules', ['id' => $schedule->id]);
+    }
+
+    public function test_viewer_cannot_manage_lead_sync_schedules(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Sales',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/lead-sync-schedules")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/LeadSyncSchedules/Index')
+                ->where('can.manage', false));
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/lead-sync-schedules", [
+                'amo_pipeline_id' => 10,
+                'interval_minutes' => 60,
+                'lookback_days' => 45,
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_due_lead_sync_schedule_runs_only_configured_pipeline(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'is_active' => true,
+        ]);
+        $inactiveAccount = AmoAccount::query()->create([
+            'name' => 'Inactive',
+            'base_domain' => 'inactive.amocrm.ru',
+            'is_active' => false,
+        ]);
+        $due = LeadSyncSchedule::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'pipeline_name' => 'Sales',
+            'interval_minutes' => 60,
+            'lookback_days' => 45,
+            'is_enabled' => true,
+            'next_run_at' => now()->subMinute(),
+        ]);
+        LeadSyncSchedule::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 20,
+            'pipeline_name' => 'Hiring',
+            'interval_minutes' => 60,
+            'lookback_days' => 45,
+            'is_enabled' => false,
+            'next_run_at' => now()->subMinute(),
+        ]);
+        LeadSyncSchedule::query()->create([
+            'amo_account_id' => $inactiveAccount->id,
+            'amo_pipeline_id' => 30,
+            'pipeline_name' => 'Inactive',
+            'interval_minutes' => 60,
+            'lookback_days' => 45,
+            'is_enabled' => true,
+            'next_run_at' => now()->subMinute(),
+        ]);
+
+        $auditService = Mockery::mock(CrmAuditService::class);
+        $auditService->shouldReceive('syncAll')
+            ->once()
+            ->withArgs(fn (AmoAccount $passedAccount, Carbon $from, Carbon $to, int $pipelineId): bool =>
+                $passedAccount->id === $account->id
+                && $from->toDateTimeString() === '2026-04-27 00:00:00'
+                && $to->toDateTimeString() === '2026-06-11 23:59:59'
+                && $pipelineId === 10
+            )
+            ->andReturn(['leads' => 37]);
+        $this->app->instance(CrmAuditService::class, $auditService);
+
+        $this->artisan('amo:run-lead-sync-schedules')->assertExitCode(0);
+
+        $due->refresh();
+        $this->assertSame(LeadSyncSchedule::STATUS_COMPLETED, $due->last_status);
+        $this->assertSame(37, $due->last_synced_count);
+        $this->assertSame('2026-06-11 13:00:00', $due->next_run_at?->toDateTimeString());
+
+        Carbon::setTestNow();
+    }
+
+    public function test_scheduler_uses_only_configured_lead_sync_schedules_for_automatic_data_sync(): void
+    {
+        $consoleRoutes = file_get_contents(base_path('routes/console.php'));
+
+        $this->assertStringContainsString('amo:run-lead-sync-schedules', $consoleRoutes);
+        $this->assertStringNotContainsString('amo:sync-task-statistics', $consoleRoutes);
+        $this->assertStringNotContainsString('SyncAmoUsersAndRolesJob::dispatch', $consoleRoutes);
     }
 
     public function test_admin_can_view_lead_and_contact_field_ids(): void

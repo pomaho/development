@@ -19,6 +19,7 @@ use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
 use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
+use App\Http\Controllers\Web\LeadSyncScheduleController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -84,6 +85,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::get('/amo-accounts/{amo_account}/crm-audit/fields', [CrmAuditController::class, 'fields'])->name('amo-accounts.crm-audit.fields');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
+    Route::get('/amo-accounts/{amo_account}/lead-sync-schedules', [LeadSyncScheduleController::class, 'index'])->name('amo-accounts.lead-sync-schedules.index');
+    Route::post('/amo-accounts/{amo_account}/lead-sync-schedules', [LeadSyncScheduleController::class, 'store'])->name('amo-accounts.lead-sync-schedules.store');
+    Route::put('/amo-accounts/{amo_account}/lead-sync-schedules/{lead_sync_schedule}', [LeadSyncScheduleController::class, 'update'])->name('amo-accounts.lead-sync-schedules.update');
+    Route::delete('/amo-accounts/{amo_account}/lead-sync-schedules/{lead_sync_schedule}', [LeadSyncScheduleController::class, 'destroy'])->name('amo-accounts.lead-sync-schedules.destroy');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
     Route::get('/amo-accounts/{amo_account}/users-export', [AmoUsersController::class, 'export'])->name('amo-accounts.users.export');
     Route::get('/amo-accounts/{amo_account}/leads', AmoLeadsController::class)->name('amo-accounts.leads');

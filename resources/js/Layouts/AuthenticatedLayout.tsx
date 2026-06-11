@@ -12,6 +12,7 @@ import {
     LogOut,
     Menu,
     Plug,
+    RefreshCcw,
     Settings2,
     ShieldCheck,
     SquareCheckBig,
@@ -59,6 +60,7 @@ type Props = {
             responsibility_redistribution?: string;
             task_statistics?: string;
             events_sync?: string;
+            lead_sync_schedules?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -80,6 +82,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const responsibilityHref = currentAccount ? currentLinks?.responsibility_redistribution || `/amo-accounts/${currentAccount.id}/responsibility-redistribution` : null;
     const taskStatisticsHref = currentAccount ? currentLinks?.task_statistics || `/amo-accounts/${currentAccount.id}/task-statistics` : null;
     const eventsSyncHref = currentAccount ? currentLinks?.events_sync || `/amo-accounts/${currentAccount.id}/events-sync` : null;
+    const leadSyncSchedulesHref = currentAccount ? currentLinks?.lead_sync_schedules || `/amo-accounts/${currentAccount.id}/lead-sync-schedules` : null;
 
     const mainLinks: NavLink[] = [
         {
@@ -111,6 +114,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
         ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
         ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
         ...(eventsSyncHref ? [{ label: 'События', href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
+        ...(leadSyncSchedulesHref ? [{ label: 'Sync сделок', href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
         { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') },
         { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 />, active: url.endsWith('/integrations') },
         { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks />, active: url.endsWith('/widgets') },

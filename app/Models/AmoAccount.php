@@ -67,6 +67,11 @@ class AmoAccount extends Model
         return $this->hasMany(TaskStatisticsSyncRun::class);
     }
 
+    public function leadSyncSchedules(): HasMany
+    {
+        return $this->hasMany(LeadSyncSchedule::class);
+    }
+
     public function dashboardWidgetInstallations(): HasMany
     {
         return $this->hasMany(AmoAccountDashboardWidget::class);
