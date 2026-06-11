@@ -1203,14 +1203,16 @@ class AuthAndAmoAccountsTest extends TestCase
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));
 
-        $this->assertStringContainsString('BI-отчеты рабочего стола', $source);
+        $this->assertStringContainsString('Отчеты рабочего стола', $source);
         $this->assertStringContainsString('debug_iframe', $source);
         $this->assertStringContainsString('postMessage events', $source);
-        $this->assertStringContainsString('Выбран на рабочем столе amoCRM', $source);
+        $this->assertStringContainsString('Период с рабочего стола amoCRM', $source);
         $this->assertStringContainsString('Отчет по задачам', $source);
         $this->assertStringContainsString('Выполненные просроченные задачи', $source);
         $this->assertStringContainsString('Отчет по сделкам', $source);
-        $this->assertStringContainsString('className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"', $source);
+        $this->assertStringContainsString('ReportSection', $source);
+        $this->assertStringContainsString('MetricCard', $source);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
         $this->assertStringContainsString('Источник:', $source);
         $this->assertStringContainsString('source_columns.map', $source);
         $this->assertStringContainsString('city.sources[source]', $source);

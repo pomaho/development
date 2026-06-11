@@ -1,5 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Percent, Users } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+    AlertTriangle,
+    ArrowRightLeft,
+    BarChart3,
+    CalendarDays,
+    CheckCircle2,
+    Database,
+    Percent,
+    Users,
+} from 'lucide-react';
 
 type Account = {
     name: string;
@@ -88,6 +97,14 @@ type Props = {
     };
 };
 
+type MessageLog = {
+    received_at: string;
+    origin: string;
+    data: unknown;
+};
+
+const progressWidth = (value: number) => `${Math.min(Math.max(value, 0), 100)}%`;
+
 export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
     const debugIframe = useMemo(() => {
         if (typeof window === 'undefined') {
@@ -106,16 +123,15 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
 
         return keys.flatMap((key) => params.getAll(key).map((value) => [key, value] as [string, string]));
     }, []);
-    const [iframeMessages, setIframeMessages] = useState<Array<{
-        received_at: string;
-        origin: string;
-        data: unknown;
-    }>>([]);
+    const [iframeMessages, setIframeMessages] = useState<MessageLog[]>([]);
     const totalCompleted = groups.reduce((sum, group) => sum + group.completed_count, 0);
     const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
     const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
     const totalUsers = groups.reduce((sum, group) => sum + group.users.length, 0);
     const periodLabel = `${period.label}: ${period.from} - ${period.to}`;
+    const periodSourceLabel = period.source === 'amo_period' || period.source === 'amo_dates'
+        ? 'Период с рабочего стола amoCRM'
+        : 'Период выбран вручную';
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') {
@@ -139,144 +155,98 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
     }, [debugIframe]);
 
     return (
-        <div className="min-h-screen bg-slate-100 px-4 py-4 text-slate-900">
-            <div className="mx-auto max-w-7xl">
-                <header className="mb-4 rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div className="grid gap-4 border-b border-slate-200 p-4 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div className="min-h-screen bg-gray-50 px-3 py-4 text-gray-900 sm:px-4">
+            <div className="mx-auto max-w-7xl space-y-4">
+                <header className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
+                    <div className="grid gap-4 border-b border-gray-100 px-5 py-5 lg:grid-cols-[1fr_auto] lg:items-end">
                         <div className="flex min-w-0 items-start gap-4">
-                            <img className="h-14 w-14 shrink-0 rounded-md border border-amber-100 bg-slate-950 object-contain p-1.5" src="/assets/anyservice-logo.png" alt="AnyService" />
-                            <div>
-                                <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">BI аналитика CRM</div>
-                                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">BI-отчеты рабочего стола</h1>
-                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-500">
+                            <img className="size-14 shrink-0 rounded-xl border border-gray-200 bg-gray-950 object-contain p-1.5" src="/assets/anyservice-logo.png" alt="AnyService" />
+                            <div className="min-w-0">
+                                <div className="inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-theme-xs font-medium text-brand-600">
+                                    BI аналитика CRM
+                                </div>
+                                <h1 className="mt-2 text-2xl font-semibold text-gray-900">Отчеты рабочего стола</h1>
+                                <div className="mt-2 flex flex-wrap items-center gap-2 text-theme-sm text-gray-500">
                                     <span>{account.name}</span>
-                                    <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-block" />
+                                    <span className="size-1 rounded-full bg-gray-300" />
                                     <span>{account.base_domain}</span>
-                                    <span className="hidden h-1 w-1 rounded-full bg-slate-300 sm:inline-block" />
+                                    <span className="size-1 rounded-full bg-gray-300" />
                                     <span>{periodLabel}</span>
                                 </div>
                             </div>
                         </div>
 
-                        <form className="rounded-md border border-slate-200 bg-slate-50 p-3" method="get" action={links.self}>
+                        <form className="rounded-2xl border border-gray-200 bg-gray-50 p-3" method="get" action={links.self}>
                             {debugIframe ? <input type="hidden" name="debug_iframe" value="1" /> : null}
                             {preservedIframeParams.map(([key, value], index) => (
                                 <input key={`${key}-${index}`} type="hidden" name={key} value={value} />
                             ))}
-                            <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                <CalendarDays className="h-4 w-4 text-amber-500" />
+                            <div className="mb-2 flex items-center gap-2 text-theme-xs font-semibold uppercase text-gray-500">
+                                <CalendarDays className="size-4 text-brand-500" />
                                 Период
                             </div>
-                            <div className="mb-2 text-xs text-slate-500">
-                                {period.source === 'amo_period' || period.source === 'amo_dates'
-                                    ? 'Выбран на рабочем столе amoCRM'
-                                    : 'Выбран вручную в отчете'}
-                            </div>
-                            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-sm">
-                                <input className="h-9 rounded-md border-slate-300 bg-white text-slate-900 focus:border-amber-500 focus:ring-amber-500" name="from" type="date" defaultValue={period.from} />
-                                <input className="h-9 rounded-md border-slate-300 bg-white text-slate-900 focus:border-amber-500 focus:ring-amber-500" name="to" type="date" defaultValue={period.to} />
-                                <button className="h-9 rounded-md bg-slate-950 px-4 font-semibold text-white hover:bg-slate-800" type="submit">Показать</button>
+                            <div className="mb-2 text-theme-xs text-gray-500">{periodSourceLabel}</div>
+                            <div className="grid grid-cols-[1fr_1fr_auto] gap-2 text-theme-sm">
+                                <input className="h-10 rounded-lg border-gray-200 bg-white px-3 text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" name="from" type="date" defaultValue={period.from} />
+                                <input className="h-10 rounded-lg border-gray-200 bg-white px-3 text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" name="to" type="date" defaultValue={period.to} />
+                                <button className="h-10 rounded-lg bg-brand-500 px-4 font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Показать</button>
                             </div>
                         </form>
                     </div>
                 </header>
 
-                {debugIframe ? (
-                    <section className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm shadow-sm">
-                        <div className="mb-3">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Iframe diagnostics</div>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-950">Диагностика параметров amoCRM</h2>
-                            <p className="mt-1 text-slate-600">
-                                Этот блок виден только при `debug_iframe=1` и помогает проверить, передает ли рабочий стол amoCRM период в URL или через postMessage.
-                            </p>
-                        </div>
-                        <div className="grid gap-3 lg:grid-cols-2">
-                            <div className="rounded border border-sky-100 bg-white p-3">
-                                <div className="text-xs font-semibold uppercase text-slate-500">Location</div>
-                                <dl className="mt-2 grid gap-2">
-                                    <div>
-                                        <dt className="text-xs text-slate-500">href</dt>
-                                        <dd className="break-all font-mono text-xs text-slate-900">{typeof window !== 'undefined' ? window.location.href : '-'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-slate-500">search</dt>
-                                        <dd className="break-all font-mono text-xs text-slate-900">{typeof window !== 'undefined' ? window.location.search || '-' : '-'}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-xs text-slate-500">document.referrer</dt>
-                                        <dd className="break-all font-mono text-xs text-slate-900">{typeof document !== 'undefined' ? document.referrer || '-' : '-'}</dd>
-                                    </div>
-                                </dl>
-                            </div>
-                            <div className="rounded border border-sky-100 bg-white p-3">
-                                <div className="text-xs font-semibold uppercase text-slate-500">postMessage events</div>
-                                <div className="mt-2 max-h-64 overflow-auto rounded bg-slate-950 p-3 font-mono text-xs text-slate-100">
-                                    {iframeMessages.length > 0 ? iframeMessages.map((message, index) => (
-                                        <pre className="mb-3 whitespace-pre-wrap break-words last:mb-0" key={`${message.received_at}-${index}`}>
-                                            {JSON.stringify(message, null, 2)}
-                                        </pre>
-                                    )) : (
-                                        <div className="text-slate-400">Сообщений пока нет. Измените период на рабочем столе amoCRM и посмотрите, появятся ли события.</div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </section>
-                ) : null}
+                {debugIframe ? <DebugPanel iframeMessages={iframeMessages} /> : null}
 
-                <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center">
-                        <div>
-                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Отчет по сделкам</div>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-950">Поле “{recruiterLeads.field_name}”</h2>
-                            <p className="mt-1 text-sm text-slate-500">
-                                Количество сделок, в которых выбрано каждое значение списка.
-                                Воронка: {recruiterLeads.pipeline_name || (recruiterLeads.pipeline_id ? `ID ${recruiterLeads.pipeline_id}` : 'все воронки')}.
-                                Учитываются все этапы, включая успешные и закрытые нереализованные.
-                            </p>
-                        </div>
-                        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-right">
-                            <div className="text-xs font-medium uppercase tracking-wide text-amber-700">Сделок с рекрутером</div>
-                            <div className="mt-1 text-3xl font-semibold text-slate-950">{recruiterLeads.assigned_leads_count}</div>
-                            <div className="mt-1 text-xs text-amber-800">
-                                Передано менеджеру: {recruiterLeads.transferred_to_manager_count}
-                            </div>
-                        </div>
-                    </div>
+                <ReportSection
+                    eyebrow="Отчет по сделкам"
+                    title={`Поле “${recruiterLeads.field_name}”`}
+                    description={`Воронка: ${recruiterLeads.pipeline_name || (recruiterLeads.pipeline_id ? `ID ${recruiterLeads.pipeline_id}` : 'все воронки')}. Учитываются все этапы, включая успешные и закрытые нереализованные.`}
+                    aside={(
+                        <AccentSummary
+                            label="Сделок с рекрутером"
+                            value={recruiterLeads.assigned_leads_count}
+                            note={`Передано менеджеру: ${recruiterLeads.transferred_to_manager_count}`}
+                            tone="brand"
+                        />
+                    )}
+                >
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-white text-xs uppercase tracking-wide text-slate-500">
+                        <table className="w-full text-left text-theme-sm">
+                            <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                                 <tr>
-                                    <th className="px-4 py-3 font-semibold">Рекрутер из списка</th>
-                                    <th className="px-3 py-3 font-semibold">Сделок</th>
-                                    <th className="px-3 py-3 font-semibold">Передано менеджеру</th>
-                                    <th className="px-3 py-3 font-semibold">Доля</th>
+                                    <th className="px-5 py-3">Рекрутер из списка</th>
+                                    <th className="px-4 py-3">Сделок</th>
+                                    <th className="px-4 py-3">Передано менеджеру</th>
+                                    <th className="px-4 py-3">Доля</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="divide-y divide-gray-100">
                                 {recruiterLeads.recruiters.length > 0 ? recruiterLeads.recruiters.map((recruiter) => {
                                     const rate = recruiterLeads.assigned_leads_count > 0
                                         ? Math.round((recruiter.leads_count / recruiterLeads.assigned_leads_count) * 1000) / 10
                                         : 0;
+                                    const transferRate = recruiter.leads_count > 0
+                                        ? Math.round((recruiter.transferred_to_manager_count / recruiter.leads_count) * 1000) / 10
+                                        : 0;
 
                                     return (
-                                        <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={recruiter.enum_id}>
-                                            <td className="px-4 py-3 font-medium text-slate-950">{recruiter.name}</td>
-                                            <td className="px-3 py-3 tabular-nums">{recruiter.leads_count}</td>
-                                            <td className="px-3 py-3 tabular-nums">{recruiter.transferred_to_manager_count}</td>
-                                            <td className="px-3 py-3">
-                                                <div className="flex min-w-40 items-center gap-2">
-                                                    <div className="h-2 flex-1 rounded-full bg-slate-100">
-                                                        <div className="h-2 rounded-full bg-amber-500" style={{ width: `${Math.min(rate, 100)}%` }} />
-                                                    </div>
-                                                    <span className="w-12 text-right tabular-nums text-slate-600">{rate}%</span>
+                                        <tr className="text-gray-700 hover:bg-brand-50/40" key={recruiter.enum_id}>
+                                            <td className="px-5 py-3 font-medium text-gray-900">{recruiter.name}</td>
+                                            <td className="px-4 py-3 tabular-nums">{recruiter.leads_count}</td>
+                                            <td className="px-4 py-3">
+                                                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-theme-xs font-medium text-emerald-700">
+                                                    <ArrowRightLeft className="size-3.5" />
+                                                    {recruiter.transferred_to_manager_count} · {transferRate}%
                                                 </div>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <Progress value={rate} tone="brand" />
                                             </td>
                                         </tr>
                                     );
                                 }) : (
                                     <tr>
-                                        <td className="px-4 py-5 text-sm text-slate-500" colSpan={4}>
+                                        <td className="px-5 py-6 text-gray-500" colSpan={4}>
                                             {recruiterLeads.field_found
                                                 ? 'В поле “Рекрутер” пока нет значений списка или нет сделок с заполненным рекрутером за выбранный период.'
                                                 : 'Поле сделки “Рекрутер” не найдено в CRM-аудите. Запустите синхронизацию структуры CRM.'}
@@ -286,66 +256,63 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                             </tbody>
                         </table>
                     </div>
-                </section>
+                </ReportSection>
 
-                <section className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                    <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center">
-                        <div>
-                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Передачи рекрутеров</div>
-                            <h2 className="mt-1 text-lg font-semibold text-slate-950">
-                                {recruiterTeamCityBreakdown.team_field_name} / {recruiterTeamCityBreakdown.city_field_name}
-                            </h2>
-                            <p className="mt-1 text-sm text-slate-500">
-                                Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по команде, городу и источнику.
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                                Источник: {recruiterTeamCityBreakdown.source_field_found ? recruiterTeamCityBreakdown.source_field_name : 'поле не найдено'}
-                            </p>
-                        </div>
-                        <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-right">
-                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Сделок в разрезе</div>
-                            <div className="mt-1 text-3xl font-semibold text-slate-950">{recruiterTeamCityBreakdown.total_leads_count}</div>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 p-4">
+                <ReportSection
+                    eyebrow="Передачи рекрутеров"
+                    title={`${recruiterTeamCityBreakdown.team_field_name} / ${recruiterTeamCityBreakdown.city_field_name}`}
+                    description="Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по команде, городу и источнику."
+                    aside={(
+                        <AccentSummary
+                            label="Сделок в разрезе"
+                            value={recruiterTeamCityBreakdown.total_leads_count}
+                            note={`Источник: ${recruiterTeamCityBreakdown.source_field_found ? recruiterTeamCityBreakdown.source_field_name : 'поле не найдено'}`}
+                            tone="warning"
+                        />
+                    )}
+                >
+                    <div className="grid gap-4 p-5">
                         {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
-                            <article className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50" key={recruiter.enum_id}>
-                                <div className="flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3">
-                                    <h3 className="text-base font-semibold text-slate-950">{recruiter.name}</h3>
-                                    <span className="rounded bg-white px-2 py-1 text-xs font-medium tabular-nums text-slate-600">
+                            <article className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50" key={recruiter.enum_id}>
+                                <div className="flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4">
+                                    <h3 className="text-base font-semibold text-gray-900">{recruiter.name}</h3>
+                                    <span className="rounded-full bg-brand-50 px-2.5 py-1 text-theme-xs font-medium tabular-nums text-brand-600">
                                         {recruiter.total_leads_count}
                                     </span>
                                 </div>
 
                                 <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[760px] text-left text-sm">
-                                        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                                    <table className="w-full min-w-[760px] text-left text-theme-sm">
+                                        <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                                             <tr>
-                                                <th className="px-4 py-3 font-semibold">Команда</th>
-                                                <th className="px-3 py-3 font-semibold">Город</th>
-                                                <th className="px-3 py-3 text-right font-semibold">Всего</th>
+                                                <th className="px-5 py-3">Команда</th>
+                                                <th className="px-4 py-3">Город</th>
+                                                <th className="px-4 py-3 text-right">Всего</th>
                                                 {recruiterTeamCityBreakdown.source_columns.map((source) => (
-                                                    <th className="px-3 py-3 text-right font-semibold" key={source}>{source}</th>
+                                                    <th className="px-4 py-3 text-right" key={source}>{source}</th>
                                                 ))}
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-gray-100 bg-white">
                                             {recruiter.teams.flatMap((team) => team.cities.map((city, index) => (
-                                                <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={`${team.name}-${city.name}`}>
+                                                <tr className="text-gray-700 hover:bg-brand-50/40" key={`${team.name}-${city.name}`}>
                                                     {index === 0 ? (
-                                                        <td className="px-4 py-3 align-top font-semibold text-slate-950" rowSpan={team.cities.length}>
+                                                        <td className="px-5 py-3 align-top font-semibold text-gray-900" rowSpan={team.cities.length}>
                                                             {team.name}
-                                                            <div className="mt-1 text-xs font-normal tabular-nums text-slate-500">{team.total_leads_count}</div>
+                                                            <div className="mt-1 text-theme-xs font-normal tabular-nums text-gray-500">{team.total_leads_count}</div>
                                                         </td>
                                                     ) : null}
-                                                    <td className="px-3 py-3 font-medium text-slate-900">{city.name}</td>
-                                                    <td className="px-3 py-3 text-right font-semibold tabular-nums text-slate-950">{city.leads_count}</td>
-                                                    {recruiterTeamCityBreakdown.source_columns.map((source) => (
-                                                        <td className="px-3 py-3 text-right tabular-nums" key={source}>
-                                                            {city.sources[source] || 0}
-                                                        </td>
-                                                    ))}
+                                                    <td className="px-4 py-3 font-medium text-gray-900">{city.name}</td>
+                                                    <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">{city.leads_count}</td>
+                                                    {recruiterTeamCityBreakdown.source_columns.map((source) => {
+                                                        const count = city.sources[source] || 0;
+
+                                                        return (
+                                                            <td className={count > 0 ? 'px-4 py-3 text-right font-medium tabular-nums text-brand-600' : 'px-4 py-3 text-right tabular-nums text-gray-400'} key={source}>
+                                                                {count}
+                                                            </td>
+                                                        );
+                                                    })}
                                                 </tr>
                                             )))}
                                         </tbody>
@@ -353,102 +320,59 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                 </div>
                             </article>
                         )) : (
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 lg:col-span-2">
+                            <EmptyState>
                                 Нет данных для отчета. Проверьте, что выбраны поля “Команда” и “Город”, а в сделках заполнены рекрутер и менеджер.
-                            </div>
+                            </EmptyState>
                         )}
                     </div>
-                </section>
+                </ReportSection>
 
-                <section className="mt-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="mb-4">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Отчет по задачам</div>
-                        <h2 className="mt-1 text-lg font-semibold text-slate-950">Выполненные просроченные задачи</h2>
+                <ReportSection
+                    eyebrow="Отчет по задачам"
+                    title="Выполненные просроченные задачи"
+                    description="Показывает задачи, которые были завершены после наступления крайнего срока выполнения."
+                >
+                    <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
+                        <MetricCard label="Выполнено за период" value={totalCompleted} icon={<CheckCircle2 className="size-5" />} tone="success" progress={100} />
+                        <MetricCard label="Выполнено с просрочкой" value={totalOverdue} icon={<AlertTriangle className="size-5" />} tone="warning" progress={totalRate} />
+                        <MetricCard label="Процент просрочки" value={`${totalRate}%`} icon={<Percent className="size-5" />} tone={totalRate > 20 ? 'danger' : 'neutral'} progress={totalRate} />
+                        <MetricCard label="Пользователей в отчете" value={totalUsers} icon={<Users className="size-5" />} tone="brand" note={`групп: ${groups.length}`} />
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
-                                Выполнено за период
-                                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                            </div>
-                            <div className="mt-2 text-3xl font-semibold text-slate-950">{totalCompleted}</div>
-                            <div className="mt-3 h-1.5 rounded-full bg-slate-100">
-                                <div className="h-1.5 w-full rounded-full bg-emerald-500" />
-                            </div>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
-                                Выполнено с просрочкой
-                                <AlertTriangle className="h-5 w-5 text-amber-600" />
-                            </div>
-                            <div className="mt-2 text-3xl font-semibold text-slate-950">{totalOverdue}</div>
-                            <div className="mt-3 h-1.5 rounded-full bg-slate-100">
-                                <div className="h-1.5 rounded-full bg-amber-500" style={{ width: `${Math.min(totalRate, 100)}%` }} />
-                            </div>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
-                                Процент просрочки
-                                <Percent className="h-5 w-5 text-slate-500" />
-                            </div>
-                            <div className="mt-2 text-3xl font-semibold text-slate-950">{totalRate}%</div>
-                            <div className="mt-3 h-1.5 rounded-full bg-slate-100">
-                                <div className="h-1.5 rounded-full bg-slate-700" style={{ width: `${Math.min(totalRate, 100)}%` }} />
-                            </div>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between gap-3 text-sm font-medium text-slate-500">
-                                Пользователей в отчете
-                                <Users className="h-5 w-5 text-amber-600" />
-                            </div>
-                            <div className="mt-2 text-3xl font-semibold text-slate-950">{totalUsers}</div>
-                            <div className="mt-3 flex items-center gap-2 text-xs text-slate-500">
-                                <BarChart3 className="h-4 w-4 text-amber-500" />
-                                групп: {groups.length}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 space-y-4">
+                    <div className="space-y-4 p-5 pt-0">
                         {groups.length > 0 ? groups.map((group) => (
-                            <section className="overflow-hidden rounded-lg border border-slate-200 bg-white" key={group.group_id || group.group_name}>
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
-                                    <h3 className="flex items-center gap-2 text-base font-semibold text-slate-950">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                            <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white" key={group.group_id || group.group_name}>
+                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-5 py-4">
+                                    <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
+                                        <span className="size-2.5 rounded-full bg-brand-500" />
                                         {group.group_name}
                                     </h3>
-                                    <div className="text-sm text-slate-500">
+                                    <div className="text-theme-sm text-gray-500">
                                         выполнено {group.completed_count} · просрочено {group.completed_overdue_count}
                                     </div>
                                 </div>
                                 <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-sm">
-                                        <thead className="bg-white text-xs uppercase tracking-wide text-slate-500">
+                                    <table className="w-full text-left text-theme-sm">
+                                        <thead className="bg-white text-theme-xs font-semibold uppercase text-gray-500">
                                             <tr>
-                                                <th className="px-4 py-3 font-semibold">Пользователь</th>
-                                                <th className="px-3 py-3 font-semibold">Выполнено</th>
-                                                <th className="px-3 py-3 font-semibold">Просрочено</th>
-                                                <th className="px-3 py-3 font-semibold">Доля</th>
+                                                <th className="px-5 py-3">Пользователь</th>
+                                                <th className="px-4 py-3">Выполнено</th>
+                                                <th className="px-4 py-3">Просрочено</th>
+                                                <th className="px-4 py-3">Доля</th>
                                             </tr>
                                         </thead>
-                                        <tbody>
+                                        <tbody className="divide-y divide-gray-100">
                                             {group.users.map((user) => (
-                                                <tr className="border-t border-slate-100 text-slate-700 hover:bg-amber-50/60" key={user.id}>
-                                                    <td className="px-4 py-3 font-medium text-slate-950">{user.name}</td>
-                                                    <td className="px-3 py-3 tabular-nums">{user.completed_count}</td>
-                                                    <td className="px-3 py-3 tabular-nums">
+                                                <tr className="text-gray-700 hover:bg-brand-50/40" key={user.id}>
+                                                    <td className="px-5 py-3 font-medium text-gray-900">{user.name}</td>
+                                                    <td className="px-4 py-3 tabular-nums">{user.completed_count}</td>
+                                                    <td className="px-4 py-3 tabular-nums">
                                                         <span className={user.completed_overdue_count > 0 ? 'font-semibold text-amber-700' : ''}>
                                                             {user.completed_overdue_count}
                                                         </span>
                                                     </td>
-                                                    <td className="px-3 py-3">
-                                                        <div className="flex min-w-36 items-center gap-2">
-                                                            <div className="h-2 flex-1 rounded-full bg-slate-100">
-                                                                <div className="h-2 rounded-full bg-amber-500" style={{ width: `${Math.min(user.overdue_rate, 100)}%` }} />
-                                                            </div>
-                                                            <span className="w-12 text-right tabular-nums text-slate-600">{user.overdue_rate}%</span>
-                                                        </div>
+                                                    <td className="px-4 py-3">
+                                                        <Progress value={user.overdue_rate} tone={user.overdue_rate > 20 ? 'danger' : 'warning'} />
                                                     </td>
                                                 </tr>
                                             ))}
@@ -457,13 +381,148 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                 </div>
                             </section>
                         )) : (
-                            <section className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
-                                Нет данных за выбранный период. Запустите синхронизацию статистики задач в сервисе.
-                            </section>
+                            <EmptyState>Нет данных за выбранный период. Запустите синхронизацию статистики задач в сервисе.</EmptyState>
                         )}
                     </div>
-                </section>
+                </ReportSection>
             </div>
+        </div>
+    );
+}
+
+function DebugPanel({ iframeMessages }: { iframeMessages: MessageLog[] }) {
+    return (
+        <ReportSection
+            eyebrow="Iframe diagnostics"
+            title="Диагностика параметров amoCRM"
+            description="Этот блок виден только при debug_iframe=1 и помогает проверить, передает ли рабочий стол amoCRM период в URL или через postMessage."
+        >
+            <div className="grid gap-4 p-5 lg:grid-cols-2">
+                <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4">
+                    <div className="text-theme-xs font-semibold uppercase text-sky-700">Location</div>
+                    <dl className="mt-3 grid gap-2">
+                        <DebugValue label="href" value={typeof window !== 'undefined' ? window.location.href : '-'} />
+                        <DebugValue label="search" value={typeof window !== 'undefined' ? window.location.search || '-' : '-'} />
+                        <DebugValue label="document.referrer" value={typeof document !== 'undefined' ? document.referrer || '-' : '-'} />
+                    </dl>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <div className="flex items-center gap-2 text-theme-xs font-semibold uppercase text-gray-500">
+                        <Database className="size-4 text-brand-500" />
+                        postMessage events
+                    </div>
+                    <div className="mt-3 max-h-64 overflow-auto rounded-xl bg-gray-950 p-3 font-mono text-theme-xs text-gray-100">
+                        {iframeMessages.length > 0 ? iframeMessages.map((message, index) => (
+                            <pre className="mb-3 whitespace-pre-wrap break-words last:mb-0" key={`${message.received_at}-${index}`}>
+                                {JSON.stringify(message, null, 2)}
+                            </pre>
+                        )) : (
+                            <div className="text-gray-400">Сообщений пока нет. Измените период на рабочем столе amoCRM и посмотрите, появятся ли события.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </ReportSection>
+    );
+}
+
+function DebugValue({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <dt className="text-theme-xs text-gray-500">{label}</dt>
+            <dd className="break-all font-mono text-theme-xs text-gray-900">{value}</dd>
+        </div>
+    );
+}
+
+function ReportSection({ eyebrow, title, description, aside, children }: { eyebrow: string; title: string; description?: string; aside?: ReactNode; children: ReactNode }) {
+    return (
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
+            <div className="grid gap-4 border-b border-gray-200 bg-gray-50 px-5 py-4 lg:grid-cols-[1fr_auto] lg:items-center">
+                <div>
+                    <div className="text-theme-xs font-semibold uppercase text-brand-600">{eyebrow}</div>
+                    <h2 className="mt-1 text-lg font-semibold text-gray-900">{title}</h2>
+                    {description ? <p className="mt-1 text-theme-sm text-gray-500">{description}</p> : null}
+                </div>
+                {aside}
+            </div>
+            {children}
+        </section>
+    );
+}
+
+function AccentSummary({ label, value, note, tone }: { label: string; value: number; note: string; tone: 'brand' | 'warning' }) {
+    const classes = tone === 'warning'
+        ? 'border-amber-200 bg-amber-50 text-amber-700'
+        : 'border-brand-200 bg-brand-50 text-brand-700';
+
+    return (
+        <div className={`rounded-2xl border px-4 py-3 text-right ${classes}`}>
+            <div className="text-theme-xs font-medium uppercase">{label}</div>
+            <div className="mt-1 text-3xl font-semibold text-gray-900">{value}</div>
+            <div className="mt-1 text-theme-xs">{note}</div>
+        </div>
+    );
+}
+
+function MetricCard({ label, value, icon, tone, progress, note }: { label: string; value: ReactNode; icon: ReactNode; tone: 'brand' | 'success' | 'warning' | 'danger' | 'neutral'; progress?: number; note?: string }) {
+    const toneClass = {
+        brand: 'bg-brand-50 text-brand-600',
+        success: 'bg-emerald-50 text-emerald-600',
+        warning: 'bg-amber-50 text-amber-600',
+        danger: 'bg-red-50 text-red-600',
+        neutral: 'bg-gray-100 text-gray-600',
+    }[tone];
+    const barClass = {
+        brand: 'bg-brand-500',
+        success: 'bg-emerald-500',
+        warning: 'bg-amber-500',
+        danger: 'bg-red-500',
+        neutral: 'bg-gray-600',
+    }[tone];
+
+    return (
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-xs">
+            <div className={`flex size-11 items-center justify-center rounded-xl ${toneClass}`}>
+                {icon}
+            </div>
+            <div className="mt-4 flex items-end justify-between gap-3">
+                <div>
+                    <div className="text-theme-sm text-gray-500">{label}</div>
+                    <div className="mt-2 text-3xl font-semibold text-gray-900">{value}</div>
+                </div>
+                {note ? <div className="text-theme-xs text-gray-500">{note}</div> : null}
+            </div>
+            {progress !== undefined ? (
+                <div className="mt-4 h-1.5 rounded-full bg-gray-100">
+                    <div className={`h-1.5 rounded-full ${barClass}`} style={{ width: progressWidth(progress) }} />
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function Progress({ value, tone }: { value: number; tone: 'brand' | 'warning' | 'danger' }) {
+    const barClass = {
+        brand: 'bg-brand-500',
+        warning: 'bg-amber-500',
+        danger: 'bg-red-500',
+    }[tone];
+
+    return (
+        <div className="flex min-w-40 items-center gap-2">
+            <div className="h-2 flex-1 rounded-full bg-gray-100">
+                <div className={`h-2 rounded-full ${barClass}`} style={{ width: progressWidth(value) }} />
+            </div>
+            <span className="w-12 text-right tabular-nums text-gray-600">{value}%</span>
+        </div>
+    );
+}
+
+function EmptyState({ children }: { children: ReactNode }) {
+    return (
+        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-theme-sm text-gray-500">
+            {children}
         </div>
     );
 }
