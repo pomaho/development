@@ -18,19 +18,19 @@ export default function Pagination({ links }: Props) {
     }
 
     return (
-        <div className="mt-4 flex flex-wrap gap-2 text-sm">
+        <div className="mt-5 flex flex-wrap gap-2 text-theme-sm">
             {links.map((link, index) => link.url ? (
                 <a
                     className={link.active
-                        ? 'rounded bg-blue-700 px-3 py-1 text-white'
-                        : 'rounded border border-slate-300 px-3 py-1 text-slate-700 hover:border-blue-400'}
+                        ? 'inline-flex h-9 min-w-9 items-center justify-center rounded-lg bg-brand-500 px-3 font-medium text-white shadow-theme-xs'
+                        : 'inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-3 font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500'}
                     href={link.url}
                     key={`${link.label}-${index}`}
                 >
                     {paginationLabel(link.label)}
                 </a>
             ) : (
-                <span className="rounded border border-slate-200 px-3 py-1 text-slate-400" key={`${link.label}-${index}`}>
+                <span className="inline-flex h-9 min-w-9 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-3 font-medium text-gray-400" key={`${link.label}-${index}`}>
                     {paginationLabel(link.label)}
                 </span>
             ))}

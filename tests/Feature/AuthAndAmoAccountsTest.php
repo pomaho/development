@@ -1237,6 +1237,19 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('aria-label="Toggle sidebar"', $source);
     }
 
+    public function test_shared_react_components_use_tailadmin_visual_tokens(): void
+    {
+        $metric = file_get_contents(resource_path('js/Components/DashboardMetric.tsx'));
+        $pagination = file_get_contents(resource_path('js/Components/Pagination.tsx'));
+        $json = file_get_contents(resource_path('js/Components/JsonDetails.tsx'));
+        $form = file_get_contents(resource_path('js/Components/PlainActionForm.tsx'));
+
+        $this->assertStringContainsString('shadow-theme-sm', $metric);
+        $this->assertStringContainsString('bg-brand-500', $pagination);
+        $this->assertStringContainsString('text-brand-600', $json);
+        $this->assertStringContainsString('shadow-theme-xs', $form);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
