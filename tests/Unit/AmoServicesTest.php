@@ -864,10 +864,11 @@ class AmoServicesTest extends TestCase
         ]);
 
         foreach ([
-            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111, 'pipeline_id' => 10],
-            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142, 'pipeline_id' => 10],
-            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143, 'pipeline_id' => 10],
-            ['id' => '504', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 20],
+            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '504', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 20, 'created_at' => now()->subDay()],
+            ['id' => '505', 'enum_id' => null, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subYear()],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -876,14 +877,14 @@ class AmoServicesTest extends TestCase
                 'name' => 'Lead '.$lead['id'],
                 'pipeline_id' => $lead['pipeline_id'],
                 'status_id' => $lead['status_id'],
-                'entity_created_at' => now()->subDay(),
+                'entity_created_at' => $lead['created_at'],
                 'custom_fields_values' => [[
                     'field_id' => 777,
                     'field_name' => 'Рекрутер',
-                    'values' => [[
+                    'values' => [array_filter([
                         'enum_id' => $lead['enum_id'],
                         'value' => $lead['value'],
-                    ]],
+                    ], fn ($value): bool => $value !== null)],
                 ]],
                 'raw' => [],
                 'synced_at' => now(),
@@ -901,12 +902,12 @@ class AmoServicesTest extends TestCase
         $this->assertTrue($distribution['field_found']);
         $this->assertSame(10, $distribution['pipeline_id']);
         $this->assertSame('Массовый подбор', $distribution['pipeline_name']);
-        $this->assertSame(3, $distribution['total_leads_count']);
-        $this->assertSame(3, $distribution['assigned_leads_count']);
+        $this->assertSame(4, $distribution['total_leads_count']);
+        $this->assertSame(4, $distribution['assigned_leads_count']);
         $this->assertSame('Иван Рекрутер', $distribution['recruiters'][0]['name']);
         $this->assertSame(2, $distribution['recruiters'][0]['leads_count']);
         $this->assertSame('Мария Рекрутер', $distribution['recruiters'][1]['name']);
-        $this->assertSame(1, $distribution['recruiters'][1]['leads_count']);
+        $this->assertSame(2, $distribution['recruiters'][1]['leads_count']);
         $this->assertSame('Без сделок', $distribution['recruiters'][2]['name']);
         $this->assertSame(0, $distribution['recruiters'][2]['leads_count']);
     }

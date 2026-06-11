@@ -167,6 +167,10 @@ class AmoTaskStatisticsService
                 'leads_count' => 0,
             ]])
             ->all();
+        $enumIdsByValue = collect($field?->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
+            ->all();
 
         if ($field === null) {
             return [
@@ -189,16 +193,12 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $fieldName, $from, $to): void {
+            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue): void {
                 foreach ($leads as $lead) {
-                    if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
-                        continue;
-                    }
-
                     $totalLeads++;
                     $leadId = (string) $lead->external_id;
 
-                    foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, $fieldName) as $enumId) {
+                    foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, $fieldName, $enumIdsByValue) as $enumId) {
                         $leadIdsByEnum[$enumId][$leadId] = true;
                     }
                 }
@@ -248,7 +248,7 @@ class AmoTaskStatisticsService
         ]);
     }
 
-    private function recruiterEnumIds(array $customFields, int $fieldId, string $fieldName): array
+    private function recruiterEnumIds(array $customFields, int $fieldId, string $fieldName, array $enumIdsByValue): array
     {
         $enumIds = [];
 
@@ -263,6 +263,10 @@ class AmoTaskStatisticsService
             foreach (($customField['values'] ?? []) as $value) {
                 $enumId = (int) ($value['enum_id'] ?? $value['enum'] ?? 0);
 
+                if ($enumId <= 0 && isset($value['value'])) {
+                    $enumId = $enumIdsByValue[$this->normaliseRecruiterValue($value['value'])] ?? 0;
+                }
+
                 if ($enumId > 0) {
                     $enumIds[$enumId] = true;
                 }
@@ -270,6 +274,11 @@ class AmoTaskStatisticsService
         }
 
         return array_keys($enumIds);
+    }
+
+    private function normaliseRecruiterValue(mixed $value): string
+    {
+        return mb_strtolower(trim((string) $value));
     }
 
     private function buildCompletedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
