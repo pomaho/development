@@ -94,34 +94,34 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold">События amoCRM</h1>
-                    <div className="mt-1 text-sm text-slate-500">{account.name} · {account.base_domain}</div>
+                    <div className="mt-1 text-theme-sm text-gray-500">{account.name} · {account.base_domain}</div>
                 </div>
             </div>
 
             <section className="mb-6 grid gap-3 md:grid-cols-4">
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="text-sm text-slate-500">Событий в базе</div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
+                    <div className="text-theme-sm text-gray-500">Событий в базе</div>
                     <div className="mt-1 text-3xl font-semibold">{coverage.events_count}</div>
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="text-sm text-slate-500">Самое раннее событие</div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
+                    <div className="text-theme-sm text-gray-500">Самое раннее событие</div>
                     <div className="mt-1 text-lg font-semibold">{coverage.period_from || '-'}</div>
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="text-sm text-slate-500">Самое позднее событие</div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
+                    <div className="text-theme-sm text-gray-500">Самое позднее событие</div>
                     <div className="mt-1 text-lg font-semibold">{coverage.period_to || '-'}</div>
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="text-sm text-slate-500">Incremental cursor</div>
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
+                    <div className="text-theme-sm text-gray-500">Incremental cursor</div>
                     <div className="mt-1 text-lg font-semibold">{coverage.cursor || '-'}</div>
                 </div>
             </section>
 
-            <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <h2 className="font-semibold">Настройки отчетов по событиям</h2>
-                        <div className="mt-1 text-sm text-slate-500">
+                        <div className="mt-1 text-theme-sm text-gray-500">
                             Если список групп пустой, запустите синхронизацию пользователей или введите group_id вручную.
                         </div>
                     </div>
@@ -130,7 +130,7 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                     <input name="_token" type="hidden" value={csrf} />
                     <label className="block">
                         <span>Отдел для отчета “Авито рекрутинг”</span>
-                        <select className="mt-1 w-full rounded border-slate-300" defaultValue={reportSettings.avito_recruiting_group_id || ''} name="avito_recruiting_group_id">
+                        <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={reportSettings.avito_recruiting_group_id || ''} name="avito_recruiting_group_id">
                             <option value="">Автоопределение по названию группы</option>
                             {groups.map((group) => (
                                 <option key={group.id} value={group.id}>
@@ -145,7 +145,7 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                     <label className="block">
                         <span>group_id вручную</span>
                         <input
-                            className="mt-1 w-full rounded border-slate-300"
+                            className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10"
                             min="1"
                             name="avito_recruiting_group_id_manual"
                             placeholder="например 12345"
@@ -154,7 +154,7 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                     </label>
                     <div className="flex items-end">
                         <button
-                            className="rounded bg-slate-900 px-4 py-2 text-white hover:bg-slate-800 disabled:opacity-50"
+                            className="rounded bg-gray-900 px-4 py-2 text-white hover:bg-gray-800 disabled:opacity-50"
                             disabled={! can.sync}
                             type="submit"
                         >
@@ -164,23 +164,23 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                 </form>
             </section>
 
-            <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <div className="flex items-center gap-2">
-                            <Database className="h-5 w-5 text-blue-700" />
+                            <Database className="h-5 w-5 text-brand-600" />
                             <h2 className="font-semibold">Покрытие загруженных событий</h2>
                         </div>
-                        <div className="mt-2 text-sm text-slate-600">
+                        <div className="mt-2 text-theme-sm text-gray-600">
                             Отчеты строятся по локальной базе. Hourly sync догружает новые события от курсора с overlap, а ночной safety refresh обновляет последние 3 дня.
                         </div>
-                        <div className="mt-1 text-sm text-slate-500">Последняя запись событий в БД: {coverage.last_synced_at || '-'}</div>
+                        <div className="mt-1 text-theme-sm text-gray-500">Последняя запись событий в БД: {coverage.last_synced_at || '-'}</div>
                     </div>
 
                     <form action={links.events_sync_start} method="post">
                         <input name="_token" type="hidden" value={csrf} />
                         <button
-                            className="inline-flex items-center gap-2 rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50"
                             disabled={! can.sync}
                             type="submit"
                         >
@@ -191,11 +191,11 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                 </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <h2 className="font-semibold">Последние запуски синхронизации</h2>
                 <div className="mt-3 overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                        <thead className="text-gray-500">
                             <tr>
                                 <th className="py-2">Дата</th>
                                 <th>Период</th>
@@ -206,7 +206,7 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                         </thead>
                         <tbody>
                             {runs.length > 0 ? runs.map((run) => (
-                                <tr className="align-top border-t border-slate-100" key={run.id}>
+                                <tr className="align-top border-t border-gray-100" key={run.id}>
                                     <td className="py-3">{run.created_at || '-'}</td>
                                     <td>{run.period_from || '-'} - {run.period_to || '-'}</td>
                                     <td>{statusLabel(run.status)}</td>
@@ -215,7 +215,7 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={5}>Синхронизаций пока нет.</td>
+                                    <td className="py-4 text-gray-500" colSpan={5}>Синхронизаций пока нет.</td>
                                 </tr>
                             )}
                         </tbody>

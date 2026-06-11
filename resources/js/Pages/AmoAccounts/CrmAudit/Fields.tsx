@@ -74,9 +74,9 @@ export default function CrmAuditFields({ account, filters, summary, fields, link
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold">Поля сделок и контактов</h1>
-                    <div className="text-sm text-slate-500">{account.name} · {account.base_domain}</div>
+                    <div className="text-theme-sm text-gray-500">{account.name} · {account.base_domain}</div>
                 </div>
-                <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.crm_audit}>
+                <a className="rounded border border-gray-200 bg-white px-4 py-2 text-sm hover:border-brand-300" href={links.crm_audit}>
                     Назад к CRM-аудиту
                 </a>
             </div>
@@ -87,37 +87,37 @@ export default function CrmAuditFields({ account, filters, summary, fields, link
                 <DashboardMetric label="Показано" value={fields.length} />
             </div>
 
-            <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <form action={links.fields} className="grid gap-3 text-sm md:grid-cols-[220px_1fr_auto]" method="get">
                     <label>
-                        <span className="text-xs text-slate-500">Сущность</span>
-                        <select className="mt-1 w-full rounded border-slate-300" defaultValue={filters.entity_type} name="entity_type">
+                        <span className="text-theme-xs text-gray-500">Сущность</span>
+                        <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.entity_type} name="entity_type">
                             <option value="">Сделки и контакты</option>
                             <option value="leads">Сделки</option>
                             <option value="contacts">Контакты</option>
                         </select>
                     </label>
                     <label>
-                        <span className="text-xs text-slate-500">Поиск по названию или ID</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.search} name="search" placeholder="Рекрутер или 123456" />
+                        <span className="text-theme-xs text-gray-500">Поиск по названию или ID</span>
+                        <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.search} name="search" placeholder="Рекрутер или 123456" />
                     </label>
                     <div className="flex items-end gap-2">
-                        <button className="rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800" type="submit">Найти</button>
-                        <a className="rounded border border-slate-300 px-4 py-2 text-slate-700 hover:border-blue-400" href={links.fields}>Сбросить</a>
+                        <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Найти</button>
+                        <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 text-gray-700 hover:border-brand-300" href={links.fields}>Сбросить</a>
                     </div>
                 </form>
             </section>
 
-            <section className="mt-6 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                <div className="border-b border-slate-200 px-4 py-3">
+            <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
+                <div className="border-b border-gray-200 px-4 py-3">
                     <h2 className="font-semibold">Список полей</h2>
-                    <div className="mt-1 text-sm text-slate-500">
+                    <div className="mt-1 text-theme-sm text-gray-500">
                         Данные берутся из последней синхронизации CRM-аудита. Для обновления ID и новых полей запустите синхронизацию структуры.
                     </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                        <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                             <tr>
                                 <th className="px-4 py-3 font-semibold">Сущность</th>
                                 <th className="px-3 py-3 font-semibold">Field ID</th>
@@ -130,10 +130,10 @@ export default function CrmAuditFields({ account, filters, summary, fields, link
                         </thead>
                         <tbody>
                             {fields.length > 0 ? fields.map((field) => (
-                                <tr className="border-t border-slate-100 align-top hover:bg-slate-50" key={field.id}>
+                                <tr className="border-t border-gray-100 align-top hover:bg-gray-50" key={field.id}>
                                     <td className="px-4 py-3">{entityLabels[field.entity_type] || field.entity_type}</td>
-                                    <td className="px-3 py-3 font-mono text-slate-950">{field.amo_field_id}</td>
-                                    <td className="px-3 py-3 font-medium text-slate-950">{field.name}</td>
+                                    <td className="px-3 py-3 font-mono text-gray-900">{field.amo_field_id}</td>
+                                    <td className="px-3 py-3 font-medium text-gray-900">{field.name}</td>
                                     <td className="px-3 py-3">{field.field_type || '-'}</td>
                                     <td className="px-3 py-3">{field.code || '-'}</td>
                                     <td className="px-3 py-3">{field.sort ?? '-'}</td>
@@ -158,7 +158,7 @@ export default function CrmAuditFields({ account, filters, summary, fields, link
 function EmptyRow() {
     return (
         <tr>
-            <td className="px-4 py-5 text-slate-500" colSpan={7}>Поля не найдены. Запустите CRM-аудит структуры или измените фильтр.</td>
+            <td className="px-4 py-5 text-gray-500" colSpan={7}>Поля не найдены. Запустите CRM-аудит структуры или измените фильтр.</td>
         </tr>
     );
 }

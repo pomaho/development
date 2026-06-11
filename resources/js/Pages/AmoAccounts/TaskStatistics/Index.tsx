@@ -112,29 +112,29 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold">Статистика задач</h1>
-                    <div className="mt-1 text-sm text-slate-500">{account.name} · {account.base_domain}</div>
+                    <div className="mt-1 text-theme-sm text-gray-500">{account.name} · {account.base_domain}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <a className="rounded border border-slate-300 px-3 py-2 text-sm hover:border-blue-400 hover:text-blue-700" href={links.export}>
+                    <a className="rounded border border-gray-200 px-3 py-2 text-sm hover:border-brand-300 hover:text-brand-600" href={links.export}>
                         Экспорт
                     </a>
                 </div>
             </div>
 
-            <form className="mb-4 grid gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm md:grid-cols-[1fr_1fr_auto_auto]" method="get">
+            <form className="mb-4 grid gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm md:grid-cols-[1fr_1fr_auto_auto]" method="get">
                 <label className="block">
                     <span>Показать статистику с</span>
-                    <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.from} name="from" type="date" />
+                    <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.from} name="from" type="date" />
                 </label>
                 <label className="block">
                     <span>Показать статистику по</span>
-                    <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.to} name="to" type="date" />
+                    <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.to} name="to" type="date" />
                 </label>
                 <div className="flex items-end">
-                    <button className="rounded bg-blue-700 px-3 py-2 text-white hover:bg-blue-800" type="submit">Фильтр</button>
+                    <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Фильтр</button>
                 </div>
                 <div className="flex items-end">
-                    <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={links.reset}>Сбросить</a>
+                    <a className="rounded border border-gray-200 px-3 py-2 hover:border-brand-300" href={links.reset}>Сбросить</a>
                 </div>
             </form>
 
@@ -142,26 +142,26 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                 Выполненная задача считается просроченной по событию завершения `task_completed`: если время события позже дедлайна `complete_till`. Если событие еще не найдено, используется fallback по `updated_at`.
             </div>
 
-            <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h2 className="font-semibold">Синхронизация задач</h2>
-                        <div className="mt-1 text-sm text-slate-500">Выберите период, за который нужно вычитать выполненные задачи. Открытые и просроченные задачи обновляются по текущему состоянию.</div>
+                        <div className="mt-1 text-theme-sm text-gray-500">Выберите период, за который нужно вычитать выполненные задачи. Открытые и просроченные задачи обновляются по текущему состоянию.</div>
                     </div>
                 </div>
                 <form action={links.sync} className="mt-4 grid gap-3 text-sm md:grid-cols-[1fr_1fr_auto]" method="post">
                     <input name="_token" type="hidden" value={csrf} />
                     <label className="block">
                         <span>Синхронизировать с</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.from} name="from" type="date" />
+                        <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.from} name="from" type="date" />
                     </label>
                     <label className="block">
                         <span>Синхронизировать по</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={filters.to} name="to" type="date" />
+                        <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={filters.to} name="to" type="date" />
                     </label>
                     <div className="flex items-end">
                         <button
-                            className="inline-flex items-center gap-2 rounded bg-blue-700 px-3 py-2 text-white hover:bg-blue-800 disabled:opacity-50"
+                            className="inline-flex items-center gap-2 inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50"
                             disabled={! can.sync}
                             type="submit"
                         >
@@ -172,11 +172,11 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                 </form>
             </section>
 
-            <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <h2 className="font-semibold">Последние синхронизации</h2>
                 <div className="mt-3 overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                        <thead className="text-gray-500">
                             <tr>
                                 <th className="py-2">Дата</th>
                                 <th>Период</th>
@@ -189,7 +189,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                         </thead>
                         <tbody>
                             {runs.length > 0 ? runs.map((run) => (
-                                <tr className="align-top border-t border-slate-100" key={run.id}>
+                                <tr className="align-top border-t border-gray-100" key={run.id}>
                                     <td className="py-3">{run.created_at || '-'}</td>
                                     <td>{run.period_from || '-'} - {run.period_to || '-'}</td>
                                     <td>{statusLabel(run.status)}</td>
@@ -200,7 +200,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={7}>Синхронизаций пока нет.</td>
+                                    <td className="py-4 text-gray-500" colSpan={7}>Синхронизаций пока нет.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -208,10 +208,10 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                 </div>
             </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                        <thead className="text-gray-500">
                             <tr>
                                 <th className="py-2">Пользователь</th>
                                 <th>Выполнено за период</th>
@@ -225,7 +225,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                         </thead>
                         <tbody>
                             {rows.length > 0 ? rows.map((row) => (
-                                <tr className="border-t border-slate-100" key={row.responsible_user_id}>
+                                <tr className="border-t border-gray-100" key={row.responsible_user_id}>
                                     <td className="py-3 font-medium">{userLabel(row)}</td>
                                     <td>{row.completed_count}</td>
                                     <td>
@@ -243,7 +243,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={8}>Данных пока нет. Запустите синхронизацию задач.</td>
+                                    <td className="py-4 text-gray-500" colSpan={8}>Данных пока нет. Запустите синхронизацию задач.</td>
                                 </tr>
                             )}
                         </tbody>

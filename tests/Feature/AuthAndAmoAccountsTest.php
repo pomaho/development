@@ -1340,6 +1340,20 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('inline-flex h-10 items-center rounded-lg bg-brand-500', $transfer);
     }
 
+    public function test_analytics_pages_use_tailadmin_surfaces(): void
+    {
+        $crmAudit = file_get_contents(resource_path('js/Pages/AmoAccounts/CrmAudit/Index.tsx'));
+        $crmFields = file_get_contents(resource_path('js/Pages/AmoAccounts/CrmAudit/Fields.tsx'));
+        $events = file_get_contents(resource_path('js/Pages/AmoAccounts/EventsSync/Index.tsx'));
+        $tasks = file_get_contents(resource_path('js/Pages/AmoAccounts/TaskStatistics/Index.tsx'));
+
+        $this->assertStringContainsString('shadow-theme-sm', $crmAudit);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white', $crmFields);
+        $this->assertStringContainsString('shadow-theme-sm', $events);
+        $this->assertStringContainsString('shadow-theme-sm', $tasks);
+        $this->assertStringContainsString('focus:border-brand-300 focus:ring-brand-500/10', $crmAudit.$events.$tasks);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();

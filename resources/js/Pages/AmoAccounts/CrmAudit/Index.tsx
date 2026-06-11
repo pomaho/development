@@ -97,17 +97,17 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-semibold">CRM-аудит: {account.name}</h1>
-                    <div className="text-sm text-slate-500">{account.base_domain}</div>
+                    <div className="text-theme-sm text-gray-500">{account.base_domain}</div>
                 </div>
-                <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.fields}>
+                <a className="rounded border border-gray-200 bg-white px-4 py-2 text-sm hover:border-brand-300" href={links.fields}>
                     Все поля сделок и контактов
                 </a>
                 {can.sync ? (
-                    <form action={links.sync} className="grid gap-2 rounded border border-slate-200 bg-white p-3 text-sm md:grid-cols-6" method="post">
+                    <form action={links.sync} className="grid gap-2 rounded-xl border border-gray-200 bg-white p-3 text-sm md:grid-cols-6" method="post">
                         <input name="_token" type="hidden" value={csrf} />
                         <label>
-                            <span className="text-xs text-slate-500">Воронка</span>
-                            <select className="mt-1 w-full rounded border-slate-300" defaultValue={defaults.pipeline_id} name="pipeline_id">
+                            <span className="text-theme-xs text-gray-500">Воронка</span>
+                            <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={defaults.pipeline_id} name="pipeline_id">
                                 <option value="">Все воронки</option>
                                 {pipelines.map((pipeline) => (
                                     <option key={pipeline.amo_pipeline_id} value={pipeline.amo_pipeline_id}>{pipeline.name}</option>
@@ -115,22 +115,22 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                             </select>
                         </label>
                         <label>
-                            <span className="text-xs text-slate-500">С даты</span>
-                            <input className="mt-1 w-full rounded border-slate-300" defaultValue={defaults.from} name="from" type="date" />
+                            <span className="text-theme-xs text-gray-500">С даты</span>
+                            <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={defaults.from} name="from" type="date" />
                         </label>
                         <label>
-                            <span className="text-xs text-slate-500">По дату</span>
-                            <input className="mt-1 w-full rounded border-slate-300" defaultValue={defaults.to} name="to" type="date" />
+                            <span className="text-theme-xs text-gray-500">По дату</span>
+                            <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={defaults.to} name="to" type="date" />
                         </label>
                         <label className="flex items-end gap-2 pb-2">
-                            <input className="rounded border-slate-300" name="structure_only" type="checkbox" value="1" />
+                            <input className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" name="structure_only" type="checkbox" value="1" />
                             <span>Только структура</span>
                         </label>
                         <label className="flex items-end gap-2 pb-2">
-                            <input className="rounded border-slate-300" name="ignore_period" type="checkbox" value="1" />
+                            <input className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" name="ignore_period" type="checkbox" value="1" />
                             <span>Все сделки воронки</span>
                         </label>
-                        <button className="self-end rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800" type="submit">Запустить</button>
+                        <button className="self-end inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Запустить</button>
                     </form>
                 ) : null}
             </div>
@@ -147,13 +147,13 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
             </div>
 
             <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                     <h2 className="mb-3 font-semibold">Воронки</h2>
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500"><tr><th className="py-2">ID</th><th>Название</th><th>Главная</th><th>Неразобранное</th></tr></thead>
+                        <thead className="text-gray-500"><tr><th className="py-2">ID</th><th>Название</th><th>Главная</th><th>Неразобранное</th></tr></thead>
                         <tbody>
                             {pipelines.length > 0 ? pipelines.map((pipeline) => (
-                                <tr className="border-t border-slate-100" key={pipeline.id}>
+                                <tr className="border-t border-gray-100" key={pipeline.id}>
                                     <td className="py-2">{pipeline.amo_pipeline_id}</td>
                                     <td>{pipeline.name}</td>
                                     <td>{pipeline.is_main ? 'да' : 'нет'}</td>
@@ -164,13 +164,13 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                     </table>
                 </section>
 
-                <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                     <h2 className="mb-3 font-semibold">Поля CRM</h2>
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500"><tr><th className="py-2">Сущность</th><th>ID</th><th>Название</th><th>Тип</th></tr></thead>
+                        <thead className="text-gray-500"><tr><th className="py-2">Сущность</th><th>ID</th><th>Название</th><th>Тип</th></tr></thead>
                         <tbody>
                             {fields.length > 0 ? fields.map((field) => (
-                                <tr className="border-t border-slate-100" key={field.id}>
+                                <tr className="border-t border-gray-100" key={field.id}>
                                     <td className="py-2">{field.entity_type}</td>
                                     <td>{field.amo_field_id}</td>
                                     <td>{field.name}</td>
@@ -182,14 +182,14 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
                 </section>
             </div>
 
-            <section className="mt-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <h2 className="mb-3 font-semibold">Последние snapshots</h2>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500"><tr><th className="py-2">Тип</th><th>ID</th><th>Название</th><th>Pipeline</th><th>Status</th><th>Sync</th><th>Raw</th></tr></thead>
+                        <thead className="text-gray-500"><tr><th className="py-2">Тип</th><th>ID</th><th>Название</th><th>Pipeline</th><th>Status</th><th>Sync</th><th>Raw</th></tr></thead>
                         <tbody>
                             {recentEntities.length > 0 ? recentEntities.map((entity) => (
-                                <tr className="border-t border-slate-100 align-top" key={entity.id}>
+                                <tr className="border-t border-gray-100 align-top" key={entity.id}>
                                     <td className="py-2">{entity.entity_type}</td>
                                     <td>{entity.external_id}</td>
                                     <td>{entity.name}</td>
@@ -210,7 +210,7 @@ export default function CrmAuditIndex({ account, summary, pipelines, fields, rec
 function EmptyRow({ colSpan }: { colSpan: number }) {
     return (
         <tr>
-            <td className="py-4 text-slate-500" colSpan={colSpan}>Данных пока нет.</td>
+            <td className="py-4 text-gray-500" colSpan={colSpan}>Данных пока нет.</td>
         </tr>
     );
 }
