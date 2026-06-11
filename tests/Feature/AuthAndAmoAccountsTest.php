@@ -1260,6 +1260,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500', $source);
     }
 
+    public function test_amo_accounts_index_uses_tailadmin_table_and_shared_pagination(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/AmoAccounts/Index.tsx'));
+
+        $this->assertStringContainsString('Client connections', $source);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
+        $this->assertStringContainsString('bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500', $source);
+        $this->assertStringContainsString('<Pagination links={accounts.links} />', $source);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
