@@ -62,13 +62,13 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
         >
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold">Dashboard-блоки: {account.name}</h1>
-                <div className="text-sm text-slate-500">{account.base_domain}</div>
+                <div className="text-theme-sm text-gray-500">{account.base_domain}</div>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                        <thead className="text-gray-500">
                             <tr>
                                 <th className="py-2">Код</th>
                                 <th>Название блока</th>
@@ -82,7 +82,7 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
                         </thead>
                         <tbody>
                             {widgets.map((widget) => (
-                                <tr className="border-t border-slate-100" key={widget.id}>
+                                <tr className="border-t border-gray-100" key={widget.id}>
                                     <td className="py-2 font-mono text-xs">{widget.code}</td>
                                     <td>{widget.name}</td>
                                     <td>{widget.component_key}</td>
@@ -90,20 +90,20 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
                                     <td>{widget.is_enabled && widget.installation.is_enabled ? 'enabled' : 'disabled'}</td>
                                     <td className="font-mono text-xs">{widget.installation.public_key}</td>
                                     <td>
-                                        <a className="text-blue-700 hover:text-blue-900" href={widget.installation.settings_url}>
+                                        <a className="text-brand-600 hover:text-brand-700" href={widget.installation.settings_url}>
                                             Настроить
                                         </a>
                                     </td>
                                     <td className="max-w-xl">
                                         {widget.installation.iframe_url ? (
                                             <div className="space-y-1">
-                                                <a className="break-all text-blue-700 hover:text-blue-900" href={widget.installation.iframe_url} target="_blank" rel="noreferrer">
+                                                <a className="break-all text-brand-600 hover:text-brand-700" href={widget.installation.iframe_url} target="_blank" rel="noreferrer">
                                                     {widget.installation.iframe_url}
                                                 </a>
-                                                {widget.installation.api_url ? <div className="break-all text-xs text-slate-500">API: {widget.installation.api_url}</div> : null}
+                                                {widget.installation.api_url ? <div className="break-all text-theme-xs text-gray-500">API: {widget.installation.api_url}</div> : null}
                                             </div>
                                         ) : (
-                                            <span className="text-slate-400">-</span>
+                                            <span className="text-gray-400">-</span>
                                         )}
                                     </td>
                                 </tr>

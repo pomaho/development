@@ -59,21 +59,21 @@ export default function AmoAccountIntegrations({ account, modules, can, links }:
         >
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold">Интеграции: {account.name}</h1>
-                <div className="text-sm text-slate-500">{account.base_domain}</div>
+                <div className="text-theme-sm text-gray-500">{account.base_domain}</div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
                 {modules.map((module) => (
-                    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" key={module.id}>
+                    <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm" key={module.id}>
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <h2 className="font-semibold">{module.name}</h2>
-                                <div className="mt-1 text-sm text-slate-500">{module.description || 'Модуль без описания.'}</div>
-                                <div className="mt-3 text-xs text-slate-500">code: {module.code}</div>
+                                <div className="mt-1 text-theme-sm text-gray-500">{module.description || 'Модуль без описания.'}</div>
+                                <div className="mt-3 text-theme-xs text-gray-500">code: {module.code}</div>
                             </div>
                             <span className={module.is_enabled
                                 ? 'rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700'
-                                : 'rounded bg-slate-100 px-2 py-1 text-xs text-slate-600'}
+                                : 'rounded bg-gray-100 px-2 py-1 text-theme-xs text-gray-600'}
                             >
                                 {module.is_enabled ? 'enabled' : 'disabled'}
                             </span>
@@ -81,28 +81,28 @@ export default function AmoAccountIntegrations({ account, modules, can, links }:
 
                         {module.code === 'users_audit' ? (
                             <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.users}>Таблица прав</a>
-                                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.roles}>Роли</a>
+                                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.users}>Таблица прав</a>
+                                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.roles}>Роли</a>
                             </div>
                         ) : null}
 
                         {module.code === 'pipelines_builder' ? (
                             <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines}>Список воронок</a>
-                                {can.sync ? <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines_create}>Создать воронку</a> : null}
-                                {can.sync && accountLinks.pipelines_transfer_leads ? <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.pipelines_transfer_leads}>Перенос сделок</a> : null}
+                                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.pipelines}>Список воронок</a>
+                                {can.sync ? <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.pipelines_create}>Создать воронку</a> : null}
+                                {can.sync && accountLinks.pipelines_transfer_leads ? <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.pipelines_transfer_leads}>Перенос сделок</a> : null}
                             </div>
                         ) : null}
 
                         {module.code === 'catalogs_builder' ? (
                             <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.catalogs}>Списки и связанные списки</a>
+                                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.catalogs}>Списки и связанные списки</a>
                             </div>
                         ) : null}
 
                         {module.code === 'crm_audit' ? (
                             <div className="mt-4 flex flex-wrap gap-2 text-sm">
-                                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={accountLinks.crm_audit}>Открыть аудит</a>
+                                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 hover:border-brand-300" href={accountLinks.crm_audit}>Открыть аудит</a>
                             </div>
                         ) : null}
                     </section>
