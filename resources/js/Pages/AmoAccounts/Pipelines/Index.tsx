@@ -57,6 +57,9 @@ type Props = {
 };
 
 export default function PipelineIndex({ account, pipelines, error, filters, can, links }: Props) {
+    const inputClass = 'h-10 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10';
+    const actionLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
+
     return (
         <AuthenticatedLayout
             title="amo Integrator Hub"
@@ -70,81 +73,77 @@ export default function PipelineIndex({ account, pipelines, error, filters, can,
         >
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-2xl font-semibold">Воронки: {account.name}</h1>
-                    <div className="text-sm text-slate-500">{account.base_domain}</div>
+                    <p className="text-theme-sm font-medium text-brand-600">Pipeline settings</p>
+                    <h1 className="mt-1 text-2xl font-semibold text-gray-900">Воронки: {account.name}</h1>
+                    <div className="mt-1 text-theme-sm text-gray-500">{account.base_domain}</div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.export}>Экспорт в Excel</a>
-                    {can.sync ? <a className="rounded border border-slate-300 bg-white px-4 py-2 text-sm hover:border-blue-400" href={links.transfer_leads}>Перенос сделок</a> : null}
-                    {can.sync ? <a className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" href={links.create}>Создать воронку</a> : null}
+                    <a className={actionLinkClass} href={links.export}>Экспорт в Excel</a>
+                    {can.sync ? <a className={actionLinkClass} href={links.transfer_leads}>Перенос сделок</a> : null}
+                    {can.sync ? <a className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" href={links.create}>Создать воронку</a> : null}
                 </div>
             </div>
 
-            <form className="mb-4 flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm" method="get">
-                <select className="rounded border-slate-300" defaultValue={filters.activity} name="activity">
+            <form className="mb-4 flex flex-wrap gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm" method="get">
+                <select className={inputClass} defaultValue={filters.activity} name="activity">
                     <option value="">Все воронки</option>
                     <option value="active">Только активные</option>
                     <option value="archived">Только архивные</option>
                 </select>
-                <button className="rounded bg-blue-700 px-3 py-2 text-white hover:bg-blue-800" type="submit">Фильтр</button>
-                <a className="rounded border border-slate-300 px-3 py-2 hover:border-blue-400" href={links.reset}>Сбросить</a>
+                <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Фильтр</button>
+                <a className={actionLinkClass} href={links.reset}>Сбросить</a>
             </form>
 
             {error ? (
-                <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-theme-sm text-amber-800">
                     Не удалось загрузить воронки из amoCRM: {error}
                 </div>
             ) : null}
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                    <table className="w-full text-left text-theme-sm">
+                        <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                             <tr>
-                                <th className="py-2">ID</th>
-                                <th>Название</th>
-                                <th>Главная</th>
-                                <th>Неразобранное</th>
-                                <th>Архив</th>
-                                <th>Этапов</th>
-                                <th>Этапы</th>
-                                <th>Действия</th>
+                                {['ID', 'Название', 'Главная', 'Неразобранное', 'Архив', 'Этапов', 'Этапы', 'Действия'].map((heading) => (
+                                    <th className="px-5 py-3" key={heading}>{heading}</th>
+                                ))}
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                             {pipelines.length > 0 ? pipelines.map((pipeline, index) => (
-                                <tr className="border-t border-slate-100 align-top" key={pipeline.id || `${pipeline.name}-${index}`}>
-                                    <td className="py-2">{pipeline.id || '-'}</td>
-                                    <td className="font-medium">
+                                <tr className="align-top" key={pipeline.id || `${pipeline.name}-${index}`}>
+                                    <td className="px-5 py-3 text-gray-700">{pipeline.id || '-'}</td>
+                                    <td className="px-5 py-3 font-medium text-gray-900">
                                         {pipeline.links ? (
-                                            <a className="text-blue-700 hover:text-blue-900" href={pipeline.links.show}>{pipeline.name}</a>
+                                            <a className="text-brand-600 hover:text-brand-700" href={pipeline.links.show}>{pipeline.name}</a>
                                         ) : pipeline.name}
                                     </td>
-                                    <td>{pipeline.is_main ? 'да' : 'нет'}</td>
-                                    <td>{pipeline.is_unsorted_on ? 'да' : 'нет'}</td>
-                                    <td>{pipeline.is_archive ? 'да' : 'нет'}</td>
-                                    <td>{pipeline.statuses.length}</td>
-                                    <td>
+                                    <td className="px-5 py-3 text-gray-600">{pipeline.is_main ? 'да' : 'нет'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{pipeline.is_unsorted_on ? 'да' : 'нет'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{pipeline.is_archive ? 'да' : 'нет'}</td>
+                                    <td className="px-5 py-3 text-gray-600">{pipeline.statuses.length}</td>
+                                    <td className="px-5 py-3">
                                         <div className="flex max-w-2xl flex-wrap gap-2">
                                             {pipeline.statuses.map((status, statusIndex) => (
-                                                <span className="rounded border border-slate-200 px-2 py-1 text-xs" key={status.id || `${status.name}-${statusIndex}`}>
+                                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-theme-xs text-gray-600" key={status.id || `${status.name}-${statusIndex}`}>
                                                     {status.name}
                                                 </span>
                                             ))}
                                         </div>
                                     </td>
-                                    <td>
+                                    <td className="px-5 py-3">
                                         {pipeline.links ? (
-                                            <div className="flex flex-wrap gap-2 text-sm">
-                                                <a className="text-blue-700 hover:text-blue-900" href={pipeline.links.show}>Настройки</a>
-                                                {can.sync ? <a className="text-blue-700 hover:text-blue-900" href={pipeline.links.clone}>Клонировать</a> : null}
+                                            <div className="flex flex-wrap gap-2">
+                                                <a className="text-theme-sm font-medium text-brand-600 hover:text-brand-700" href={pipeline.links.show}>Настройки</a>
+                                                {can.sync ? <a className="text-theme-sm font-medium text-brand-600 hover:text-brand-700" href={pipeline.links.clone}>Клонировать</a> : null}
                                             </div>
                                         ) : null}
                                     </td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-slate-500" colSpan={8}>Воронки не загружены или пока отсутствуют.</td>
+                                    <td className="px-5 py-6 text-gray-500" colSpan={8}>Воронки не загружены или пока отсутствуют.</td>
                                 </tr>
                             )}
                         </tbody>

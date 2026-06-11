@@ -1305,6 +1305,18 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('<JsonDetails data={log.response_payload} />', $logs);
     }
 
+    public function test_leads_and_pipelines_use_tailadmin_operational_tables(): void
+    {
+        $leads = file_get_contents(resource_path('js/Pages/AmoAccounts/Leads.tsx'));
+        $pipelines = file_get_contents(resource_path('js/Pages/AmoAccounts/Pipelines/Index.tsx'));
+
+        $this->assertStringContainsString('Leads analytics', $leads);
+        $this->assertStringContainsString('<JsonDetails data={lead.raw} />', $leads);
+        $this->assertStringContainsString('<Pagination links={leads.links} />', $leads);
+        $this->assertStringContainsString('Pipeline settings', $pipelines);
+        $this->assertStringContainsString('rounded-full border border-gray-200 bg-gray-50', $pipelines);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();
