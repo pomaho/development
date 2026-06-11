@@ -20,4 +20,5 @@ return [
         'secrets_uri' => env('AMO_EXTERNAL_SECRETS_URI'),
     ],
     'api_log_retention_days' => (int) env('API_LOG_RETENTION_DAYS', 30),
+    'api_log_payload_max_bytes' => (int) env('API_LOG_PAYLOAD_MAX_BYTES', 16384),
 ];

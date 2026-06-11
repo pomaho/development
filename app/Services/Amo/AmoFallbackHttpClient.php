@@ -125,13 +125,48 @@ class AmoFallbackHttpClient
             return null;
         }
 
+        return $this->truncatePayload($this->redactPayload($payload));
+    }
+
+    private function redactPayload(array $payload): array
+    {
         return Arr::mapWithKeys($payload, function ($value, $key): array {
             $lower = mb_strtolower((string) $key);
             if (in_array($lower, ['authorization', 'access_token', 'refresh_token', 'client_secret'], true)) {
                 return [$key => '[redacted]'];
             }
 
-            return [$key => is_array($value) ? $this->safePayload($value) : $value];
+            return [$key => is_array($value) ? $this->redactPayload($value) : $value];
         });
+    }
+
+    private function truncatePayload(array $payload): array
+    {
+        $maxBytes = max(0, (int) config('amo.api_log_payload_max_bytes', 16384));
+
+        if ($maxBytes === 0) {
+            return [
+                '_truncated' => true,
+                '_reason' => 'API payload logging is disabled.',
+            ];
+        }
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($json === false || strlen($json) <= $maxBytes) {
+            return $payload;
+        }
+
+        return [
+            '_truncated' => true,
+            '_original_bytes' => strlen($json),
+            '_stored_bytes_limit' => $maxBytes,
+            '_top_level_keys' => array_slice(array_map('strval', array_keys($payload)), 0, 30),
+            '_embedded_keys' => isset($payload['_embedded']) && is_array($payload['_embedded'])
+                ? array_slice(array_map('strval', array_keys($payload['_embedded'])), 0, 30)
+                : [],
+            '_page' => $payload['_page'] ?? null,
+            '_page_count' => $payload['_page_count'] ?? null,
+        ];
     }
 }

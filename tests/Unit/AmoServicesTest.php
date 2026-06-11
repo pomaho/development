@@ -23,6 +23,7 @@ use App\Services\Amo\AmoUsersService;
 use App\Services\Amo\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Mockery;
 use Tests\TestCase;
 
@@ -1140,6 +1141,39 @@ class AmoServicesTest extends TestCase
     public function test_oauth_refresh_saves_new_refresh_token(): void
     {
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');
+    }
+
+    public function test_fallback_http_client_truncates_large_api_log_payloads(): void
+    {
+        config(['amo.api_log_payload_max_bytes' => 512]);
+
+        $account = $this->accountWithToken($this->longLivedJwt());
+        Http::fake([
+            'client.amocrm.ru/api/v4/leads*' => Http::response([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => [
+                    'leads' => collect(range(1, 100))->map(fn (int $id): array => [
+                        'id' => $id,
+                        'name' => str_repeat('Lead ', 40),
+                    ])->all(),
+                ],
+                'access_token' => 'secret-token',
+            ], 200),
+        ]);
+
+        app(AmoFallbackHttpClient::class)->get($account, '/api/v4/leads', [
+            'filter' => ['access_token' => 'secret-query-token'],
+        ]);
+
+        $log = $account->apiRequestLogs()->firstOrFail();
+
+        $this->assertSame(['access_token' => '[redacted]'], $log->request_payload['filter']);
+        $this->assertTrue($log->response_payload['_truncated']);
+        $this->assertGreaterThan(512, $log->response_payload['_original_bytes']);
+        $this->assertContains('_embedded', $log->response_payload['_top_level_keys']);
+        $this->assertStringNotContainsString('secret-token', json_encode($log->response_payload));
+        $this->assertStringNotContainsString('Lead Lead Lead', json_encode($log->response_payload));
     }
 
     private function accountWithToken(string $token): AmoAccount

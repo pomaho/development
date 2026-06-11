@@ -392,7 +392,10 @@ DB_CONNECTION=mysql
 QUEUE_CONNECTION=database
 SESSION_SECURE_COOKIE=true
 API_LOG_RETENTION_DAYS=30
+API_LOG_PAYLOAD_MAX_BYTES=16384
 ```
+
+`API_LOG_PAYLOAD_MAX_BYTES` ограничивает размер JSON payload в `api_request_logs`. Большие ответы amoCRM сохраняются как краткая мета-информация, чтобы таблица логов не раздувала базу.
 
 На сервере нужно настроить HTTPS, MySQL или PostgreSQL, backup БД, безопасный backup `.env`, ротацию логов и мониторинг ошибок.
 
