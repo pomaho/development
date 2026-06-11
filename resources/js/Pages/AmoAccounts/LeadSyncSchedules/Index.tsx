@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Clock3, DatabaseZap, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, DatabaseZap, PlayCircle, Trash2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
@@ -182,6 +182,7 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
                                     intervals={intervals}
                                     key={schedule.id}
                                     pipelines={pipelines}
+                                    runUrl={`${links.current_account.lead_sync_schedules}/${schedule.id}/run`}
                                     schedule={schedule}
                                     updateUrl={`${links.current_account.lead_sync_schedules}/${schedule.id}`}
                                 />
@@ -198,11 +199,12 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
     );
 }
 
-function ScheduleRow({ canManage, csrf, intervals, pipelines, schedule, updateUrl }: {
+function ScheduleRow({ canManage, csrf, intervals, pipelines, runUrl, schedule, updateUrl }: {
     canManage: boolean;
     csrf: string;
     intervals: IntervalOption[];
     pipelines: Pipeline[];
+    runUrl: string;
     schedule: Schedule;
     updateUrl: string;
 }) {
@@ -272,6 +274,29 @@ function ScheduleRow({ canManage, csrf, intervals, pipelines, schedule, updateUr
                             </button>
                         </form>
                     </div>
+                    <form action={runUrl} className="mt-3 rounded-xl border border-brand-100 bg-brand-50/50 p-3" method="post">
+                        <input name="_token" type="hidden" value={csrf} />
+                        <div className="mb-2 flex items-center gap-2 text-theme-xs font-medium text-brand-700">
+                            <PlayCircle size={14} />
+                            Разовая загрузка
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                            <input
+                                aria-label="Период разовой загрузки в днях"
+                                className="h-9 w-20 rounded-lg border-gray-200 bg-white px-2 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10"
+                                defaultValue={45}
+                                max={365}
+                                min={1}
+                                name="lookback_days"
+                                required
+                                type="number"
+                            />
+                            <span className="text-theme-xs text-gray-500">дней</span>
+                            <button className="rounded-lg bg-brand-500 px-3 py-2 text-theme-xs font-medium text-white hover:bg-brand-600" type="submit">
+                                Запустить
+                            </button>
+                        </div>
+                    </form>
                 </td>
             ) : null}
         </tr>

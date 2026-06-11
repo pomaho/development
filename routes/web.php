@@ -88,6 +88,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/lead-sync-schedules', [LeadSyncScheduleController::class, 'index'])->name('amo-accounts.lead-sync-schedules.index');
     Route::post('/amo-accounts/{amo_account}/lead-sync-schedules', [LeadSyncScheduleController::class, 'store'])->name('amo-accounts.lead-sync-schedules.store');
     Route::put('/amo-accounts/{amo_account}/lead-sync-schedules/{lead_sync_schedule}', [LeadSyncScheduleController::class, 'update'])->name('amo-accounts.lead-sync-schedules.update');
+    Route::post('/amo-accounts/{amo_account}/lead-sync-schedules/{lead_sync_schedule}/run', [LeadSyncScheduleController::class, 'run'])->name('amo-accounts.lead-sync-schedules.run');
     Route::delete('/amo-accounts/{amo_account}/lead-sync-schedules/{lead_sync_schedule}', [LeadSyncScheduleController::class, 'destroy'])->name('amo-accounts.lead-sync-schedules.destroy');
     Route::get('/amo-accounts/{amo_account}/users', AmoUsersController::class)->name('amo-accounts.users');
     Route::get('/amo-accounts/{amo_account}/users-export', [AmoUsersController::class, 'export'])->name('amo-accounts.users.export');

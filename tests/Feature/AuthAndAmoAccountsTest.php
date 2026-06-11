@@ -1927,7 +1927,7 @@ class AuthAndAmoAccountsTest extends TestCase
         ]);
 
         $auditService = Mockery::mock(CrmAuditService::class);
-        $auditService->shouldReceive('syncAll')
+        $auditService->shouldReceive('syncOperationalData')
             ->once()
             ->withArgs(fn (AmoAccount $passedAccount, Carbon $from, Carbon $to, int $pipelineId): bool =>
                 $passedAccount->id === $account->id
@@ -1948,13 +1948,66 @@ class AuthAndAmoAccountsTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_admin_can_run_one_time_lead_sync_without_changing_schedule_window(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $schedule = LeadSyncSchedule::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'pipeline_name' => 'Sales',
+            'interval_minutes' => 360,
+            'lookback_days' => 2,
+            'is_enabled' => true,
+            'next_run_at' => now()->addHours(6),
+        ]);
+
+        $auditService = Mockery::mock(CrmAuditService::class);
+        $auditService->shouldReceive('syncOperationalData')
+            ->once()
+            ->withArgs(fn (AmoAccount $passedAccount, Carbon $from, Carbon $to, int $pipelineId): bool =>
+                $passedAccount->id === $account->id
+                && $from->toDateTimeString() === '2026-04-27 00:00:00'
+                && $to->toDateTimeString() === '2026-06-11 23:59:59'
+                && $pipelineId === 10
+            )
+            ->andReturn(['leads' => 250]);
+        $this->app->instance(CrmAuditService::class, $auditService);
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/lead-sync-schedules/{$schedule->id}/run", [
+                'lookback_days' => 45,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status', 'Разовая синхронизация завершена. Загружено сделок: 250.');
+
+        $schedule->refresh();
+        $this->assertSame(2, $schedule->lookback_days);
+        $this->assertSame('2026-06-11 18:00:00', $schedule->next_run_at?->toDateTimeString());
+        $this->assertSame(LeadSyncSchedule::STATUS_COMPLETED, $schedule->last_status);
+        $this->assertSame(250, $schedule->last_synced_count);
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/lead-sync-schedules/{$schedule->id}/run", [
+                'lookback_days' => 45,
+            ])
+            ->assertForbidden();
+
+        Carbon::setTestNow();
+    }
+
     public function test_scheduler_uses_only_configured_lead_sync_schedules_for_automatic_data_sync(): void
     {
         $consoleRoutes = file_get_contents(base_path('routes/console.php'));
+        $syncPage = file_get_contents(resource_path('js/Pages/AmoAccounts/LeadSyncSchedules/Index.tsx'));
 
         $this->assertStringContainsString('amo:run-lead-sync-schedules', $consoleRoutes);
         $this->assertStringNotContainsString('amo:sync-task-statistics', $consoleRoutes);
         $this->assertStringNotContainsString('SyncAmoUsersAndRolesJob::dispatch', $consoleRoutes);
+        $this->assertStringContainsString('Разовая загрузка', $syncPage);
     }
 
     public function test_admin_can_view_lead_and_contact_field_ids(): void

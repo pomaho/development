@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AmoAccount;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\LeadSyncSchedule;
+use App\Services\Amo\LeadSyncScheduleRunner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -140,6 +141,20 @@ class LeadSyncScheduleController extends Controller
         ]);
 
         return back()->with('status', 'Расписание синхронизации сделок обновлено.');
+    }
+
+    public function run(Request $request, AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule, LeadSyncScheduleRunner $runner): RedirectResponse
+    {
+        $this->authorize('sync', $amoAccount);
+        $this->abortIfWrongAccount($amoAccount, $leadSyncSchedule);
+
+        $data = $request->validate([
+            'lookback_days' => ['required', 'integer', 'min:1', 'max:365'],
+        ]);
+
+        $syncedCount = $runner->run($leadSyncSchedule->load('account'), (int) $data['lookback_days'], false);
+
+        return back()->with('status', "Разовая синхронизация завершена. Загружено сделок: {$syncedCount}.");
     }
 
     public function destroy(AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule): RedirectResponse
