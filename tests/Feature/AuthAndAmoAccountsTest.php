@@ -1280,6 +1280,16 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
     }
 
+    public function test_amo_account_edit_uses_tailadmin_form_layout(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/AmoAccounts/Edit.tsx'));
+
+        $this->assertStringContainsString('Connection settings', $source);
+        $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm', $source);
+        $this->assertStringContainsString('focus:border-brand-300 focus:ring-brand-500/10', $source);
+        $this->assertStringContainsString('text-theme-xs font-medium text-red-600', $source);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();

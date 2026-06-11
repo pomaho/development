@@ -49,11 +49,14 @@ function FieldError({ name }: { name: string }) {
     const { props } = usePage<PageProps>();
     const message = props.errors?.[name];
 
-    return message ? <div className="mt-1 text-xs text-red-700">{message}</div> : null;
+    return message ? <div className="mt-1.5 text-theme-xs font-medium text-red-600">{message}</div> : null;
 }
 
 export default function AmoAccountEdit({ account, credential, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
+    const labelClass = 'block text-theme-sm font-medium text-gray-700';
+    const inputClass = 'mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10';
+    const secretInputClass = `${inputClass} font-mono`;
 
     return (
         <AuthenticatedLayout
@@ -66,84 +69,88 @@ export default function AmoAccountEdit({ account, credential, links }: Props) {
             ]}
             links={links}
         >
-            <h1 className="mb-6 text-2xl font-semibold">Редактировать подключение</h1>
-            <form action={links.current_account.update} className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" method="post">
+            <div className="mb-6">
+                <p className="text-theme-sm font-medium text-brand-600">Connection settings</p>
+                <h1 className="mt-1 text-2xl font-semibold text-gray-900">Редактировать подключение</h1>
+            </div>
+
+            <form action={links.current_account.update} className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm" method="post">
                 <input name="_token" type="hidden" value={csrf} />
                 <input name="_method" type="hidden" value="put" />
 
                 <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Название</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={account.name} name="name" required />
+                        <input className={inputClass} defaultValue={account.name} name="name" required />
                         <FieldError name="name" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Домен amoCRM</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={account.base_domain} name="base_domain" placeholder="company.amocrm.ru" required />
+                        <input className={inputClass} defaultValue={account.base_domain} name="base_domain" placeholder="company.amocrm.ru" required />
                         <FieldError name="base_domain" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Тип авторизации</span>
-                        <select className="mt-1 w-full rounded border-slate-300" defaultValue={credential.auth_type || 'long_lived_token'} name="auth_type" required>
+                        <select className={inputClass} defaultValue={credential.auth_type || 'long_lived_token'} name="auth_type" required>
                             <option value="long_lived_token">long_lived_token</option>
                             <option value="oauth">oauth</option>
                         </select>
                         <FieldError name="auth_type" />
                     </label>
 
-                    <label className="flex items-end gap-2 text-sm">
-                        <input className="rounded border-slate-300" defaultChecked={account.is_active} name="is_active" type="checkbox" value="1" />
+                    <label className="flex items-end gap-2 text-theme-sm font-medium text-gray-700">
+                        <input className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" defaultChecked={account.is_active} name="is_active" type="checkbox" value="1" />
                         <span>Активен</span>
                     </label>
 
-                    <label className="block text-sm md:col-span-2">
+                    <label className={`${labelClass} md:col-span-2`}>
                         <span>Access token {credential.masked_access_token ? `(${credential.masked_access_token})` : ''}</span>
-                        <input autoComplete="off" className="mt-1 w-full rounded border-slate-300" name="access_token" type="password" />
+                        <input autoComplete="off" className={secretInputClass} name="access_token" type="password" />
                         <FieldError name="access_token" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Client ID</span>
-                        <input autoComplete="off" className="mt-1 w-full rounded border-slate-300" name="client_id" type="password" />
+                        <input autoComplete="off" className={secretInputClass} name="client_id" type="password" />
                         <FieldError name="client_id" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Client secret</span>
-                        <input autoComplete="off" className="mt-1 w-full rounded border-slate-300" name="client_secret" type="password" />
+                        <input autoComplete="off" className={secretInputClass} name="client_secret" type="password" />
                         <FieldError name="client_secret" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Redirect URI</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={credential.redirect_uri || ''} name="redirect_uri" />
+                        <input className={inputClass} defaultValue={credential.redirect_uri || ''} name="redirect_uri" />
                         <FieldError name="redirect_uri" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Refresh token</span>
-                        <input autoComplete="off" className="mt-1 w-full rounded border-slate-300" name="refresh_token" type="password" />
+                        <input autoComplete="off" className={secretInputClass} name="refresh_token" type="password" />
                         <FieldError name="refresh_token" />
                     </label>
 
-                    <label className="block text-sm">
+                    <label className={labelClass}>
                         <span>Token expires at</span>
-                        <input className="mt-1 w-full rounded border-slate-300" defaultValue={credential.token_expires_at || ''} name="token_expires_at" type="datetime-local" />
+                        <input className={inputClass} defaultValue={credential.token_expires_at || ''} name="token_expires_at" type="datetime-local" />
                         <FieldError name="token_expires_at" />
                     </label>
 
-                    <label className="block text-sm md:col-span-2">
+                    <label className={`${labelClass} md:col-span-2`}>
                         <span>Заметки</span>
-                        <textarea className="mt-1 w-full rounded border-slate-300" defaultValue={account.notes || ''} name="notes" rows={4} />
+                        <textarea className="mt-1.5 w-full rounded-lg border-gray-200 bg-white px-3 py-2 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={account.notes || ''} name="notes" rows={4} />
                         <FieldError name="notes" />
                     </label>
                 </div>
 
                 <div className="mt-6 flex gap-3">
-                    <button className="rounded bg-blue-700 px-4 py-2 text-white hover:bg-blue-800" type="submit">Сохранить</button>
-                    <a className="rounded border border-slate-300 px-4 py-2" href={links.current_account.show}>Отмена</a>
+                    <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Сохранить</button>
+                    <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500" href={links.current_account.show}>Отмена</a>
                 </div>
             </form>
         </AuthenticatedLayout>
