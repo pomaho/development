@@ -7,6 +7,7 @@ use App\Models\AmoAccountDashboardWidget;
 use App\Services\Amo\AmoTaskStatisticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -78,9 +79,37 @@ class AmoTaskOverdueDashboardController extends Controller
 
     private function period(Request $request): array
     {
-        return [
-            $request->filled('from') ? $request->date('from')->startOfDay() : now()->startOfMonth(),
-            $request->filled('to') ? $request->date('to')->endOfDay() : now()->endOfDay(),
-        ];
+        $from = $this->dateValue($request->query('from')) ?? $this->dateValue($request->query('date_from'));
+        $to = $this->dateValue($request->query('to')) ?? $this->dateValue($request->query('date_to'));
+
+        if ($from !== null || $to !== null) {
+            return [
+                ($from ?? now()->startOfMonth())->startOfDay(),
+                ($to ?? now())->endOfDay(),
+            ];
+        }
+
+        return match ((string) $request->query('period', '')) {
+            'today', 'day' => [now()->startOfDay(), now()->endOfDay()],
+            'yesterday' => [now()->subDay()->startOfDay(), now()->subDay()->endOfDay()],
+            'week' => [now()->startOfWeek()->startOfDay(), now()->endOfWeek()->endOfDay()],
+            'month' => [now()->startOfMonth()->startOfDay(), now()->endOfMonth()->endOfDay()],
+            'quarter' => [now()->startOfQuarter()->startOfDay(), now()->endOfQuarter()->endOfDay()],
+            'year' => [now()->startOfYear()->startOfDay(), now()->endOfYear()->endOfDay()],
+            default => [now()->startOfMonth(), now()->endOfDay()],
+        };
+    }
+
+    private function dateValue(mixed $value): ?Carbon
+    {
+        if ($value === null || $value === '' || $value === false || $value === 'false' || $value === 'null') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            return Carbon::createFromTimestamp((int) $value);
+        }
+
+        return Carbon::parse((string) $value);
     }
 }

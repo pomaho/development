@@ -1150,6 +1150,35 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }
 
+    public function test_public_task_widget_uses_amo_workspace_period_query(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-06-11 12:00:00'));
+
+        try {
+            $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+            $widget = DashboardWidget::query()->create([
+                'code' => 'task_overdue_dashboard',
+                'name' => 'Просроченные выполненные задачи',
+                'component_key' => 'amo_iframe_task_overdue_dashboard',
+                'sort_order' => 70,
+                'is_enabled' => true,
+            ]);
+            $installation = AmoAccountDashboardWidget::query()->create([
+                'amo_account_id' => $account->id,
+                'dashboard_widget_id' => $widget->id,
+                'public_key' => 'public-widget-key',
+                'is_enabled' => true,
+            ]);
+
+            $this->get("/api/widgets/amo/{$installation->public_key}/task-overdue-dashboard?currency=RUB&date_from=false&date_to=false&lang=ru&period=week&t=0.1768444589890391")
+                ->assertOk()
+                ->assertJsonPath('period.from', '2026-06-08')
+                ->assertJsonPath('period.to', '2026-06-14');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));
