@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, BarChart3, CalendarDays, CheckCircle2, Percent, Users } from 'lucide-react';
 
 type Account = {
@@ -81,11 +82,44 @@ type Props = {
 };
 
 export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
+    const debugIframe = useMemo(() => {
+        if (typeof window === 'undefined') {
+            return false;
+        }
+
+        return new URLSearchParams(window.location.search).get('debug_iframe') === '1';
+    }, []);
+    const [iframeMessages, setIframeMessages] = useState<Array<{
+        received_at: string;
+        origin: string;
+        data: unknown;
+    }>>([]);
     const totalCompleted = groups.reduce((sum, group) => sum + group.completed_count, 0);
     const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
     const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
     const totalUsers = groups.reduce((sum, group) => sum + group.users.length, 0);
     const periodLabel = `${period.from} - ${period.to}`;
+
+    useEffect(() => {
+        if (!debugIframe || typeof window === 'undefined') {
+            return;
+        }
+
+        const listener = (event: MessageEvent) => {
+            setIframeMessages((messages) => [
+                {
+                    received_at: new Date().toISOString(),
+                    origin: event.origin || 'unknown',
+                    data: event.data,
+                },
+                ...messages,
+            ].slice(0, 10));
+        };
+
+        window.addEventListener('message', listener);
+
+        return () => window.removeEventListener('message', listener);
+    }, [debugIframe]);
 
     return (
         <div className="min-h-screen bg-slate-100 px-4 py-4 text-slate-900">
@@ -108,6 +142,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                         </div>
 
                         <form className="rounded-md border border-slate-200 bg-slate-50 p-3" method="get" action={links.self}>
+                            {debugIframe ? <input type="hidden" name="debug_iframe" value="1" /> : null}
                             <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
                                 <CalendarDays className="h-4 w-4 text-amber-500" />
                                 Период
@@ -120,6 +155,49 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                         </form>
                     </div>
                 </header>
+
+                {debugIframe ? (
+                    <section className="mb-4 rounded-lg border border-sky-200 bg-sky-50 p-4 text-sm shadow-sm">
+                        <div className="mb-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-sky-700">Iframe diagnostics</div>
+                            <h2 className="mt-1 text-lg font-semibold text-slate-950">Диагностика параметров amoCRM</h2>
+                            <p className="mt-1 text-slate-600">
+                                Этот блок виден только при `debug_iframe=1` и помогает проверить, передает ли рабочий стол amoCRM период в URL или через postMessage.
+                            </p>
+                        </div>
+                        <div className="grid gap-3 lg:grid-cols-2">
+                            <div className="rounded border border-sky-100 bg-white p-3">
+                                <div className="text-xs font-semibold uppercase text-slate-500">Location</div>
+                                <dl className="mt-2 grid gap-2">
+                                    <div>
+                                        <dt className="text-xs text-slate-500">href</dt>
+                                        <dd className="break-all font-mono text-xs text-slate-900">{typeof window !== 'undefined' ? window.location.href : '-'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">search</dt>
+                                        <dd className="break-all font-mono text-xs text-slate-900">{typeof window !== 'undefined' ? window.location.search || '-' : '-'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-slate-500">document.referrer</dt>
+                                        <dd className="break-all font-mono text-xs text-slate-900">{typeof document !== 'undefined' ? document.referrer || '-' : '-'}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div className="rounded border border-sky-100 bg-white p-3">
+                                <div className="text-xs font-semibold uppercase text-slate-500">postMessage events</div>
+                                <div className="mt-2 max-h-64 overflow-auto rounded bg-slate-950 p-3 font-mono text-xs text-slate-100">
+                                    {iframeMessages.length > 0 ? iframeMessages.map((message, index) => (
+                                        <pre className="mb-3 whitespace-pre-wrap break-words last:mb-0" key={`${message.received_at}-${index}`}>
+                                            {JSON.stringify(message, null, 2)}
+                                        </pre>
+                                    )) : (
+                                        <div className="text-slate-400">Сообщений пока нет. Измените период на рабочем столе amoCRM и посмотрите, появятся ли события.</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                ) : null}
 
                 <section className="mb-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-4">

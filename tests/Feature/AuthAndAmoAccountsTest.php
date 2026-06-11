@@ -1155,6 +1155,8 @@ class AuthAndAmoAccountsTest extends TestCase
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));
 
         $this->assertStringContainsString('BI-отчеты рабочего стола', $source);
+        $this->assertStringContainsString('debug_iframe', $source);
+        $this->assertStringContainsString('postMessage events', $source);
         $this->assertStringContainsString('Отчет по задачам', $source);
         $this->assertStringContainsString('Выполненные просроченные задачи', $source);
         $this->assertStringContainsString('Отчет по сделкам', $source);
