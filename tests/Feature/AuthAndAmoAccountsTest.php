@@ -851,6 +851,17 @@ class AuthAndAmoAccountsTest extends TestCase
             'raw' => [],
             'synced_at' => now(),
         ]);
+        foreach ([[779, 'Команда'], [780, 'Город']] as [$fieldId, $name]) {
+            CrmCustomFieldSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'amo_field_id' => $fieldId,
+                'name' => $name,
+                'field_type' => 'select',
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
         CrmEntitySnapshot::query()->create([
             'amo_account_id' => $account->id,
             'entity_type' => 'leads',
@@ -874,7 +885,7 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->component('AmoAccounts/Widgets/Settings')
                 ->where('pipelines.0.id', 10)
-                ->has('leadFields', 2)
+                ->has('leadFields', 4)
                 ->where('diagnostics.synced_leads_total', 1)
                 ->where('diagnostics.field_found', true));
 
@@ -883,6 +894,8 @@ class AuthAndAmoAccountsTest extends TestCase
                 'pipeline_id' => 10,
                 'recruiter_field_id' => 777,
                 'manager_field_id' => 778,
+                'team_field_id' => 779,
+                'city_field_id' => 780,
             ])
             ->assertRedirect("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings");
 
@@ -893,12 +906,18 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertSame('Рекрутер', $installation->config['recruiter_field_name']);
         $this->assertSame(778, $installation->config['manager_field_id']);
         $this->assertSame('Менеджер', $installation->config['manager_field_name']);
+        $this->assertSame(779, $installation->config['team_field_id']);
+        $this->assertSame('Команда', $installation->config['team_field_name']);
+        $this->assertSame(780, $installation->config['city_field_id']);
+        $this->assertSame('Город', $installation->config['city_field_name']);
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
                 'pipeline_id' => 10,
                 'recruiter_field_id' => 777,
                 'manager_field_id' => 778,
+                'team_field_id' => 779,
+                'city_field_id' => 780,
             ])
             ->assertForbidden();
     }
@@ -925,6 +944,10 @@ class AuthAndAmoAccountsTest extends TestCase
                 'recruiter_field_name' => 'Рекрутер',
                 'manager_field_id' => 778,
                 'manager_field_name' => 'Менеджер',
+                'team_field_id' => 779,
+                'team_field_name' => 'Команда',
+                'city_field_id' => 780,
+                'city_field_name' => 'Город',
             ],
         ]);
         CrmCustomFieldSnapshot::query()->create([
@@ -1023,10 +1046,25 @@ class AuthAndAmoAccountsTest extends TestCase
             'synced_at' => now(),
         ]);
         foreach ([
-            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер'],
-            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => null],
-            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер'],
-            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер'],
+            [779, 'Команда', [['id' => 3001, 'value' => 'Альфа'], ['id' => 3002, 'value' => 'Бетта']]],
+            [780, 'Город', [['id' => 4001, 'value' => 'Москва'], ['id' => 4002, 'value' => 'Омск']]],
+        ] as [$fieldId, $name, $enums]) {
+            CrmCustomFieldSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'amo_field_id' => $fieldId,
+                'name' => $name,
+                'field_type' => 'select',
+                'enums' => $enums,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+        foreach ([
+            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва'],
+            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер', 'manager' => null, 'team' => 'Альфа', 'city' => 'Москва'],
+            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер', 'team' => 'Бетта', 'city' => 'Омск'],
+            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер', 'manager' => 'Второй менеджер', 'team' => 'Бетта', 'city' => 'Омск'],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
@@ -1049,6 +1087,14 @@ class AuthAndAmoAccountsTest extends TestCase
                     'values' => $lead['manager'] === null ? [] : [[
                         'value' => $lead['manager'],
                     ]],
+                ], [
+                    'field_id' => 779,
+                    'field_name' => 'Команда',
+                    'values' => [['value' => $lead['team']]],
+                ], [
+                    'field_id' => 780,
+                    'field_name' => 'Город',
+                    'values' => [['value' => $lead['city']]],
                 ]],
                 'raw' => [],
                 'synced_at' => now(),
@@ -1090,7 +1136,16 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertJsonPath('recruiterLeads.recruiters.1.leads_count', 1)
             ->assertJsonPath('recruiterLeads.recruiters.1.transferred_to_manager_count', 1)
             ->assertJsonPath('recruiterLeads.recruiters.2.name', 'Пустой рекрутер')
-            ->assertJsonPath('recruiterLeads.recruiters.2.leads_count', 0);
+            ->assertJsonPath('recruiterLeads.recruiters.2.leads_count', 0)
+            ->assertJsonPath('recruiterTeamCityBreakdown.total_leads_count', 2)
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.name', 'Иван Рекрутер')
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.name', 'Альфа')
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.cities.0.name', 'Москва')
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.0.teams.0.cities.0.leads_count', 1)
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.name', 'Мария Рекрутер')
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.name', 'Бетта')
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.cities.0.name', 'Омск')
+            ->assertJsonPath('recruiterTeamCityBreakdown.recruiters.1.teams.0.cities.0.leads_count', 1);
 
         $this->get('/api/widgets/amo/wrong-key/task-overdue-dashboard')->assertNotFound();
     }

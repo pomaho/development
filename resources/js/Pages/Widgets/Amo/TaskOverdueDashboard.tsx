@@ -40,6 +40,31 @@ type RecruiterLeads = {
     recruiters: RecruiterLeadRow[];
 };
 
+type RecruiterTeamCityBreakdown = {
+    pipeline_id: number | null;
+    pipeline_name: string | null;
+    recruiter_field_found: boolean;
+    manager_field_found: boolean;
+    team_field_found: boolean;
+    city_field_found: boolean;
+    team_field_name: string;
+    city_field_name: string;
+    total_leads_count: number;
+    recruiters: Array<{
+        enum_id: number;
+        name: string;
+        total_leads_count: number;
+        teams: Array<{
+            name: string;
+            total_leads_count: number;
+            cities: Array<{
+                name: string;
+                leads_count: number;
+            }>;
+        }>;
+    }>;
+};
+
 type Props = {
     account: Account;
     period: {
@@ -48,13 +73,14 @@ type Props = {
     };
     groups: GroupRow[];
     recruiterLeads: RecruiterLeads;
+    recruiterTeamCityBreakdown: RecruiterTeamCityBreakdown;
     links: {
         self: string;
         api: string;
     };
 };
 
-export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, links }: Props) {
+export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
     const totalCompleted = groups.reduce((sum, group) => sum + group.completed_count, 0);
     const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
     const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
@@ -260,6 +286,60 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                </section>
+
+                <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                    <div className="grid gap-4 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                        <div>
+                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Передачи рекрутеров</div>
+                            <h2 className="mt-1 text-lg font-semibold text-slate-950">
+                                {recruiterTeamCityBreakdown.team_field_name} / {recruiterTeamCityBreakdown.city_field_name}
+                            </h2>
+                            <p className="mt-1 text-sm text-slate-500">
+                                Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по команде и городу.
+                            </p>
+                        </div>
+                        <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-right">
+                            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Сделок в разрезе</div>
+                            <div className="mt-1 text-3xl font-semibold text-slate-950">{recruiterTeamCityBreakdown.total_leads_count}</div>
+                        </div>
+                    </div>
+
+                    <div className="grid gap-4 p-4 lg:grid-cols-2">
+                        {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
+                            <article className="rounded-lg border border-slate-200 bg-slate-50 p-4" key={recruiter.enum_id}>
+                                <div className="flex items-start justify-between gap-3">
+                                    <h3 className="text-base font-semibold text-slate-950">{recruiter.name}</h3>
+                                    <span className="rounded bg-white px-2 py-1 text-xs font-medium tabular-nums text-slate-600">
+                                        {recruiter.total_leads_count}
+                                    </span>
+                                </div>
+
+                                <div className="mt-4 space-y-3">
+                                    {recruiter.teams.map((team) => (
+                                        <div className="rounded border border-slate-200 bg-white p-3" key={team.name}>
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="text-sm font-semibold text-slate-900">Команда: {team.name}</div>
+                                                <div className="text-xs tabular-nums text-slate-500">{team.total_leads_count}</div>
+                                            </div>
+                                            <div className="mt-3 grid gap-2">
+                                                {team.cities.map((city) => (
+                                                    <div className="flex items-center justify-between gap-3 text-sm" key={city.name}>
+                                                        <span className="text-slate-600">{city.name}</span>
+                                                        <span className="font-semibold tabular-nums text-slate-950">{city.leads_count}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </article>
+                        )) : (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-sm text-slate-500 lg:col-span-2">
+                                Нет данных для отчета. Проверьте, что выбраны поля “Команда” и “Город”, а в сделках заполнены рекрутер и менеджер.
+                            </div>
+                        )}
                     </div>
                 </section>
             </div>

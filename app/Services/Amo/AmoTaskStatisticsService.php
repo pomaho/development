@@ -14,6 +14,8 @@ class AmoTaskStatisticsService
 {
     private const RECRUITER_FIELD_NAME = 'Рекрутер';
     private const MANAGER_FIELD_NAME = 'Менеджер';
+    private const TEAM_FIELD_NAME = 'Команда';
+    private const CITY_FIELD_NAME = 'Город';
 
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
@@ -145,6 +147,15 @@ class AmoTaskStatisticsService
             $this->recruiterLeadDistributionCacheKey($account, $from, $to, $config),
             now()->addMinutes(10),
             fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to, $config),
+        );
+    }
+
+    public function recruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    {
+        return Cache::remember(
+            $this->recruiterTeamCityBreakdownCacheKey($account, $from, $to, $config),
+            now()->addMinutes(10),
+            fn (): array => $this->buildRecruiterTeamCityBreakdown($account, $from, $to, $config),
         );
     }
 
@@ -371,6 +382,137 @@ class AmoTaskStatisticsService
         ];
     }
 
+    private function buildRecruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    {
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $pipelineName = data_get($config, 'pipeline_name');
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+        $recruiterField = $this->leadField($fieldQuery, (int) data_get($config, 'recruiter_field_id', 0), (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME));
+        $managerField = $this->leadField($fieldQuery, (int) data_get($config, 'manager_field_id', 0), (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME));
+        $teamField = $this->leadField($fieldQuery, (int) data_get($config, 'team_field_id', 0), (string) (data_get($config, 'team_field_name') ?: self::TEAM_FIELD_NAME));
+        $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
+
+        if ($recruiterField === null || $managerField === null || $teamField === null || $cityField === null) {
+            return [
+                'pipeline_id' => $pipelineId ?: null,
+                'pipeline_name' => $pipelineName,
+                'recruiter_field_found' => $recruiterField !== null,
+                'manager_field_found' => $managerField !== null,
+                'team_field_found' => $teamField !== null,
+                'city_field_found' => $cityField !== null,
+                'team_field_name' => $teamField?->name ?? self::TEAM_FIELD_NAME,
+                'city_field_name' => $cityField?->name ?? self::CITY_FIELD_NAME,
+                'total_leads_count' => 0,
+                'recruiters' => [],
+            ];
+        }
+
+        $recruiterNames = $this->enumNamesById($recruiterField);
+        $recruiterEnumIdsByValue = $this->enumIdsByValue($recruiterField);
+        $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
+        $teamEnumIdsByValue = $this->enumIdsByValue($teamField);
+        $cityEnumIdsByValue = $this->enumIdsByValue($cityField);
+        $rows = [];
+        $totalLeads = 0;
+
+        CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, $from, $to, $recruiterField, $managerField, $teamField, $cityField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue): void {
+                foreach ($leads as $lead) {
+                    if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
+                        continue;
+                    }
+
+                    $customFields = $lead->custom_fields_values ?? [];
+
+                    if (! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                        continue;
+                    }
+
+                    $recruiterIds = $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue);
+
+                    if ($recruiterIds === []) {
+                        continue;
+                    }
+
+                    $teamValues = $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue);
+                    $cityValues = $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue);
+
+                    if ($teamValues === [] || $cityValues === []) {
+                        continue;
+                    }
+
+                    $totalLeads++;
+
+                    foreach ($recruiterIds as $recruiterId) {
+                        $rows[$recruiterId] ??= [
+                            'enum_id' => $recruiterId,
+                            'name' => $recruiterNames[$recruiterId] ?? "Значение {$recruiterId}",
+                            'total_leads_count' => 0,
+                            'teams' => [],
+                        ];
+                        $rows[$recruiterId]['total_leads_count']++;
+
+                        foreach ($teamValues as $teamValue) {
+                            $rows[$recruiterId]['teams'][$teamValue] ??= [
+                                'name' => $teamValue,
+                                'total_leads_count' => 0,
+                                'cities' => [],
+                            ];
+                            $rows[$recruiterId]['teams'][$teamValue]['total_leads_count']++;
+
+                            foreach ($cityValues as $cityValue) {
+                                $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue] ??= [
+                                    'name' => $cityValue,
+                                    'leads_count' => 0,
+                                ];
+                                $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['leads_count']++;
+                            }
+                        }
+                    }
+                }
+            });
+
+        $recruiters = collect($rows)
+            ->map(function (array $recruiter): array {
+                $recruiter['teams'] = collect($recruiter['teams'])
+                    ->map(function (array $team): array {
+                        $team['cities'] = collect($team['cities'])
+                            ->sortByDesc('leads_count')
+                            ->values()
+                            ->all();
+
+                        return $team;
+                    })
+                    ->sortByDesc('total_leads_count')
+                    ->values()
+                    ->all();
+
+                return $recruiter;
+            })
+            ->sortByDesc('total_leads_count')
+            ->values()
+            ->all();
+
+        return [
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
+            'recruiter_field_found' => true,
+            'manager_field_found' => true,
+            'team_field_found' => true,
+            'city_field_found' => true,
+            'team_field_name' => $teamField->name,
+            'city_field_name' => $cityField->name,
+            'total_leads_count' => $totalLeads,
+            'recruiters' => $recruiters,
+        ];
+    }
+
     private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
@@ -384,6 +526,24 @@ class AmoTaskStatisticsService
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
             data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
+        ]);
+    }
+
+    private function recruiterTeamCityBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_recruiter_team_city_breakdown',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+            data_get($config, 'pipeline_id') ?: 'all',
+            data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
+            data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
+            data_get($config, 'team_field_id') ?: data_get($config, 'team_field_name', self::TEAM_FIELD_NAME),
+            data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
         ]);
     }
 
@@ -435,6 +595,39 @@ class AmoTaskStatisticsService
     {
         return collect($this->recruiterFieldValues($customFields, $fieldId, $fieldName, $enumIdsByValue))
             ->contains(fn (array $value): bool => (int) $value['enum_id'] > 0 || trim((string) $value['value']) !== '');
+    }
+
+    private function leadField($fieldQuery, int $fieldId, string $fieldName): ?CrmCustomFieldSnapshot
+    {
+        return $fieldId > 0
+            ? (clone $fieldQuery)->where('amo_field_id', $fieldId)->first()
+            : (clone $fieldQuery)->where('name', $fieldName)->first();
+    }
+
+    private function enumIdsByValue(CrmCustomFieldSnapshot $field): array
+    {
+        return collect($field->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
+            ->all();
+    }
+
+    private function enumNamesById(CrmCustomFieldSnapshot $field): array
+    {
+        return collect($field->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->mapWithKeys(fn (array $enum): array => [(int) $enum['id'] => (string) $enum['value']])
+            ->all();
+    }
+
+    private function fieldValueLabels(array $customFields, int $fieldId, string $fieldName, array $enumIdsByValue): array
+    {
+        return collect($this->recruiterFieldValues($customFields, $fieldId, $fieldName, $enumIdsByValue))
+            ->map(fn (array $value): string => trim((string) $value['value']))
+            ->filter(fn (string $value): bool => $value !== '')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function normaliseRecruiterValue(mixed $value): string

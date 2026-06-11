@@ -66,6 +66,8 @@ type Props = {
         pipeline_id: number | string | null;
         recruiter_field_id: number | string | null;
         manager_field_id: number | string | null;
+        team_field_id: number | string | null;
+        city_field_id: number | string | null;
     };
     diagnostics: Diagnostics;
     pipelines: Pipeline[];
@@ -177,6 +179,32 @@ export default function WidgetSettings({ account, widget, config, diagnostics, p
                             Колонка “Передано менеджеру” считает сделки, где заполнены и рекрутер, и менеджер.
                         </span>
                     </label>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <label className="block">
+                            <span className="text-sm font-medium text-slate-700">Поле сделки с командой</span>
+                            <select className="mt-1 w-full rounded border-slate-300" defaultValue={config.team_field_id || ''} name="team_field_id">
+                                <option value="">Авто: поле “Команда”</option>
+                                {leadFields.map((field) => (
+                                    <option key={field.id} value={field.id}>
+                                        {field.name} · ID {field.id} · {field.field_type || 'без типа'}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+
+                        <label className="block">
+                            <span className="text-sm font-medium text-slate-700">Поле сделки с городом</span>
+                            <select className="mt-1 w-full rounded border-slate-300" defaultValue={config.city_field_id || ''} name="city_field_id">
+                                <option value="">Авто: поле “Город”</option>
+                                {leadFields.map((field) => (
+                                    <option key={field.id} value={field.id}>
+                                        {field.name} · ID {field.id} · {field.field_type || 'без типа'}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-3">
                         <button className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" type="submit">

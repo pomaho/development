@@ -1004,6 +1004,79 @@ class AmoServicesTest extends TestCase
         $this->assertSame('501', $diagnostics['sample_leads'][0]['id']);
     }
 
+    public function test_recruiter_team_city_breakdown_groups_manager_handoffs(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        foreach ([
+            [777, 'Рекрутер', [['id' => 1001, 'value' => 'Косыева Лилия'], ['id' => 1002, 'value' => 'Иван Рекрутер']]],
+            [778, 'Менеджер', [['id' => 2001, 'value' => 'Первый менеджер']]],
+            [779, 'Команда', [['id' => 3001, 'value' => 'Альфа'], ['id' => 3002, 'value' => 'Бетта']]],
+            [780, 'Город', [['id' => 4001, 'value' => 'Москва'], ['id' => 4002, 'value' => 'Омск'], ['id' => 4003, 'value' => 'Санкт-Петербург']]],
+        ] as [$fieldId, $name, $enums]) {
+            CrmCustomFieldSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'amo_field_id' => $fieldId,
+                'name' => $name,
+                'field_type' => 'select',
+                'enums' => $enums,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        foreach ([
+            ['id' => '501', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва'],
+            ['id' => '502', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Москва'],
+            ['id' => '503', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Омск'],
+            ['id' => '504', 'recruiter' => 'Косыева Лилия', 'manager' => 'Первый менеджер', 'team' => 'Бетта', 'city' => 'Санкт-Петербург'],
+            ['id' => '505', 'recruiter' => 'Иван Рекрутер', 'manager' => 'Первый менеджер', 'team' => 'Альфа', 'city' => 'Омск'],
+            ['id' => '506', 'recruiter' => 'Косыева Лилия', 'manager' => null, 'team' => 'Альфа', 'city' => 'Москва'],
+        ] as $lead) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => 10,
+                'status_id' => 111,
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => [
+                    ['field_id' => 777, 'field_name' => 'Рекрутер', 'values' => [['value' => $lead['recruiter']]]],
+                    ['field_id' => 778, 'field_name' => 'Менеджер', 'values' => $lead['manager'] === null ? [] : [['value' => $lead['manager']]]],
+                    ['field_id' => 779, 'field_name' => 'Команда', 'values' => [['value' => $lead['team']]]],
+                    ['field_id' => 780, 'field_name' => 'Город', 'values' => [['value' => $lead['city']]]],
+                ],
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $breakdown = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
+            ->recruiterTeamCityBreakdown($account, now()->subDays(7), now(), [
+                'pipeline_id' => 10,
+                'recruiter_field_id' => 777,
+                'manager_field_id' => 778,
+                'team_field_id' => 779,
+                'city_field_id' => 780,
+            ]);
+
+        $this->assertSame(5, $breakdown['total_leads_count']);
+        $this->assertSame('Косыева Лилия', $breakdown['recruiters'][0]['name']);
+        $this->assertSame(4, $breakdown['recruiters'][0]['total_leads_count']);
+        $this->assertSame('Альфа', $breakdown['recruiters'][0]['teams'][0]['name']);
+        $this->assertSame(3, $breakdown['recruiters'][0]['teams'][0]['total_leads_count']);
+        $this->assertSame('Москва', $breakdown['recruiters'][0]['teams'][0]['cities'][0]['name']);
+        $this->assertSame(2, $breakdown['recruiters'][0]['teams'][0]['cities'][0]['leads_count']);
+        $this->assertSame('Омск', $breakdown['recruiters'][0]['teams'][0]['cities'][1]['name']);
+        $this->assertSame(1, $breakdown['recruiters'][0]['teams'][0]['cities'][1]['leads_count']);
+        $this->assertSame('Иван Рекрутер', $breakdown['recruiters'][1]['name']);
+        $this->assertSame(1, $breakdown['recruiters'][1]['total_leads_count']);
+    }
+
     public function test_task_statistics_job_updates_incremental_cursor(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
