@@ -31,6 +31,8 @@ type RecruiterLeads = {
     field_name: string;
     field_id: number | null;
     field_found: boolean;
+    pipeline_id: number | null;
+    pipeline_name: string | null;
     total_leads_count: number;
     assigned_leads_count: number;
     recruiters: RecruiterLeadRow[];
@@ -141,7 +143,9 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                             <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">Сделки по рекрутеру</div>
                             <h2 className="mt-1 text-lg font-semibold text-slate-950">Поле “{recruiterLeads.field_name}”</h2>
                             <p className="mt-1 text-sm text-slate-500">
-                                Количество сделок, в которых выбрано каждое значение списка. Учитываются все этапы, включая успешные и закрытые нереализованные.
+                                Количество сделок, в которых выбрано каждое значение списка.
+                                Воронка: {recruiterLeads.pipeline_name || (recruiterLeads.pipeline_id ? `ID ${recruiterLeads.pipeline_id}` : 'все воронки')}.
+                                Учитываются все этапы, включая успешные и закрытые нереализованные.
                             </p>
                         </div>
                         <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-right">

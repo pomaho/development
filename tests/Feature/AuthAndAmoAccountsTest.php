@@ -808,7 +808,66 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('account.name', 'Client')
                 ->where('widgets.0.code', 'users_count')
                 ->where('widgets.0.component_key', 'metric.users')
-                ->has('widgets.0.installation.public_key'));
+                ->has('widgets.0.installation.public_key')
+                ->has('widgets.0.installation.settings_url'));
+    }
+
+    public function test_admin_can_configure_dashboard_widget_report_settings(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $widget = DashboardWidget::query()->create([
+            'code' => 'task_overdue_dashboard',
+            'name' => 'Просроченные выполненные задачи',
+            'component_key' => 'amo_iframe_task_overdue_dashboard',
+            'sort_order' => 70,
+            'is_enabled' => true,
+        ]);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Массовый подбор',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Widgets/Settings')
+                ->where('pipelines.0.id', 10)
+                ->where('leadFields.0.id', 777));
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
+                'pipeline_id' => 10,
+                'recruiter_field_id' => 777,
+            ])
+            ->assertRedirect("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings");
+
+        $installation = AmoAccountDashboardWidget::query()->where('amo_account_id', $account->id)->where('dashboard_widget_id', $widget->id)->firstOrFail();
+        $this->assertSame(10, $installation->config['pipeline_id']);
+        $this->assertSame('Массовый подбор', $installation->config['pipeline_name']);
+        $this->assertSame(777, $installation->config['recruiter_field_id']);
+        $this->assertSame('Рекрутер', $installation->config['recruiter_field_name']);
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/widgets/{$widget->id}/settings", [
+                'pipeline_id' => 10,
+                'recruiter_field_id' => 777,
+            ])
+            ->assertForbidden();
     }
 
     public function test_public_task_overdue_widget_uses_account_installation_key(): void
@@ -827,6 +886,12 @@ class AuthAndAmoAccountsTest extends TestCase
             'dashboard_widget_id' => $widget->id,
             'public_key' => 'public-widget-key',
             'is_enabled' => true,
+            'config' => [
+                'pipeline_id' => 10,
+                'pipeline_name' => 'Массовый подбор',
+                'recruiter_field_id' => 777,
+                'recruiter_field_name' => 'Рекрутер',
+            ],
         ]);
         AmoUsersSnapshot::query()->create([
             'amo_account_id' => $account->id,
@@ -854,15 +919,17 @@ class AuthAndAmoAccountsTest extends TestCase
             'synced_at' => now(),
         ]);
         foreach ([
-            ['id' => 501, 'name' => 'Lead 1', 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
-            ['id' => 502, 'name' => 'Lead 2', 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
-            ['id' => 503, 'name' => 'Lead 3', 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер'],
+            ['id' => 501, 'name' => 'Lead 1', 'pipeline_id' => 10, 'status_id' => 111, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
+            ['id' => 502, 'name' => 'Lead 2', 'pipeline_id' => 10, 'status_id' => 142, 'recruiter_enum_id' => 1001, 'recruiter' => 'Иван Рекрутер'],
+            ['id' => 503, 'name' => 'Lead 3', 'pipeline_id' => 10, 'status_id' => 143, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер'],
+            ['id' => 504, 'name' => 'Other Pipeline Lead', 'pipeline_id' => 20, 'status_id' => 111, 'recruiter_enum_id' => 1002, 'recruiter' => 'Мария Рекрутер'],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
                 'entity_type' => 'leads',
                 'external_id' => (string) $lead['id'],
                 'name' => $lead['name'],
+                'pipeline_id' => $lead['pipeline_id'],
                 'status_id' => $lead['status_id'],
                 'entity_created_at' => now()->subDay(),
                 'custom_fields_values' => [[
@@ -901,6 +968,8 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertJsonPath('groups.0.users.0.name', 'Manager')
             ->assertJsonPath('groups.0.users.0.completed_overdue_count', 1)
             ->assertJsonPath('recruiterLeads.field_name', 'Рекрутер')
+            ->assertJsonPath('recruiterLeads.pipeline_id', 10)
+            ->assertJsonPath('recruiterLeads.pipeline_name', 'Массовый подбор')
             ->assertJsonPath('recruiterLeads.total_leads_count', 3)
             ->assertJsonPath('recruiterLeads.assigned_leads_count', 3)
             ->assertJsonPath('recruiterLeads.recruiters.0.name', 'Иван Рекрутер')

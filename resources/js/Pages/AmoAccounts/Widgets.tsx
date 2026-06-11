@@ -16,6 +16,7 @@ type Widget = {
     installation: {
         public_key: string;
         is_enabled: boolean;
+        settings_url: string;
         iframe_url: string | null;
         api_url: string | null;
     };
@@ -75,6 +76,7 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
                                 <th>Порядок</th>
                                 <th>Статус</th>
                                 <th>Ключ клиента</th>
+                                <th>Настройки</th>
                                 <th>Iframe URL</th>
                             </tr>
                         </thead>
@@ -87,6 +89,11 @@ export default function AmoAccountWidgets({ account, widgets, links }: Props) {
                                     <td>{widget.sort_order}</td>
                                     <td>{widget.is_enabled && widget.installation.is_enabled ? 'enabled' : 'disabled'}</td>
                                     <td className="font-mono text-xs">{widget.installation.public_key}</td>
+                                    <td>
+                                        <a className="text-blue-700 hover:text-blue-900" href={widget.installation.settings_url}>
+                                            Настроить
+                                        </a>
+                                    </td>
                                     <td className="max-w-xl">
                                         {widget.installation.iframe_url ? (
                                             <div className="space-y-1">

@@ -864,15 +864,17 @@ class AmoServicesTest extends TestCase
         ]);
 
         foreach ([
-            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111],
-            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142],
-            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143],
+            ['id' => '501', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 111, 'pipeline_id' => 10],
+            ['id' => '502', 'enum_id' => 1001, 'value' => 'Иван Рекрутер', 'status_id' => 142, 'pipeline_id' => 10],
+            ['id' => '503', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 143, 'pipeline_id' => 10],
+            ['id' => '504', 'enum_id' => 1002, 'value' => 'Мария Рекрутер', 'status_id' => 111, 'pipeline_id' => 20],
         ] as $lead) {
             CrmEntitySnapshot::query()->create([
                 'amo_account_id' => $account->id,
                 'entity_type' => 'leads',
                 'external_id' => $lead['id'],
                 'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => $lead['pipeline_id'],
                 'status_id' => $lead['status_id'],
                 'entity_created_at' => now()->subDay(),
                 'custom_fields_values' => [[
@@ -889,9 +891,16 @@ class AmoServicesTest extends TestCase
         }
 
         $distribution = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
-            ->recruiterLeadDistribution($account, now()->subDays(7), now());
+            ->recruiterLeadDistribution($account, now()->subDays(7), now(), [
+                'pipeline_id' => 10,
+                'pipeline_name' => 'Массовый подбор',
+                'recruiter_field_id' => 777,
+                'recruiter_field_name' => 'Рекрутер',
+            ]);
 
         $this->assertTrue($distribution['field_found']);
+        $this->assertSame(10, $distribution['pipeline_id']);
+        $this->assertSame('Массовый подбор', $distribution['pipeline_name']);
         $this->assertSame(3, $distribution['total_leads_count']);
         $this->assertSame(3, $distribution['assigned_leads_count']);
         $this->assertSame('Иван Рекрутер', $distribution['recruiters'][0]['name']);

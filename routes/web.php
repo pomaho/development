@@ -56,6 +56,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/dashboard', DashboardController::class)->name('amo-accounts.dashboard');
     Route::get('/amo-accounts/{amo_account}/integrations', AmoAccountIntegrationsController::class)->name('amo-accounts.integrations');
     Route::get('/amo-accounts/{amo_account}/widgets', AmoAccountWidgetsController::class)->name('amo-accounts.widgets');
+    Route::get('/amo-accounts/{amo_account}/widgets/{dashboard_widget}/settings', [AmoAccountWidgetsController::class, 'settings'])->name('amo-accounts.widgets.settings');
+    Route::post('/amo-accounts/{amo_account}/widgets/{dashboard_widget}/settings', [AmoAccountWidgetsController::class, 'updateSettings'])->name('amo-accounts.widgets.settings.update');
     Route::get('/amo-accounts/{amo_account}/catalogs', [AmoCatalogsController::class, 'index'])->name('amo-accounts.catalogs.index');
     Route::post('/amo-accounts/{amo_account}/catalogs', [AmoCatalogsController::class, 'storeCatalog'])->name('amo-accounts.catalogs.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/elements', [AmoCatalogsController::class, 'storeElements'])->name('amo-accounts.catalogs.elements.store');

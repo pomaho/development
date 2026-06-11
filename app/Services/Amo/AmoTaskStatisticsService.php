@@ -138,22 +138,27 @@ class AmoTaskStatisticsService
         Cache::put($this->dashboardCacheVersionKey($account), now()->timestamp, now()->addDays(2));
     }
 
-    public function recruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function recruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
         return Cache::remember(
-            $this->recruiterLeadDistributionCacheKey($account, $from, $to),
+            $this->recruiterLeadDistributionCacheKey($account, $from, $to, $config),
             now()->addMinutes(10),
-            fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to),
+            fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to, $config),
         );
     }
 
-    private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
-        $field = CrmCustomFieldSnapshot::query()
+        $fieldId = (int) data_get($config, 'recruiter_field_id', 0);
+        $fieldName = (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME);
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $pipelineName = data_get($config, 'pipeline_name');
+        $fieldQuery = CrmCustomFieldSnapshot::query()
             ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'leads')
-            ->where('name', self::RECRUITER_FIELD_NAME)
-            ->first();
+            ->where('entity_type', 'leads');
+        $field = $fieldId > 0
+            ? (clone $fieldQuery)->where('amo_field_id', $fieldId)->first()
+            : $fieldQuery->where('name', $fieldName)->first();
         $enums = collect($field?->enums ?? [])
             ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
             ->mapWithKeys(fn (array $enum): array => [(int) $enum['id'] => [
@@ -165,9 +170,11 @@ class AmoTaskStatisticsService
 
         if ($field === null) {
             return [
-                'field_name' => self::RECRUITER_FIELD_NAME,
+                'field_name' => $fieldName,
                 'field_id' => null,
                 'field_found' => false,
+                'pipeline_id' => $pipelineId ?: null,
+                'pipeline_name' => $pipelineName,
                 'total_leads_count' => 0,
                 'assigned_leads_count' => 0,
                 'recruiters' => [],
@@ -180,8 +187,9 @@ class AmoTaskStatisticsService
         CrmEntitySnapshot::query()
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $from, $to): void {
+            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$totalLeads, $field, $fieldName, $from, $to): void {
                 foreach ($leads as $lead) {
                     if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
                         continue;
@@ -190,7 +198,7 @@ class AmoTaskStatisticsService
                     $totalLeads++;
                     $leadId = (string) $lead->external_id;
 
-                    foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, self::RECRUITER_FIELD_NAME) as $enumId) {
+                    foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, $fieldName) as $enumId) {
                         $leadIdsByEnum[$enumId][$leadId] = true;
                     }
                 }
@@ -211,9 +219,11 @@ class AmoTaskStatisticsService
             ->all();
 
         return [
-            'field_name' => self::RECRUITER_FIELD_NAME,
+            'field_name' => $field->name,
             'field_id' => (int) $field->amo_field_id,
             'field_found' => true,
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
             'total_leads_count' => $totalLeads,
             'assigned_leads_count' => collect($leadIdsByEnum)
                 ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
@@ -223,7 +233,7 @@ class AmoTaskStatisticsService
         ];
     }
 
-    private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -233,6 +243,8 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            data_get($config, 'pipeline_id') ?: 'all',
+            data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
         ]);
     }
 
