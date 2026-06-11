@@ -19,6 +19,7 @@ class CrmAuditService
     {
         $structure = $this->syncStructure($account, $pipelineId);
         $data = $this->syncOperationalData($account, $from, $to, $pipelineId);
+        $this->refreshDashboardCache($account);
 
         return array_merge($structure, $data);
     }
@@ -66,6 +67,7 @@ class CrmAuditService
         $counts['loss_reasons'] = $this->syncSimpleEntity($account, 'loss_reasons', '/api/v4/leads/loss_reasons', 'loss_reasons', $syncedAt);
         $counts['sources'] = $this->syncSimpleEntity($account, 'sources', '/api/v4/sources', 'sources', $syncedAt);
         $counts['catalogs'] = $this->syncSimpleEntity($account, 'catalogs', '/api/v4/catalogs', 'catalogs', $syncedAt);
+        $this->refreshDashboardCache($account);
 
         return $counts;
     }
@@ -263,6 +265,11 @@ class CrmAuditService
     private function timestamp(mixed $timestamp): ?Carbon
     {
         return $timestamp ? Carbon::createFromTimestamp((int) $timestamp) : null;
+    }
+
+    private function refreshDashboardCache(AmoAccount $account): void
+    {
+        app(AmoTaskStatisticsService::class)->refreshDashboardCacheVersion($account);
     }
 
     private function entityCount(AmoAccount $account, string $entityType): int

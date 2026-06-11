@@ -135,7 +135,7 @@ class AmoTaskStatisticsService
 
     public function refreshDashboardCacheVersion(AmoAccount $account): void
     {
-        Cache::put($this->dashboardCacheVersionKey($account), now()->timestamp, now()->addDays(2));
+        Cache::put($this->dashboardCacheVersionKey($account), (string) now()->getPreciseTimestamp(6), now()->addDays(2));
     }
 
     public function recruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array

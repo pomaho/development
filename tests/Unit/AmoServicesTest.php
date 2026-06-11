@@ -998,6 +998,81 @@ class AmoServicesTest extends TestCase
         $this->assertDatabaseMissing('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '200']);
     }
 
+    public function test_crm_audit_sync_refreshes_recruiter_dashboard_cache(): void
+    {
+        Cache::flush();
+
+        $account = $this->accountWithToken('abcdef123456');
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'enums' => [['id' => 1001, 'value' => 'Иван Рекрутер']],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $statistics = app(AmoTaskStatisticsService::class);
+        $from = now()->subDays(7);
+        $to = now();
+        $config = [
+            'pipeline_id' => 10,
+            'pipeline_name' => 'Массовый подбор',
+            'recruiter_field_id' => 777,
+            'recruiter_field_name' => 'Рекрутер',
+        ];
+
+        $this->assertSame(0, $statistics->recruiterLeadDistribution($account, $from, $to, $config)['assigned_leads_count']);
+
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')->with($account, '/api/v4/leads/pipelines', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['pipelines' => [[
+                'id' => 10,
+                'name' => 'Массовый подбор',
+                'sort' => 1,
+                '_embedded' => ['statuses' => [['id' => 20, 'name' => 'New', 'sort' => 10]]],
+            ]]],
+        ]);
+        foreach (['leads', 'contacts', 'companies'] as $entityType) {
+            $http->shouldReceive('get')->with($account, "/api/v4/{$entityType}/custom_fields", Mockery::any())->andReturn([
+                '_page' => 1,
+                '_embedded' => ['custom_fields' => []],
+            ]);
+        }
+        foreach ([
+            ['/api/v4/leads/loss_reasons', 'loss_reasons'],
+            ['/api/v4/sources', 'sources'],
+            ['/api/v4/catalogs', 'catalogs'],
+        ] as [$path, $key]) {
+            $http->shouldReceive('get')->with($account, $path, Mockery::any())->andReturn([
+                '_page' => 1,
+                '_embedded' => [$key => []],
+            ]);
+        }
+        $http->shouldReceive('get')->with($account, '/api/v4/leads', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_embedded' => ['leads' => [[
+                'id' => 100,
+                'name' => 'Lead',
+                'pipeline_id' => 10,
+                'status_id' => 20,
+                'created_at' => now()->subDay()->timestamp,
+                'custom_fields_values' => [[
+                    'field_id' => 777,
+                    'field_name' => 'Рекрутер',
+                    'values' => [['enum_id' => 1001, 'value' => 'Иван Рекрутер']],
+                ]],
+            ]]],
+        ]);
+
+        (new CrmAuditService($http))->syncAll($account, $from, $to, 10);
+
+        $this->assertSame(1, $statistics->recruiterLeadDistribution($account, $from, $to, $config)['assigned_leads_count']);
+    }
+
     public function test_oauth_refresh_saves_new_refresh_token(): void
     {
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');
