@@ -1368,6 +1368,21 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('focus:border-brand-300 focus:ring-brand-500/10', $catalogs.$settings);
     }
 
+    public function test_support_pages_use_tailadmin_surfaces(): void
+    {
+        $responsibility = file_get_contents(resource_path('js/Pages/AmoAccounts/ResponsibilityRedistribution/Index.tsx'));
+        $login = file_get_contents(resource_path('js/Pages/Auth/Login.tsx'));
+        $register = file_get_contents(resource_path('js/Pages/Auth/Register.tsx'));
+        $oauthIndex = file_get_contents(resource_path('js/Pages/OAuth/External/Index.tsx'));
+        $oauthShow = file_get_contents(resource_path('js/Pages/OAuth/External/Show.tsx'));
+
+        $this->assertStringContainsString('shadow-theme-sm', $responsibility);
+        $this->assertStringContainsString('shadow-theme-sm', $login);
+        $this->assertStringContainsString('shadow-theme-sm', $register);
+        $this->assertStringContainsString('shadow-theme-sm', $oauthIndex);
+        $this->assertStringContainsString('shadow-theme-sm', $oauthShow);
+    }
+
     public function test_task_statistics_command_queues_sync_without_duplicate_fresh_run(): void
     {
         Queue::fake();

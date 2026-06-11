@@ -50,31 +50,31 @@ export default function OAuthExternalIndex({ connections, links }: Props) {
             <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-semibold">OAuth-подключение amoCRM</h1>
-                    <p className="mt-1 text-sm text-slate-600">История установок через публичную кнопку интеграции.</p>
+                    <p className="mt-1 text-theme-sm text-gray-600">История установок через публичную кнопку интеграции.</p>
                 </div>
-                <a className="rounded bg-blue-700 px-4 py-2 text-sm text-white hover:bg-blue-800" href={links.install} rel="noreferrer" target="_blank">
+                <a className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" href={links.install} rel="noreferrer" target="_blank">
                     Открыть публичную страницу установки
                 </a>
             </div>
 
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="text-slate-500">
+                        <thead className="text-gray-500">
                             <tr><th className="py-2">Клиент</th><th>Домен</th><th>Статус</th><th>Создано</th><th>Аккаунт</th><th>Действия</th></tr>
                         </thead>
                         <tbody>
                             {connections.data.length > 0 ? connections.data.map((connection) => (
-                                <tr className="border-t border-slate-100" key={connection.id}>
+                                <tr className="border-t border-gray-100" key={connection.id}>
                                     <td className="py-2 font-medium">{connection.name || '-'}</td>
                                     <td>{connection.base_domain || '-'}</td>
                                     <td>{connection.status}</td>
                                     <td>{connection.created_at || '-'}</td>
-                                    <td>{connection.account ? <a className="text-blue-700" href={connection.account.url}>{connection.account.name}</a> : '-'}</td>
-                                    <td><a className="text-blue-700" href={connection.url}>открыть</a></td>
+                                    <td>{connection.account ? <a className="text-brand-600" href={connection.account.url}>{connection.account.name}</a> : '-'}</td>
+                                    <td><a className="text-brand-600" href={connection.url}>открыть</a></td>
                                 </tr>
                             )) : (
-                                <tr><td className="py-4 text-slate-500" colSpan={6}>OAuth-подключений пока нет.</td></tr>
+                                <tr><td className="py-4 text-gray-500" colSpan={6}>OAuth-подключений пока нет.</td></tr>
                             )}
                         </tbody>
                     </table>

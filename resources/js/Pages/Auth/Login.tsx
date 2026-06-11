@@ -19,28 +19,28 @@ export default function Login({ links, registrationEnabled }: Props) {
 
     return (
         <GuestLayout title="Вход">
-            <div className="mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mx-auto max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-theme-sm">
                 <form action={links.login} className="space-y-4" method="post">
                     <input name="_token" type="hidden" value={csrf} />
                     <label className="block text-sm">
                         <span>Email</span>
-                        <input autoFocus className="mt-1 w-full rounded border-slate-300" name="email" required type="email" />
+                        <input autoFocus className="mt-1 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" name="email" required type="email" />
                         {props.errors?.email ? <div className="mt-1 text-xs text-red-700">{props.errors.email}</div> : null}
                     </label>
                     <label className="block text-sm">
                         <span>Пароль</span>
-                        <input className="mt-1 w-full rounded border-slate-300" name="password" required type="password" />
+                        <input className="mt-1 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" name="password" required type="password" />
                         {props.errors?.password ? <div className="mt-1 text-xs text-red-700">{props.errors.password}</div> : null}
                     </label>
                     <label className="flex items-center gap-2 text-sm">
-                        <input className="rounded border-slate-300" name="remember" type="checkbox" />
+                        <input className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" name="remember" type="checkbox" />
                         <span>Запомнить</span>
                     </label>
-                    <button className="w-full rounded bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800" type="submit">Войти</button>
+                    <button className="w-full inline-flex h-10 items-center justify-center rounded-lg bg-brand-500 px-4 font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">Войти</button>
                 </form>
                 {registrationEnabled ? (
                     <div className="mt-4 text-center text-sm">
-                        <a className="text-blue-700 hover:text-blue-900" href={links.register}>Создать аккаунт</a>
+                        <a className="text-brand-600 hover:text-brand-700" href={links.register}>Создать аккаунт</a>
                     </div>
                 ) : null}
             </div>
