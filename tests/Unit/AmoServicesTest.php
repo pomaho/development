@@ -975,7 +975,17 @@ class AmoServicesTest extends TestCase
             ->with($account, '/api/v4/leads', Mockery::on(fn (array $query): bool => (int) $query['filter[pipeline_id]'] === 10))
             ->andReturn([
                 '_page' => 1,
-                '_embedded' => ['leads' => [['id' => 100, 'name' => 'Lead', 'pipeline_id' => 10, 'status_id' => 20]]],
+                '_embedded' => ['leads' => []],
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/leads', Mockery::on(fn (array $query): bool => ! isset($query['filter[pipeline_id]'])))
+            ->andReturn([
+                '_page' => 1,
+                '_embedded' => ['leads' => [
+                    ['id' => 100, 'name' => 'Lead', 'pipeline_id' => 10, 'status_id' => 20],
+                    ['id' => 200, 'name' => 'Other Lead', 'pipeline_id' => 99, 'status_id' => 88],
+                ]],
             ]);
 
         $counts = (new CrmAuditService($http))->syncAll($account, null, null, 10);
@@ -985,6 +995,7 @@ class AmoServicesTest extends TestCase
         $this->assertDatabaseHas('crm_pipelines_snapshots', ['amo_pipeline_id' => 10, 'name' => 'Target']);
         $this->assertDatabaseMissing('crm_pipelines_snapshots', ['amo_pipeline_id' => 99]);
         $this->assertDatabaseHas('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '100', 'pipeline_id' => 10]);
+        $this->assertDatabaseMissing('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '200']);
     }
 
     public function test_oauth_refresh_saves_new_refresh_token(): void

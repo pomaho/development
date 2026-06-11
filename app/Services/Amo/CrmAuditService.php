@@ -81,8 +81,22 @@ class CrmAuditService
         ];
 
         if ($pipelineId !== null) {
+            $leads = $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, $leadQuery);
+
+            if ($leads === 0) {
+                $leads = $this->syncSimpleEntity(
+                    $account,
+                    'leads',
+                    '/api/v4/leads',
+                    'leads',
+                    $syncedAt,
+                    ['with' => 'contacts,loss_reason,source', ...$periodQuery],
+                    fn (array $lead): bool => (int) ($lead['pipeline_id'] ?? 0) === $pipelineId
+                );
+            }
+
             return [
-                'leads' => $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, $leadQuery),
+                'leads' => $leads,
             ];
         }
 
@@ -201,11 +215,16 @@ class CrmAuditService
         string $path,
         string $embeddedKey,
         Carbon $syncedAt,
-        array $query = []
+        array $query = [],
+        ?callable $filter = null
     ): int {
         $count = 0;
 
         foreach ($this->fetchPaginated($account, $path, $embeddedKey, $query) as $entity) {
+            if ($filter !== null && ! $filter($entity)) {
+                continue;
+            }
+
             CrmEntitySnapshot::query()->updateOrCreate(
                 ['amo_account_id' => $account->id, 'entity_type' => $entityType, 'external_id' => (string) ($entity['id'] ?? md5(json_encode($entity)))],
                 [
