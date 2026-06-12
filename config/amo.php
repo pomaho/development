@@ -21,4 +21,7 @@ return [
     ],
     'api_log_retention_days' => (int) env('API_LOG_RETENTION_DAYS', 30),
     'api_log_payload_max_bytes' => (int) env('API_LOG_PAYLOAD_MAX_BYTES', 16384),
+    'widgets' => [
+        'frame_ancestors' => env('AMO_WIDGET_FRAME_ANCESTORS', 'https://*.amocrm.ru https://*.amocrm.com https://*.kommo.com'),
+    ],
 ];

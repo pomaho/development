@@ -344,6 +344,18 @@ zip -r sonic-expert-task-overdue-dashboard.zip manifest.json script.js style.css
 Ключ клиента: public_key из страницы Dashboard-блоки
 ```
 
+Iframe-отчет защищен CSP `frame-ancestors`, чтобы его можно было открыть только из amoCRM/Kommo. По умолчанию:
+
+```env
+AMO_WIDGET_FRAME_ANCESTORS="https://*.amocrm.ru https://*.amocrm.com https://*.kommo.com"
+```
+
+Для более строгого режима на production можно указать конкретный домен клиента:
+
+```env
+AMO_WIDGET_FRAME_ANCESTORS="https://company.amocrm.ru"
+```
+
 Если amoCRM-аккаунт не поддерживает placement на рабочем столе, используйте fallback `widget_page`: тот же iframe-отчет будет открываться как отдельная страница виджета внутри amoCRM.
 
 Модуль воронок использует amoCRM API:

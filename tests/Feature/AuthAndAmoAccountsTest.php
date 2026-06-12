@@ -1201,6 +1201,31 @@ class AuthAndAmoAccountsTest extends TestCase
         }
     }
 
+    public function test_public_task_widget_sets_frame_ancestors_csp(): void
+    {
+        config(['amo.widgets.frame_ancestors' => 'https://*.amocrm.ru https://*.kommo.com']);
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $widget = DashboardWidget::query()->create([
+            'code' => 'task_overdue_dashboard',
+            'name' => 'Просроченные выполненные задачи',
+            'component_key' => 'amo_iframe_task_overdue_dashboard',
+            'sort_order' => 70,
+            'is_enabled' => true,
+        ]);
+        $installation = AmoAccountDashboardWidget::query()->create([
+            'amo_account_id' => $account->id,
+            'dashboard_widget_id' => $widget->id,
+            'public_key' => 'public-widget-key',
+            'is_enabled' => true,
+        ]);
+
+        $this->get("/widgets/amo/{$installation->public_key}/task-overdue-dashboard")
+            ->assertOk()
+            ->assertHeader('Content-Security-Policy', 'frame-ancestors https://*.amocrm.ru https://*.kommo.com')
+            ->assertHeaderMissing('X-Frame-Options');
+    }
+
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));

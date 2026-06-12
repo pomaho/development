@@ -41,8 +41,10 @@ Route::post('/amo-oauth/external/secrets', [AmoExternalOAuthController::class, '
 Route::get('/amo-oauth/callback', [AmoExternalOAuthController::class, 'callback'])->name('amo-oauth.callback');
 Route::get('/install', [AmoExternalOAuthController::class, 'install'])->name('amo-oauth.install');
 Route::get('/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'show'])
+    ->middleware('amo-widget-frame-policy')
     ->name('widgets.amo.task-overdue-dashboard.show');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'json'])
+    ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard.show');
 
 Route::middleware('auth')->group(function (): void {
