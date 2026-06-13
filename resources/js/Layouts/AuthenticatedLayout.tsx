@@ -65,6 +65,7 @@ type Props = {
             sync_center?: string;
             analytics_center?: string;
             automation_center?: string;
+            crm_structure_center?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -90,6 +91,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const syncCenterHref = currentAccount ? currentLinks?.sync_center || `/amo-accounts/${currentAccount.id}/sync` : null;
     const analyticsCenterHref = currentAccount ? currentLinks?.analytics_center || `/amo-accounts/${currentAccount.id}/analytics` : null;
     const automationCenterHref = currentAccount ? currentLinks?.automation_center || `/amo-accounts/${currentAccount.id}/automation` : null;
+    const crmStructureCenterHref = currentAccount ? currentLinks?.crm_structure_center || `/amo-accounts/${currentAccount.id}/crm-structure` : null;
     const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
@@ -124,6 +126,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     ] : [];
 
     const crmStructureLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(crmStructureCenterHref ? [{ label: 'Центр структуры', href: crmStructureCenterHref, icon: <ListTree />, active: url === `/amo-accounts/${currentAccount.id}/crm-structure` }] : []),
         { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 />, active: url.includes('/pipelines') },
         ...(crmFieldsHref ? [{ label: 'Поля CRM', href: crmFieldsHref, icon: <ShieldCheck />, active: url.includes('/crm-audit/fields') }] : []),
         ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree />, active: url.includes('/catalogs') }] : []),

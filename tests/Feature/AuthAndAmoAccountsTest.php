@@ -1440,6 +1440,80 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('can.sync', false));
     }
 
+    public function test_amo_crm_structure_center_groups_metadata_sections(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Sales',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmPipelineStatusSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'amo_status_id' => 20,
+            'name' => 'New',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 100,
+            'name' => 'Recruiter',
+            'field_type' => 'select',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'catalogs',
+            'external_id' => 'catalog-1',
+            'name' => 'Sources',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        AmoUsersSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_user_id' => 1,
+            'name' => 'Manager',
+            'rights' => [],
+            'is_admin' => false,
+            'is_active' => true,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        AmoRolesSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_role_id' => 1,
+            'name' => 'Admin',
+            'rights' => [],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/crm-structure")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/CrmStructureCenter/Index')
+                ->where('account.name', 'Client')
+                ->where('summary.pipelines_count', 1)
+                ->where('summary.statuses_count', 1)
+                ->where('summary.custom_fields_count', 1)
+                ->where('summary.catalogs_count', 1)
+                ->where('summary.users_count', 1)
+                ->where('summary.roles_count', 1)
+                ->has('links.current_account.pipelines')
+                ->has('links.current_account.crm_fields')
+                ->has('links.current_account.catalogs')
+                ->has('links.current_account.users')
+                ->has('links.current_account.roles'));
+    }
+
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));
