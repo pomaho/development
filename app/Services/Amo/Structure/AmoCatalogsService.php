@@ -43,7 +43,7 @@ class AmoCatalogsService
 
     public function fetchCatalogElements(AmoAccount $account, int $catalogId): array
     {
-        return $this->fetchPaginated($account, "/api/v4/catalogs/{$catalogId}/elements", 'elements');
+        return $this->fetchPaginated($account, "/api/v4/catalogs/{$catalogId}/elements", ['elements', 'catalog_elements']);
     }
 
     public function previewComposedElementNames(AmoAccount $account, int $parentCatalogId, int $childCatalogId, string $template, array $manualMappings = []): array
@@ -208,10 +208,11 @@ class AmoCatalogsService
         ]);
     }
 
-    private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array
+    private function fetchPaginated(AmoAccount $account, string $path, string|array $embeddedKey, array $query = []): array
     {
         $items = [];
         $page = 1;
+        $embeddedKeys = (array) $embeddedKey;
 
         do {
             $response = $this->http->get($account, $path, array_merge($query, [
@@ -219,7 +220,13 @@ class AmoCatalogsService
                 'limit' => 250,
             ]));
 
-            $items = array_merge($items, $response['_embedded'][$embeddedKey] ?? []);
+            foreach ($embeddedKeys as $key) {
+                if (isset($response['_embedded'][$key])) {
+                    $items = array_merge($items, $response['_embedded'][$key]);
+                    break;
+                }
+            }
+
             $pageCount = (int) ($response['_page_count'] ?? $page);
             $page++;
         } while ($page <= $pageCount);

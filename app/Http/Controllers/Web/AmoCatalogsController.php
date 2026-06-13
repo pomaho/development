@@ -16,7 +16,7 @@ class AmoCatalogsController extends Controller
     {
         $catalogs = [];
         $enumFields = [];
-        $error = null;
+        $error = session('catalogs_error');
 
         try {
             $catalogs = $catalogsService->fetchCatalogs($amoAccount);
@@ -112,13 +112,20 @@ class AmoCatalogsController extends Controller
         $this->authorize('sync', $amoAccount);
 
         $data = $this->validatedComposeData($request);
-        $preview = $catalogsService->previewComposedElementNames(
-            $amoAccount,
-            (int) $data['parent_catalog_id'],
-            (int) $data['child_catalog_id'],
-            $data['template'],
-            $this->parseMappings($data['mappings'] ?? '')
-        );
+
+        try {
+            $preview = $catalogsService->previewComposedElementNames(
+                $amoAccount,
+                (int) $data['parent_catalog_id'],
+                (int) $data['child_catalog_id'],
+                $data['template'],
+                $this->parseMappings($data['mappings'] ?? '')
+            );
+        } catch (\Throwable $exception) {
+            return back()
+                ->with('catalogs_compose_form', $this->composeForm($data))
+                ->with('catalogs_error', $exception->getMessage());
+        }
 
         return back()
             ->with('catalogs_compose_preview', $preview)
@@ -131,13 +138,20 @@ class AmoCatalogsController extends Controller
         $this->authorize('sync', $amoAccount);
 
         $data = $this->validatedComposeData($request);
-        $result = $catalogsService->applyComposedElementNames(
-            $amoAccount,
-            (int) $data['parent_catalog_id'],
-            (int) $data['child_catalog_id'],
-            $data['template'],
-            $this->parseMappings($data['mappings'] ?? '')
-        );
+
+        try {
+            $result = $catalogsService->applyComposedElementNames(
+                $amoAccount,
+                (int) $data['parent_catalog_id'],
+                (int) $data['child_catalog_id'],
+                $data['template'],
+                $this->parseMappings($data['mappings'] ?? '')
+            );
+        } catch (\Throwable $exception) {
+            return back()
+                ->with('catalogs_compose_form', $this->composeForm($data))
+                ->with('catalogs_error', $exception->getMessage());
+        }
 
         return back()
             ->with('catalogs_compose_preview', $result)

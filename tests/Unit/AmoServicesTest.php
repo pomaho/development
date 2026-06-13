@@ -209,7 +209,7 @@ class AmoServicesTest extends TestCase
                         '_page' => 1,
                         '_page_count' => 1,
                         '_embedded' => [
-                            'elements' => [
+                            'catalog_elements' => [
                                 ['id' => 501, 'name' => 'Командор'],
                             ],
                         ],
@@ -220,7 +220,7 @@ class AmoServicesTest extends TestCase
                     '_page' => 1,
                     '_page_count' => 1,
                     '_embedded' => [
-                        'elements' => [
+                        'catalog_elements' => [
                             ['id' => 701, 'name' => 'Железногорск', 'parent_id' => 501],
                             ['id' => 702, 'name' => 'Командор Омск', 'parent_id' => 501],
                             ['id' => 703, 'name' => 'Без связи'],

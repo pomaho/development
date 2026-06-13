@@ -2026,6 +2026,39 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_catalog_compose_preview_keeps_api_errors_on_page(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+
+        $catalogsService = Mockery::mock(AmoCatalogsService::class);
+        $catalogsService->shouldReceive('previewComposedElementNames')
+            ->once()
+            ->andThrow(new \RuntimeException('amoCRM API error. Status: 400'));
+        $catalogsService->shouldReceive('fetchCatalogs')->once()->andReturn([]);
+        $catalogsService->shouldReceive('fetchEnumCustomFields')->once()->andReturn([]);
+        $this->app->instance(AmoCatalogsService::class, $catalogsService);
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs/elements/compose-preview", [
+                'parent_catalog_id' => 1001,
+                'child_catalog_id' => 1002,
+                'template' => '{parent} {child}',
+                'mappings' => '',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('catalogs_error', 'amoCRM API error. Status: 400');
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/catalogs")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/Catalogs/Index')
+                ->where('error', 'amoCRM API error. Status: 400')
+                ->where('composeForm.parent_catalog_id', '1001')
+                ->where('composeForm.child_catalog_id', '1002'));
+    }
+
     public function test_leads_page_filters_and_exports_current_filter(): void
     {
         $viewer = User::factory()->create();
