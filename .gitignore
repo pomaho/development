@@ -19,6 +19,7 @@
 /database/*.sqlite
 .env
 .env.docker
+.env.local-prod-copy
 .env.backup
 .env.production
 Homestead.json
