@@ -284,7 +284,8 @@ class AmoCatalogsService
                 }
 
                 if (isset($value['value'])) {
-                    $parent = $parentsByName->get($this->normalizeName((string) $value['value']));
+                    $parentValue = $this->scalarString($value['value']);
+                    $parent = $parentsByName->get($this->normalizeName($parentValue));
                     if ($parent !== null) {
                         return (int) $parent['id'];
                     }
@@ -308,7 +309,26 @@ class AmoCatalogsService
 
     private function elementName(array $element): string
     {
-        return trim((string) ($element['name'] ?? $element['value'] ?? ''));
+        return $this->scalarString($element['name'] ?? $element['value'] ?? '');
+    }
+
+    private function scalarString(mixed $value): string
+    {
+        if (is_array($value)) {
+            foreach (['value', 'name', 'text'] as $key) {
+                if (array_key_exists($key, $value)) {
+                    return $this->scalarString($value[$key]);
+                }
+            }
+
+            return '';
+        }
+
+        if ($value === null || is_bool($value)) {
+            return '';
+        }
+
+        return trim((string) $value);
     }
 
     private function composeName(string $template, string $parentName, string $childName): string
