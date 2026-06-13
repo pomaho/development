@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Amo;
+namespace App\Services\Amo\Accounts;
 
 use AmoCRM\Client\AmoCRMApiClient;
 use League\OAuth2\Client\Token\AccessTokenInterface;

@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmoOAuthConnection;
-use App\Services\Amo\AmoExternalOAuthService;
+use App\Services\Amo\Accounts\AmoExternalOAuthService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

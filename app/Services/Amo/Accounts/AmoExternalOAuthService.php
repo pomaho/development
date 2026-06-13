@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Amo;
+namespace App\Services\Amo\Accounts;
 
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;

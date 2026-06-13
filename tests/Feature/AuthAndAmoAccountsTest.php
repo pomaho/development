@@ -26,7 +26,7 @@ use App\Models\User;
 use App\Services\Amo\Client\AmoFallbackHttpClient;
 use App\Services\Amo\Structure\AmoCatalogsService;
 use App\Services\Amo\Automation\AmoLeadTransferService;
-use App\Services\Amo\AmoOAuthTokenExchanger;
+use App\Services\Amo\Accounts\AmoOAuthTokenExchanger;
 use App\Services\Amo\Structure\AmoPipelinesService;
 use App\Services\Amo\Automation\AmoResponsibilityRedistributionService;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
