@@ -208,8 +208,35 @@ docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.pr
 12. Для обновления проекта на сервере после нового push:
 
 ```bash
-cd /var/www/amo-integrator && git pull origin main && docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+cd /var/www/amo-integrator
+git pull origin main
+
+docker compose \
+  --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  build app web worker scheduler
+
+docker compose \
+  --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  up -d --force-recreate app web worker scheduler
+
+docker compose \
+  --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  exec app php artisan migrate --force
+
+docker compose \
+  --env-file .env.docker \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  exec app php artisan optimize:clear
 ```
+
+Важно: пересобирайте и `app`, и `web`. Laravel в `app` читает Vite manifest, а Nginx в `web` отдает файлы `/build/assets/*`. Если обновить только один контейнер, страница может ссылаться на asset, которого нет во втором контейнере.
 
 Проверка логов:
 
