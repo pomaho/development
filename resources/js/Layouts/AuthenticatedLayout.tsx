@@ -6,6 +6,7 @@ import {
     BriefcaseBusiness,
     ChevronRight,
     ClipboardList,
+    Database,
     FileText,
     ListTree,
     LayoutDashboard,
@@ -56,6 +57,7 @@ type Props = {
             users: string;
             roles: string;
             leads: string;
+            data_center?: string;
             pipelines: string;
             catalogs?: string;
             responsibility_redistribution?: string;
@@ -92,6 +94,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const analyticsCenterHref = currentAccount ? currentLinks?.analytics_center || `/amo-accounts/${currentAccount.id}/analytics` : null;
     const automationCenterHref = currentAccount ? currentLinks?.automation_center || `/amo-accounts/${currentAccount.id}/automation` : null;
     const crmStructureCenterHref = currentAccount ? currentLinks?.crm_structure_center || `/amo-accounts/${currentAccount.id}/crm-structure` : null;
+    const dataCenterHref = currentAccount ? currentLinks?.data_center || `/amo-accounts/${currentAccount.id}/data` : null;
     const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
@@ -122,6 +125,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     ] : [];
 
     const crmDataLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(dataCenterHref ? [{ label: 'Центр данных', href: dataCenterHref, icon: <Database />, active: url === `/amo-accounts/${currentAccount.id}/data` }] : []),
         { label: 'Сделки', href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
     ] : [];
 

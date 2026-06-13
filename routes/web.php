@@ -11,6 +11,7 @@ use App\Http\Controllers\Web\AmoAnalyticsCenterController;
 use App\Http\Controllers\Web\AmoAutomationCenterController;
 use App\Http\Controllers\Web\AmoCatalogsController;
 use App\Http\Controllers\Web\AmoCrmStructureCenterController;
+use App\Http\Controllers\Web\AmoDataCenterController;
 use App\Http\Controllers\Web\AmoExternalOAuthController;
 use App\Http\Controllers\Web\AmoLeadTransferController;
 use App\Http\Controllers\Web\AmoLeadsController;
@@ -74,6 +75,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/amo-accounts/{amo_account}/catalogs/elements', [AmoCatalogsController::class, 'storeElements'])->name('amo-accounts.catalogs.elements.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/chained-list-fields', [AmoCatalogsController::class, 'storeChainedListField'])->name('amo-accounts.catalogs.chained-list-fields.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/enum-fields', [AmoCatalogsController::class, 'updateEnumField'])->name('amo-accounts.catalogs.enum-fields.update');
+    Route::get('/amo-accounts/{amo_account}/data', AmoDataCenterController::class)->name('amo-accounts.data.index');
     Route::get('/amo-accounts/{amo_account}/crm-structure', AmoCrmStructureCenterController::class)->name('amo-accounts.crm-structure.index');
     Route::get('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'index'])->name('amo-accounts.pipelines.index');
     Route::get('/amo-accounts/{amo_account}/pipelines-export', [AmoPipelinesController::class, 'export'])->name('amo-accounts.pipelines.export');

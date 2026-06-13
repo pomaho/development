@@ -1347,6 +1347,39 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->has('links.current_account.crm_audit'));
     }
 
+    public function test_amo_data_center_groups_local_crm_entities(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        foreach (['leads', 'contacts', 'companies', 'tasks', 'events'] as $entityType) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => $entityType,
+                'external_id' => "100-{$entityType}",
+                'name' => $entityType,
+                'raw' => [],
+                'synced_at' => Carbon::parse('2026-06-13 12:00:00'),
+            ]);
+        }
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/data")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/DataCenter/Index')
+                ->where('account.name', 'Client')
+                ->where('summary.leads_count', 1)
+                ->where('summary.contacts_count', 1)
+                ->where('summary.companies_count', 1)
+                ->where('summary.tasks_count', 1)
+                ->where('summary.events_count', 1)
+                ->where('summary.last_synced_at', '2026-06-13 12:00:00')
+                ->has('links.current_account.leads')
+                ->has('links.current_account.lead_sync_schedules')
+                ->has('links.current_account.events_sync')
+                ->has('links.current_account.task_statistics'));
+    }
+
     public function test_amo_analytics_center_groups_reports_and_local_data_counts(): void
     {
         $viewer = User::factory()->create();
