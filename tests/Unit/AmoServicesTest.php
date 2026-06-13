@@ -22,7 +22,7 @@ use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\Client\AmoTokenManager;
 use App\Services\Amo\Structure\AmoUsersService;
 use App\Services\Amo\AmoWebhookService;
-use App\Services\Amo\CrmAuditService;
+use App\Services\Amo\Sync\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;

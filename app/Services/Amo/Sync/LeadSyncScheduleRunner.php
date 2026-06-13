@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Amo;
+namespace App\Services\Amo\Sync;
 
 use App\Models\LeadSyncSchedule;
 use Illuminate\Support\Carbon;

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AmoAccount;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\LeadSyncSchedule;
-use App\Services\Amo\LeadSyncScheduleRunner;
+use App\Services\Amo\Sync\LeadSyncScheduleRunner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;

@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Services\Amo;
-
-use App\Services\Amo\Client\AmoFallbackHttpClient;
+namespace App\Services\Amo\Sync;
 
 use App\Models\AmoAccount;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
+use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 use Illuminate\Support\Carbon;
 
 class CrmAuditService

@@ -31,7 +31,7 @@ use App\Services\Amo\Structure\AmoPipelinesService;
 use App\Services\Amo\Automation\AmoResponsibilityRedistributionService;
 use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\Structure\AmoUsersService;
-use App\Services\Amo\CrmAuditService;
+use App\Services\Amo\Sync\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Queue;

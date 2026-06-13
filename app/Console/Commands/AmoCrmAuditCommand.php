@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AmoAccount;
-use App\Services\Amo\CrmAuditService;
+use App\Services\Amo\Sync\CrmAuditService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 

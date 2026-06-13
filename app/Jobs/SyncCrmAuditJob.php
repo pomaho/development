@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\AmoAccount;
-use App\Services\Amo\CrmAuditService;
+use App\Services\Amo\Sync\CrmAuditService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;

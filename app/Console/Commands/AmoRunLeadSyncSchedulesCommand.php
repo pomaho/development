@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\LeadSyncSchedule;
-use App\Services\Amo\LeadSyncScheduleRunner;
+use App\Services\Amo\Sync\LeadSyncScheduleRunner;
 use Illuminate\Console\Command;
 use Throwable;
 
