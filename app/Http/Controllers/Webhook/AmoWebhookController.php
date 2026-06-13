@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Webhook;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessAmoWebhookEventJob;
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoWebhookService;
+use App\Services\Amo\Webhooks\AmoWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 

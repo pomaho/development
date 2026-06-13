@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\AmoWebhookEvent;
-use App\Services\Amo\AmoWebhookService;
+use App\Services\Amo\Webhooks\AmoWebhookService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Throwable;

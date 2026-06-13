@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Amo;
+namespace App\Services\Amo\Webhooks;
 
 use App\Services\Amo\Client\AmoFallbackHttpClient;
 
