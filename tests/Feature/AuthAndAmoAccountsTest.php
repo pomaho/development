@@ -1299,6 +1299,54 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('account.webhook_url', null));
     }
 
+    public function test_amo_sync_center_groups_sync_processes_and_webhook_status(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        LeadSyncSchedule::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'pipeline_name' => 'Sales',
+            'interval_minutes' => 360,
+            'lookback_days' => 2,
+            'is_enabled' => true,
+        ]);
+        AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'leads.update',
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'payload' => ['id' => 100],
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+            'received_at' => now(),
+        ]);
+        AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'tasks.update',
+            'entity_type' => 'tasks',
+            'entity_id' => '200',
+            'payload' => ['id' => 200],
+            'status' => AmoWebhookEvent::STATUS_FAILED,
+            'received_at' => now()->subMinute(),
+            'error_message' => 'API error',
+        ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/sync")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/SyncCenter/Index')
+                ->where('account.name', 'Client')
+                ->where('summary.lead_schedules_total', 1)
+                ->where('summary.lead_schedules_enabled', 1)
+                ->where('summary.webhook_events_pending', 1)
+                ->where('summary.webhook_events_failed', 1)
+                ->where('recentWebhookEvents.0.event_type', 'leads.update')
+                ->has('links.current_account.lead_sync_schedules')
+                ->has('links.current_account.events_sync')
+                ->has('links.current_account.crm_audit'));
+    }
+
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));

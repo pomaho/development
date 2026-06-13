@@ -62,6 +62,7 @@ type Props = {
             task_statistics?: string;
             events_sync?: string;
             lead_sync_schedules?: string;
+            sync_center?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -84,6 +85,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const taskStatisticsHref = currentAccount ? currentLinks?.task_statistics || `/amo-accounts/${currentAccount.id}/task-statistics` : null;
     const eventsSyncHref = currentAccount ? currentLinks?.events_sync || `/amo-accounts/${currentAccount.id}/events-sync` : null;
     const leadSyncSchedulesHref = currentAccount ? currentLinks?.lead_sync_schedules || `/amo-accounts/${currentAccount.id}/lead-sync-schedules` : null;
+    const syncCenterHref = currentAccount ? currentLinks?.sync_center || `/amo-accounts/${currentAccount.id}/sync` : null;
     const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
@@ -126,6 +128,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     ] : [];
 
     const syncLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(syncCenterHref ? [{ label: 'Центр синхронизации', href: syncCenterHref, icon: <Activity />, active: url === `/amo-accounts/${currentAccount.id}/sync` }] : []),
         ...(leadSyncSchedulesHref ? [{ label: 'Расписания сделок', href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
         { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && ! url.includes('/crm-audit/fields') },
         ...(eventsSyncHref ? [{ label: 'События', href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),

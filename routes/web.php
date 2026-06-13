@@ -14,6 +14,7 @@ use App\Http\Controllers\Web\AmoLeadsController;
 use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoResponsibilityRedistributionController;
 use App\Http\Controllers\Web\AmoRolesController;
+use App\Http\Controllers\Web\AmoSyncCenterController;
 use App\Http\Controllers\Web\AmoTaskStatisticsController;
 use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
@@ -88,6 +89,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/events-sync', [AmoTaskStatisticsController::class, 'events'])->name('amo-accounts.events-sync.index');
     Route::post('/amo-accounts/{amo_account}/events-sync', [AmoTaskStatisticsController::class, 'syncEvents'])->name('amo-accounts.events-sync.sync');
     Route::post('/amo-accounts/{amo_account}/events-sync/settings', [AmoTaskStatisticsController::class, 'updateEventSettings'])->name('amo-accounts.events-sync.settings');
+    Route::get('/amo-accounts/{amo_account}/sync', AmoSyncCenterController::class)->name('amo-accounts.sync.index');
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::get('/amo-accounts/{amo_account}/crm-audit/fields', [CrmAuditController::class, 'fields'])->name('amo-accounts.crm-audit.fields');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
