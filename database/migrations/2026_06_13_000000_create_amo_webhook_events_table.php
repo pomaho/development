@@ -10,13 +10,17 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('amo_accounts', function (Blueprint $table): void {
-            $table->string('webhook_key')->nullable()->after('auth_status');
-        });
+        if (! Schema::hasColumn('amo_accounts', 'webhook_key')) {
+            Schema::table('amo_accounts', function (Blueprint $table): void {
+                $table->string('webhook_key')->nullable()->after('auth_status');
+            });
+        }
 
-        Schema::table('amo_accounts', function (Blueprint $table): void {
-            $table->unique('webhook_key');
-        });
+        if (! $this->hasIndex('amo_accounts', 'amo_accounts_webhook_key_unique')) {
+            Schema::table('amo_accounts', function (Blueprint $table): void {
+                $table->unique('webhook_key');
+            });
+        }
 
         DB::table('amo_accounts')
             ->whereNull('webhook_key')
@@ -27,28 +31,41 @@ return new class extends Migration
                     ->update(['webhook_key' => Str::random(48)]);
             });
 
-        Schema::create('amo_webhook_events', function (Blueprint $table): void {
-            $table->id();
-            $table->foreignId('amo_account_id')->constrained('amo_accounts')->cascadeOnDelete();
-            $table->string('event_type')->index();
-            $table->string('entity_type')->nullable()->index();
-            $table->string('entity_id')->nullable()->index();
-            $table->json('payload');
-            $table->string('status')->default('pending')->index();
-            $table->text('error_message')->nullable();
-            $table->timestamp('received_at')->index();
-            $table->timestamp('processed_at')->nullable();
-            $table->timestamps();
-        });
+        if (! Schema::hasTable('amo_webhook_events')) {
+            Schema::create('amo_webhook_events', function (Blueprint $table): void {
+                $table->id();
+                $table->foreignId('amo_account_id')->constrained('amo_accounts')->cascadeOnDelete();
+                $table->string('event_type')->index();
+                $table->string('entity_type')->nullable()->index();
+                $table->string('entity_id')->nullable()->index();
+                $table->json('payload');
+                $table->string('status')->default('pending')->index();
+                $table->text('error_message')->nullable();
+                $table->timestamp('received_at')->index();
+                $table->timestamp('processed_at')->nullable();
+                $table->timestamps();
+            });
+        }
     }
 
     public function down(): void
     {
         Schema::dropIfExists('amo_webhook_events');
 
-        Schema::table('amo_accounts', function (Blueprint $table): void {
-            $table->dropUnique(['webhook_key']);
-            $table->dropColumn('webhook_key');
-        });
+        if (Schema::hasColumn('amo_accounts', 'webhook_key')) {
+            Schema::table('amo_accounts', function (Blueprint $table): void {
+                if ($this->hasIndex('amo_accounts', 'amo_accounts_webhook_key_unique')) {
+                    $table->dropUnique(['webhook_key']);
+                }
+
+                $table->dropColumn('webhook_key');
+            });
+        }
+    }
+
+    private function hasIndex(string $table, string $index): bool
+    {
+        return collect(Schema::getIndexes($table))
+            ->contains(fn (array $existing): bool => ($existing['name'] ?? null) === $index);
     }
 };
