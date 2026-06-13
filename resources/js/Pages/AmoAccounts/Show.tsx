@@ -10,6 +10,7 @@ type Account = {
     is_active: boolean;
     auth_status: string | null;
     auth_type: string | null;
+    webhook_url: string | null;
     last_successful_sync_at: string | null;
     settings: {
         company_name?: string;
@@ -127,6 +128,21 @@ export default function AmoAccountShow({ account, summary, logs, can, links }: P
                 <a className={quickLinkClass} href={accountLinks.integrations}>Интеграции</a>
                 <a className={quickLinkClass} href={accountLinks.widgets}>Dashboard-блоки</a>
             </div>
+
+            {can.sync && account.webhook_url ? (
+                <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 className="text-lg font-semibold text-gray-900">Webhook amoCRM</h2>
+                            <p className="mt-1 text-theme-sm text-gray-500">Укажите этот URL в настройках webhook-ов amoCRM для оперативного обновления локальных snapshots.</p>
+                        </div>
+                        <span className="rounded-full bg-brand-50 px-3 py-1 text-theme-xs font-medium text-brand-700">POST</span>
+                    </div>
+                    <div className="mt-4 break-all rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-mono text-theme-sm text-gray-700">
+                        {account.webhook_url}
+                    </div>
+                </section>
+            ) : null}
 
             <div className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
                 <div className="border-b border-gray-200 px-5 py-4">

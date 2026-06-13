@@ -94,6 +94,9 @@ class AmoAccountController extends Controller
                 'is_active' => $amoAccount->is_active,
                 'auth_status' => $amoAccount->auth_status,
                 'auth_type' => $amoAccount->credentials?->auth_type,
+                'webhook_url' => request()->user()?->can('sync', $amoAccount)
+                    ? route('webhooks.amo', $amoAccount->webhook_key)
+                    : null,
                 'last_successful_sync_at' => $amoAccount->last_successful_sync_at?->toDateTimeString(),
                 'settings' => is_array($amoAccount->settings) ? $amoAccount->settings : [],
             ],

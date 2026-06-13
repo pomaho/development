@@ -8,6 +8,7 @@ use App\Models\AmoCredential;
 use App\Models\AmoOAuthConnection;
 use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
+use App\Models\AmoWebhookEvent;
 use App\Models\ApiRequestLog;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmCustomFieldSnapshot;
@@ -17,6 +18,7 @@ use App\Models\DashboardWidget;
 use App\Models\IntegrationModule;
 use App\Jobs\SyncCrmAuditJob;
 use App\Jobs\SyncAmoTaskStatisticsJob;
+use App\Jobs\ProcessAmoWebhookEventJob;
 use App\Models\LeadSyncSchedule;
 use App\Models\ResponsibilityRedistributionRun;
 use App\Models\TaskStatisticsSyncRun;
@@ -1224,6 +1226,73 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertOk()
             ->assertHeader('Content-Security-Policy', 'frame-ancestors https://*.amocrm.ru https://*.kommo.com')
             ->assertHeaderMissing('X-Frame-Options');
+    }
+
+    public function test_amo_webhook_endpoint_accepts_events_and_dispatches_processing_jobs(): void
+    {
+        Queue::fake();
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'webhook_key' => 'secret-webhook-key',
+        ]);
+
+        $this->post('/webhooks/amo/secret-webhook-key', [
+            'leads' => [
+                'update' => [
+                    ['id' => 100, 'updated_at' => 1781455200],
+                ],
+            ],
+            'contacts' => [
+                'add' => [
+                    ['id' => 200],
+                ],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('events_accepted', 2);
+
+        $this->assertDatabaseHas('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'event_type' => 'leads.update',
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+        ]);
+        $this->assertDatabaseHas('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'event_type' => 'contacts.add',
+            'entity_type' => 'contacts',
+            'entity_id' => '200',
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+        ]);
+        Queue::assertPushed(ProcessAmoWebhookEventJob::class, 2);
+
+        $this->post('/webhooks/amo/wrong-key', [])->assertNotFound();
+    }
+
+    public function test_amo_account_page_shows_webhook_url_only_to_sync_users(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'webhook_key' => 'secret-webhook-key',
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('account.webhook_url', route('webhooks.amo', 'secret-webhook-key')));
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('account.webhook_url', null));
     }
 
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void

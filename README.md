@@ -358,6 +358,30 @@ AMO_WIDGET_FRAME_ANCESTORS="https://company.amocrm.ru"
 
 Если amoCRM-аккаунт не поддерживает placement на рабочем столе, используйте fallback `widget_page`: тот же iframe-отчет будет открываться как отдельная страница виджета внутри amoCRM.
 
+## amoCRM webhooks
+
+Для оперативного обновления локальных snapshots можно подключить webhook amoCRM:
+
+```text
+Клиенты → нужный аккаунт → Webhook amoCRM
+```
+
+В amoCRM укажите показанный URL как `POST` webhook. Формат:
+
+```text
+https://your-domain.ru/webhooks/amo/{webhook_key}
+```
+
+`webhook_key` генерируется отдельно для каждого `amo_account` и не должен передаваться посторонним. Контроллер webhook-а только принимает payload, сохраняет события в `amo_webhook_events` и ставит обработку в очередь. Обновление сделок, контактов, компаний и задач выполняется job-ом через amoCRM API и обновляет `crm_entity_snapshots`.
+
+Рекомендуемая схема:
+
+```text
+webhook → быстрое обновление измененной сущности
+scheduled sync → периодическая страховочная синхронизация выбранных воронок
+manual sync → первичная загрузка или ручное восстановление периода
+```
+
 Модуль воронок использует amoCRM API:
 
 ```text

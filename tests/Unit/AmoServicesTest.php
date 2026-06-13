@@ -5,6 +5,7 @@ namespace Tests\Unit;
 use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
+use App\Models\AmoWebhookEvent;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
@@ -20,6 +21,7 @@ use App\Services\Amo\AmoResponsibilityRedistributionService;
 use App\Services\Amo\AmoTaskStatisticsService;
 use App\Services\Amo\AmoTokenManager;
 use App\Services\Amo\AmoUsersService;
+use App\Services\Amo\AmoWebhookService;
 use App\Services\Amo\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -1169,6 +1171,87 @@ class AmoServicesTest extends TestCase
         $this->assertDatabaseMissing('crm_pipelines_snapshots', ['amo_pipeline_id' => 99]);
         $this->assertDatabaseHas('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '100', 'pipeline_id' => 10]);
         $this->assertDatabaseMissing('crm_entity_snapshots', ['entity_type' => 'leads', 'external_id' => '200']);
+    }
+
+    public function test_amo_webhook_service_refreshes_lead_snapshot(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+        $event = AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'leads.update',
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'payload' => ['id' => 100],
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+            'received_at' => now(),
+        ]);
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->once()
+            ->with(
+                Mockery::on(fn (AmoAccount $passedAccount): bool => $passedAccount->id === $account->id),
+                '/api/v4/leads/100',
+                ['with' => 'contacts,loss_reason,source']
+            )
+            ->andReturn([
+                'id' => 100,
+                'name' => 'Updated lead',
+                'pipeline_id' => 10,
+                'status_id' => 20,
+                'responsible_user_id' => 30,
+                'created_at' => 1781451600,
+                'updated_at' => 1781455200,
+                'custom_fields_values' => [['field_id' => 1, 'values' => [['value' => 'A']]]],
+                '_embedded' => ['contacts' => [['id' => 500]]],
+            ]);
+
+        (new AmoWebhookService($http))->process($event);
+
+        $event->refresh();
+        $this->assertSame(AmoWebhookEvent::STATUS_PROCESSED, $event->status);
+        $this->assertDatabaseHas('crm_entity_snapshots', [
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '100',
+            'name' => 'Updated lead',
+            'pipeline_id' => 10,
+            'status_id' => 20,
+            'responsible_user_id' => 30,
+        ]);
+    }
+
+    public function test_amo_webhook_service_deletes_snapshot_for_delete_event(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '100',
+            'name' => 'Deleted lead',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        $event = AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'leads.delete',
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'payload' => ['id' => 100],
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+            'received_at' => now(),
+        ]);
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldNotReceive('get');
+
+        (new AmoWebhookService($http))->process($event);
+
+        $event->refresh();
+        $this->assertSame(AmoWebhookEvent::STATUS_PROCESSED, $event->status);
+        $this->assertDatabaseMissing('crm_entity_snapshots', [
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '100',
+        ]);
     }
 
     public function test_crm_audit_sync_refreshes_recruiter_dashboard_cache(): void

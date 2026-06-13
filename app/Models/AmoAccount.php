@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 class AmoAccount extends Model
 {
@@ -18,10 +19,20 @@ class AmoAccount extends Model
         'account_id',
         'is_active',
         'auth_status',
+        'webhook_key',
         'notes',
         'settings',
         'last_successful_sync_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (AmoAccount $account): void {
+            if (! $account->webhook_key) {
+                $account->webhook_key = Str::random(48);
+            }
+        });
+    }
 
     protected function casts(): array
     {
@@ -70,6 +81,11 @@ class AmoAccount extends Model
     public function leadSyncSchedules(): HasMany
     {
         return $this->hasMany(LeadSyncSchedule::class);
+    }
+
+    public function webhookEvents(): HasMany
+    {
+        return $this->hasMany(AmoWebhookEvent::class);
     }
 
     public function dashboardWidgetInstallations(): HasMany

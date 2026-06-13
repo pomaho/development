@@ -20,6 +20,7 @@ use App\Http\Controllers\Web\ApiLogController;
 use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\LeadSyncScheduleController;
+use App\Http\Controllers\Webhook\AmoWebhookController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -46,6 +47,9 @@ Route::get('/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDas
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'json'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard.show');
+Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
+    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->name('webhooks.amo');
 
 Route::middleware('auth')->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
