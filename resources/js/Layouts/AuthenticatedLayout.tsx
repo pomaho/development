@@ -54,6 +54,7 @@ type Props = {
             dashboard: string;
             show: string;
             users: string;
+            roles: string;
             leads: string;
             pipelines: string;
             catalogs?: string;
@@ -83,6 +84,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const taskStatisticsHref = currentAccount ? currentLinks?.task_statistics || `/amo-accounts/${currentAccount.id}/task-statistics` : null;
     const eventsSyncHref = currentAccount ? currentLinks?.events_sync || `/amo-accounts/${currentAccount.id}/events-sync` : null;
     const leadSyncSchedulesHref = currentAccount ? currentLinks?.lead_sync_schedules || `/amo-accounts/${currentAccount.id}/lead-sync-schedules` : null;
+    const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
         {
@@ -106,16 +108,38 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
         },
     ];
 
-    const clientLinks: NavLink[] = currentAccount && currentLinks ? [
-        { label: 'Users audit', href: currentLinks.users, icon: <Users />, active: url.endsWith('/users') },
+    const accountOverviewLinks: NavLink[] = currentAccount && currentLinks ? [
+        { label: 'Обзор клиента', href: currentLinks.dashboard, icon: <LayoutDashboard />, active: url.endsWith('/dashboard') },
+        { label: 'Профиль аккаунта', href: currentLinks.show, icon: <BriefcaseBusiness />, active: url === `/amo-accounts/${currentAccount.id}` },
+    ] : [];
+
+    const crmDataLinks: NavLink[] = currentAccount && currentLinks ? [
         { label: 'Сделки', href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
+    ] : [];
+
+    const crmStructureLinks: NavLink[] = currentAccount && currentLinks ? [
         { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 />, active: url.includes('/pipelines') },
+        ...(crmFieldsHref ? [{ label: 'Поля CRM', href: crmFieldsHref, icon: <ShieldCheck />, active: url.includes('/crm-audit/fields') }] : []),
         ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree />, active: url.includes('/catalogs') }] : []),
-        ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
-        ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
+        { label: 'Пользователи', href: currentLinks.users, icon: <Users />, active: url.endsWith('/users') },
+        { label: 'Роли и права', href: currentLinks.roles, icon: <UserRoundCog />, active: url.endsWith('/roles') },
+    ] : [];
+
+    const syncLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(leadSyncSchedulesHref ? [{ label: 'Расписания сделок', href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
+        { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && ! url.includes('/crm-audit/fields') },
         ...(eventsSyncHref ? [{ label: 'События', href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
-        ...(leadSyncSchedulesHref ? [{ label: 'Sync сделок', href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
-        { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') },
+    ] : [];
+
+    const automationLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
+    ] : [];
+
+    const analyticsLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
+    ] : [];
+
+    const integrationLinks: NavLink[] = currentAccount && currentLinks ? [
         { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 />, active: url.endsWith('/integrations') },
         { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks />, active: url.endsWith('/widgets') },
     ] : [];
@@ -131,7 +155,13 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
 
     const sections: NavSection[] = [
         { label: 'Основное', items: mainLinks },
-        ...(clientLinks.length > 0 ? [{ label: 'Аккаунт amoCRM', items: clientLinks }] : []),
+        ...(accountOverviewLinks.length > 0 ? [{ label: 'Обзор аккаунта', items: accountOverviewLinks }] : []),
+        ...(crmDataLinks.length > 0 ? [{ label: 'CRM-данные', items: crmDataLinks }] : []),
+        ...(crmStructureLinks.length > 0 ? [{ label: 'CRM-структура', items: crmStructureLinks }] : []),
+        ...(syncLinks.length > 0 ? [{ label: 'Синхронизация', items: syncLinks }] : []),
+        ...(automationLinks.length > 0 ? [{ label: 'Автоматизация', items: automationLinks }] : []),
+        ...(analyticsLinks.length > 0 ? [{ label: 'Аналитика', items: analyticsLinks }] : []),
+        ...(integrationLinks.length > 0 ? [{ label: 'Интеграции', items: integrationLinks }] : []),
         { label: 'Система', items: systemLinks },
     ];
 

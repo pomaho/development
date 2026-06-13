@@ -1333,6 +1333,11 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('menu-item-active', $source);
         $this->assertStringContainsString('custom-scrollbar', $source);
         $this->assertStringContainsString('aria-label="Toggle sidebar"', $source);
+        $this->assertStringContainsString('CRM-данные', $source);
+        $this->assertStringContainsString('CRM-структура', $source);
+        $this->assertStringContainsString('Синхронизация', $source);
+        $this->assertStringContainsString('Автоматизация', $source);
+        $this->assertStringContainsString('Аналитика', $source);
     }
 
     public function test_shared_react_components_use_tailadmin_visual_tokens(): void
