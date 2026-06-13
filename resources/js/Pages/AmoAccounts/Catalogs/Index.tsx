@@ -38,6 +38,8 @@ type Links = {
     logout: string;
     store_catalog: string;
     store_elements: string;
+    compose_elements_preview: string;
+    compose_elements_apply: string;
     store_chained_list_field: string;
     update_enum_field: string;
     current_account: {
@@ -58,6 +60,28 @@ type Props = {
     account: Account;
     catalogs: Catalog[];
     enumFields: EnumField[];
+    composePreview: {
+        rows: Array<{
+            child_id: number;
+            old_name: string;
+            parent_id: number | null;
+            parent_name: string | null;
+            new_name: string | null;
+            status: string;
+            message: string;
+        }>;
+        total: number;
+        ready: number;
+        unchanged: number;
+        skipped: number;
+        updated?: number;
+    } | null;
+    composeForm: {
+        parent_catalog_id: string;
+        child_catalog_id: string;
+        template: string;
+        mappings: string;
+    };
     error: string | null;
     can: {
         sync: boolean;
@@ -86,7 +110,19 @@ const entityLabel = (entityType: string | null) => {
     return entityType || '-';
 };
 
-export default function CatalogsIndex({ account, catalogs, enumFields, error, can, links }: Props) {
+const composeStatusClass = (status: string) => {
+    if (status === 'ready') {
+        return 'bg-success-50 text-success-700';
+    }
+
+    if (status === 'unchanged') {
+        return 'bg-gray-100 text-gray-600';
+    }
+
+    return 'bg-warning-50 text-warning-700';
+};
+
+export default function CatalogsIndex({ account, catalogs, enumFields, composePreview, composeForm, error, can, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const accountLinks = links.current_account;
     const firstCatalog = catalogs.find((catalog) => catalog.id);
@@ -220,6 +256,94 @@ export default function CatalogsIndex({ account, catalogs, enumFields, error, ca
                     </form>
                 </section>
             </div>
+
+            <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <h2 className="font-semibold">Скомпоновать названия связанного списка</h2>
+                        <div className="mt-1 text-theme-sm text-gray-500">
+                            Например: проект <span className="font-medium text-gray-700">Командор</span> + подгруппа <span className="font-medium text-gray-700">Железногорск</span> = <span className="font-medium text-gray-700">Командор Железногорск</span>.
+                        </div>
+                    </div>
+                    {composePreview ? (
+                        <span className="rounded bg-brand-50 px-2 py-1 text-theme-xs text-brand-700">
+                            {composePreview.ready} к изменению
+                        </span>
+                    ) : null}
+                </div>
+
+                <form action={links.compose_elements_preview} className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr_1.2fr]" method="post">
+                    <input name="_token" type="hidden" value={csrf} />
+                    <label className="block text-sm">
+                        <span>Родительский список</span>
+                        <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={composeForm.parent_catalog_id} name="parent_catalog_id" required>
+                            <option value="">Выберите список проекта</option>
+                            {catalogs.map((catalog) => catalog.id ? <option key={catalog.id} value={catalog.id}>{catalog.name}</option> : null)}
+                        </select>
+                    </label>
+                    <label className="block text-sm">
+                        <span>Дочерний список</span>
+                        <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={composeForm.child_catalog_id} name="child_catalog_id" required>
+                            <option value="">Выберите список подгруппы</option>
+                            {catalogs.map((catalog) => catalog.id ? <option key={catalog.id} value={catalog.id}>{catalog.name}</option> : null)}
+                        </select>
+                    </label>
+                    <label className="block text-sm">
+                        <span>Шаблон нового названия</span>
+                        <input className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 font-mono" defaultValue={composeForm.template || '{parent} {child}'} name="template" required />
+                    </label>
+                    <label className="block text-sm xl:col-span-3">
+                        <span>Ручные соответствия, если связь не определяется автоматически</span>
+                        <textarea
+                            className="mt-1.5 min-h-24 w-full rounded-lg border-gray-200 bg-white px-3 py-2 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 font-mono text-xs"
+                            name="mappings"
+                            defaultValue={composeForm.mappings}
+                            placeholder={'Железногорск|Командор\nОмск|Бетта'}
+                        />
+                    </label>
+                    <div className="flex flex-wrap gap-2 xl:col-span-3">
+                        <button className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500 disabled:opacity-50" disabled={! can.sync} type="submit">
+                            Предпросмотр
+                        </button>
+                        <button className="inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50" disabled={! can.sync} formAction={links.compose_elements_apply} type="submit">
+                            Применить переименование
+                        </button>
+                    </div>
+                </form>
+
+                {composePreview ? (
+                    <div className="mt-5 overflow-x-auto rounded-xl border border-gray-200">
+                        <table className="w-full min-w-[900px] text-left text-theme-sm">
+                            <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
+                                <tr>
+                                    <th className="px-4 py-3">ID</th>
+                                    <th className="px-4 py-3">Старое название</th>
+                                    <th className="px-4 py-3">Проект</th>
+                                    <th className="px-4 py-3">Новое название</th>
+                                    <th className="px-4 py-3">Статус</th>
+                                    <th className="px-4 py-3">Комментарий</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {composePreview.rows.map((row) => (
+                                    <tr className="align-top" key={row.child_id}>
+                                        <td className="px-4 py-3 text-gray-600">{row.child_id}</td>
+                                        <td className="px-4 py-3 font-medium text-gray-900">{row.old_name}</td>
+                                        <td className="px-4 py-3 text-gray-700">{row.parent_name || '-'}</td>
+                                        <td className="px-4 py-3 text-gray-900">{row.new_name || '-'}</td>
+                                        <td className="px-4 py-3">
+                                            <span className={`inline-flex rounded-full px-2.5 py-1 text-theme-xs font-medium ${composeStatusClass(row.status)}`}>
+                                                {row.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-gray-600">{row.message}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ) : null}
+            </section>
 
             <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
                 <div className="flex flex-wrap items-start justify-between gap-3">

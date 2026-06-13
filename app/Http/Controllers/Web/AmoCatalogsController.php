@@ -52,6 +52,13 @@ class AmoCatalogsController extends Controller
                     'sort' => $enum['sort'] ?? null,
                 ])->values(),
             ])->values(),
+            'composePreview' => session('catalogs_compose_preview'),
+            'composeForm' => session('catalogs_compose_form') ?? [
+                'parent_catalog_id' => '',
+                'child_catalog_id' => '',
+                'template' => '{parent} {child}',
+                'mappings' => '',
+            ],
             'error' => $error,
             'can' => [
                 'sync' => request()->user()?->can('sync', $amoAccount) ?? false,
@@ -98,6 +105,44 @@ class AmoCatalogsController extends Controller
         $catalogsService->createElements($amoAccount, (int) $data['catalog_id'], $names);
 
         return back()->with('status', 'Элементы списка отправлены в amoCRM.');
+    }
+
+    public function previewComposedElements(Request $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
+    {
+        $this->authorize('sync', $amoAccount);
+
+        $data = $this->validatedComposeData($request);
+        $preview = $catalogsService->previewComposedElementNames(
+            $amoAccount,
+            (int) $data['parent_catalog_id'],
+            (int) $data['child_catalog_id'],
+            $data['template'],
+            $this->parseMappings($data['mappings'] ?? '')
+        );
+
+        return back()
+            ->with('catalogs_compose_preview', $preview)
+            ->with('catalogs_compose_form', $this->composeForm($data))
+            ->with('status', "Предпросмотр готов: {$preview['ready']} элементов к переименованию.");
+    }
+
+    public function applyComposedElements(Request $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
+    {
+        $this->authorize('sync', $amoAccount);
+
+        $data = $this->validatedComposeData($request);
+        $result = $catalogsService->applyComposedElementNames(
+            $amoAccount,
+            (int) $data['parent_catalog_id'],
+            (int) $data['child_catalog_id'],
+            $data['template'],
+            $this->parseMappings($data['mappings'] ?? '')
+        );
+
+        return back()
+            ->with('catalogs_compose_preview', $result)
+            ->with('catalogs_compose_form', $this->composeForm($data))
+            ->with('status', "Переименовано элементов: {$result['updated']}.");
     }
 
     public function storeChainedListField(Request $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
@@ -169,6 +214,8 @@ class AmoCatalogsController extends Controller
             'logout' => route('logout'),
             'store_catalog' => route('amo-accounts.catalogs.store', $amoAccount),
             'store_elements' => route('amo-accounts.catalogs.elements.store', $amoAccount),
+            'compose_elements_preview' => route('amo-accounts.catalogs.elements.compose-preview', $amoAccount),
+            'compose_elements_apply' => route('amo-accounts.catalogs.elements.compose-apply', $amoAccount),
             'store_chained_list_field' => route('amo-accounts.catalogs.chained-list-fields.store', $amoAccount),
             'update_enum_field' => route('amo-accounts.catalogs.enum-fields.update', $amoAccount),
             'current_account' => [
@@ -183,6 +230,48 @@ class AmoCatalogsController extends Controller
                 'integrations' => route('amo-accounts.integrations', $amoAccount),
                 'widgets' => route('amo-accounts.widgets', $amoAccount),
             ],
+        ];
+    }
+
+    private function validatedComposeData(Request $request): array
+    {
+        return $request->validate([
+            'parent_catalog_id' => ['required', 'integer', 'min:1'],
+            'child_catalog_id' => ['required', 'integer', 'min:1', 'different:parent_catalog_id'],
+            'template' => ['required', 'string', 'max:255'],
+            'mappings' => ['nullable', 'string', 'max:20000'],
+        ]);
+    }
+
+    private function parseMappings(?string $mappings): array
+    {
+        return collect(preg_split('/\R/u', (string) $mappings) ?: [])
+            ->map(fn (string $line): string => trim($line))
+            ->filter()
+            ->map(function (string $line): ?array {
+                [$child, $parent] = array_pad(explode('|', $line, 2), 2, null);
+
+                if ($parent === null || trim($child) === '' || trim($parent) === '') {
+                    return null;
+                }
+
+                return [
+                    'child' => trim($child),
+                    'parent' => trim($parent),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function composeForm(array $data): array
+    {
+        return [
+            'parent_catalog_id' => (string) $data['parent_catalog_id'],
+            'child_catalog_id' => (string) $data['child_catalog_id'],
+            'template' => $data['template'],
+            'mappings' => $data['mappings'] ?? '',
         ];
     }
 }

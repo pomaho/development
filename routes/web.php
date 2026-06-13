@@ -73,6 +73,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/catalogs', [AmoCatalogsController::class, 'index'])->name('amo-accounts.catalogs.index');
     Route::post('/amo-accounts/{amo_account}/catalogs', [AmoCatalogsController::class, 'storeCatalog'])->name('amo-accounts.catalogs.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/elements', [AmoCatalogsController::class, 'storeElements'])->name('amo-accounts.catalogs.elements.store');
+    Route::post('/amo-accounts/{amo_account}/catalogs/elements/compose-preview', [AmoCatalogsController::class, 'previewComposedElements'])->name('amo-accounts.catalogs.elements.compose-preview');
+    Route::post('/amo-accounts/{amo_account}/catalogs/elements/compose-apply', [AmoCatalogsController::class, 'applyComposedElements'])->name('amo-accounts.catalogs.elements.compose-apply');
     Route::post('/amo-accounts/{amo_account}/catalogs/chained-list-fields', [AmoCatalogsController::class, 'storeChainedListField'])->name('amo-accounts.catalogs.chained-list-fields.store');
     Route::post('/amo-accounts/{amo_account}/catalogs/enum-fields', [AmoCatalogsController::class, 'updateEnumField'])->name('amo-accounts.catalogs.enum-fields.update');
     Route::get('/amo-accounts/{amo_account}/data', AmoDataCenterController::class)->name('amo-accounts.data.index');

@@ -1910,6 +1910,49 @@ class AuthAndAmoAccountsTest extends TestCase
                 return true;
             }))
             ->andReturn([]);
+        $catalogsService->shouldReceive('previewComposedElementNames')
+            ->once()
+            ->with(
+                Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)),
+                1001,
+                1002,
+                '{parent} {child}',
+                [['child' => 'Железногорск', 'parent' => 'Командор']]
+            )
+            ->andReturn([
+                'rows' => [
+                    [
+                        'child_id' => 701,
+                        'old_name' => 'Железногорск',
+                        'parent_id' => 501,
+                        'parent_name' => 'Командор',
+                        'new_name' => 'Командор Железногорск',
+                        'status' => 'ready',
+                        'message' => 'Готово к переименованию.',
+                    ],
+                ],
+                'total' => 1,
+                'ready' => 1,
+                'unchanged' => 0,
+                'skipped' => 0,
+            ]);
+        $catalogsService->shouldReceive('applyComposedElementNames')
+            ->once()
+            ->with(
+                Mockery::on(fn (AmoAccount $routeAccount): bool => $routeAccount->is($account)),
+                1001,
+                1002,
+                '{parent} {child}',
+                [['child' => 'Железногорск', 'parent' => 'Командор']]
+            )
+            ->andReturn([
+                'rows' => [],
+                'total' => 1,
+                'ready' => 1,
+                'unchanged' => 0,
+                'skipped' => 0,
+                'updated' => 1,
+            ]);
         $this->app->instance(AmoCatalogsService::class, $catalogsService);
 
         $this->actingAs($admin)
@@ -1919,6 +1962,9 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->component('AmoAccounts/Catalogs/Index')
                 ->where('catalogs.0.name', 'Проекты')
                 ->where('enumFields.0.name', 'Источник')
+                ->where('composeForm.template', '{parent} {child}')
+                ->has('links.compose_elements_preview')
+                ->has('links.compose_elements_apply')
                 ->has('links.store_chained_list_field'));
 
         $this->actingAs($admin)
@@ -1956,6 +2002,24 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertSame('Источник', $capturedEnumField['name']);
         $this->assertSame(['id' => 10, 'value' => 'Авито'], $capturedEnumField['enums'][0]);
         $this->assertSame(['value' => 'Telegram'], $capturedEnumField['enums'][2]);
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs/elements/compose-preview", [
+                'parent_catalog_id' => 1001,
+                'child_catalog_id' => 1002,
+                'template' => '{parent} {child}',
+                'mappings' => 'Железногорск|Командор',
+            ])
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/catalogs/elements/compose-apply", [
+                'parent_catalog_id' => 1001,
+                'child_catalog_id' => 1002,
+                'template' => '{parent} {child}',
+                'mappings' => 'Железногорск|Командор',
+            ])
+            ->assertRedirect();
 
         $this->actingAs($viewer)
             ->post("/amo-accounts/{$account->id}/catalogs", ['name' => 'Forbidden'])

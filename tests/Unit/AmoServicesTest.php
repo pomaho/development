@@ -196,6 +196,60 @@ class AmoServicesTest extends TestCase
         ]);
     }
 
+    public function test_catalogs_service_composes_child_element_names_without_changing_ids(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->times(4)
+            ->with($account, Mockery::any(), Mockery::on(fn (array $query): bool => $query['page'] === 1 && $query['limit'] === 250))
+            ->andReturnUsing(function (AmoAccount $account, string $path): array {
+                if ($path === '/api/v4/catalogs/1001/elements') {
+                    return [
+                        '_page' => 1,
+                        '_page_count' => 1,
+                        '_embedded' => [
+                            'elements' => [
+                                ['id' => 501, 'name' => 'Командор'],
+                            ],
+                        ],
+                    ];
+                }
+
+                return [
+                    '_page' => 1,
+                    '_page_count' => 1,
+                    '_embedded' => [
+                        'elements' => [
+                            ['id' => 701, 'name' => 'Железногорск', 'parent_id' => 501],
+                            ['id' => 702, 'name' => 'Командор Омск', 'parent_id' => 501],
+                            ['id' => 703, 'name' => 'Без связи'],
+                        ],
+                    ],
+                ];
+            });
+        $http->shouldReceive('patch')
+            ->once()
+            ->with($account, '/api/v4/catalogs/1002/elements', [[
+                'id' => 701,
+                'name' => 'Командор Железногорск',
+            ]])
+            ->andReturn(['_embedded' => ['elements' => [['id' => 701]]]]);
+
+        $service = new AmoCatalogsService($http);
+        $preview = $service->previewComposedElementNames($account, 1001, 1002, '{parent} {child}');
+
+        $this->assertSame(3, $preview['total']);
+        $this->assertSame(1, $preview['ready']);
+        $this->assertSame('Командор Железногорск', $preview['rows'][0]['new_name']);
+        $this->assertSame('unchanged', $preview['rows'][1]['status']);
+        $this->assertSame('no_parent', $preview['rows'][2]['status']);
+
+        $result = $service->applyComposedElementNames($account, 1001, 1002, '{parent} {child}');
+
+        $this->assertSame(1, $result['updated']);
+    }
+
     public function test_lead_transfer_service_maps_statuses_and_updates_snapshots(): void
     {
         $account = $this->accountWithToken('abcdef123456');
