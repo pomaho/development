@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoCatalogsService;
+use App\Services\Amo\Structure\AmoCatalogsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;

@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\CloneAmoPipelineRequest;
 use App\Http\Requests\StoreAmoPipelineRequest;
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoPipelinesService;
+use App\Services\Amo\Structure\AmoPipelinesService;
 use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

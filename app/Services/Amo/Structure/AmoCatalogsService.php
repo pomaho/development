@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Services\Amo;
-
-use App\Services\Amo\Client\AmoFallbackHttpClient;
+namespace App\Services\Amo\Structure;
 
 use App\Models\AmoAccount;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 
 class AmoCatalogsService
 {

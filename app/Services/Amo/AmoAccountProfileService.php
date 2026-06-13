@@ -2,9 +2,9 @@
 
 namespace App\Services\Amo;
 
-use App\Services\Amo\Client\AmoFallbackHttpClient;
-
 use App\Models\AmoAccount;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
+use App\Services\Amo\Structure\AmoUsersService;
 use Throwable;
 
 class AmoAccountProfileService

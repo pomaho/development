@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AmoAccount;
 use App\Models\ApiRequestLog;
-use App\Services\Amo\AmoUsersService;
+use App\Services\Amo\Structure\AmoUsersService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;

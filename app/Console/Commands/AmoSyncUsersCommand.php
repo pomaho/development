@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoUsersService;
+use App\Services\Amo\Structure\AmoUsersService;
 use Illuminate\Console\Command;
 
 class AmoSyncUsersCommand extends Command
