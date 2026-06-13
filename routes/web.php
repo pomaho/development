@@ -8,6 +8,7 @@ use App\Http\Controllers\Web\AmoAccountController;
 use App\Http\Controllers\Web\AmoAccountIntegrationsController;
 use App\Http\Controllers\Web\AmoAccountWidgetsController;
 use App\Http\Controllers\Web\AmoAnalyticsCenterController;
+use App\Http\Controllers\Web\AmoAutomationCenterController;
 use App\Http\Controllers\Web\AmoCatalogsController;
 use App\Http\Controllers\Web\AmoExternalOAuthController;
 use App\Http\Controllers\Web\AmoLeadTransferController;
@@ -81,6 +82,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/amo-accounts/{amo_account}/pipelines/{pipelineId}/clone', [AmoPipelinesController::class, 'clone'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.clone');
     Route::get('/amo-accounts/{amo_account}/pipelines/{pipelineId}', [AmoPipelinesController::class, 'show'])->whereNumber('pipelineId')->name('amo-accounts.pipelines.show');
     Route::post('/amo-accounts/{amo_account}/pipelines', [AmoPipelinesController::class, 'store'])->name('amo-accounts.pipelines.store');
+    Route::get('/amo-accounts/{amo_account}/automation', AmoAutomationCenterController::class)->name('amo-accounts.automation.index');
     Route::get('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'index'])->name('amo-accounts.responsibility-redistribution.index');
     Route::post('/amo-accounts/{amo_account}/responsibility-redistribution/preview', [AmoResponsibilityRedistributionController::class, 'preview'])->name('amo-accounts.responsibility-redistribution.preview');
     Route::post('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'store'])->name('amo-accounts.responsibility-redistribution.store');

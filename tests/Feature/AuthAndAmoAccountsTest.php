@@ -1390,6 +1390,56 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->has('links.current_account.widgets'));
     }
 
+    public function test_amo_automation_center_groups_mutating_operations(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Sales',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '100',
+            'name' => 'Lead',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        ResponsibilityRedistributionRun::query()->create([
+            'amo_account_id' => $account->id,
+            'source_user_id' => 10,
+            'target_user_ids' => [20],
+            'status' => 'failed',
+            'error_message' => 'API error',
+        ]);
+
+        $this->actingAs($admin)
+            ->get("/amo-accounts/{$account->id}/automation")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/AutomationCenter/Index')
+                ->where('account.name', 'Client')
+                ->where('can.sync', true)
+                ->where('summary.pipelines_count', 1)
+                ->where('summary.leads_count', 1)
+                ->where('summary.responsibility_runs_count', 1)
+                ->where('summary.failed_responsibility_runs_count', 1)
+                ->has('links.current_account.pipelines_create')
+                ->has('links.current_account.pipelines_transfer_leads')
+                ->has('links.current_account.responsibility_redistribution'));
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/automation")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('can.sync', false));
+    }
+
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));

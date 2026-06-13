@@ -64,6 +64,7 @@ type Props = {
             lead_sync_schedules?: string;
             sync_center?: string;
             analytics_center?: string;
+            automation_center?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -88,6 +89,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const leadSyncSchedulesHref = currentAccount ? currentLinks?.lead_sync_schedules || `/amo-accounts/${currentAccount.id}/lead-sync-schedules` : null;
     const syncCenterHref = currentAccount ? currentLinks?.sync_center || `/amo-accounts/${currentAccount.id}/sync` : null;
     const analyticsCenterHref = currentAccount ? currentLinks?.analytics_center || `/amo-accounts/${currentAccount.id}/analytics` : null;
+    const automationCenterHref = currentAccount ? currentLinks?.automation_center || `/amo-accounts/${currentAccount.id}/automation` : null;
     const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
@@ -137,6 +139,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     ] : [];
 
     const automationLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(automationCenterHref ? [{ label: 'Центр автоматизации', href: automationCenterHref, icon: <Settings2 />, active: url === `/amo-accounts/${currentAccount.id}/automation` }] : []),
         ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
     ] : [];
 
