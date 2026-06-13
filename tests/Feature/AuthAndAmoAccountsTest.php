@@ -23,7 +23,7 @@ use App\Models\LeadSyncSchedule;
 use App\Models\ResponsibilityRedistributionRun;
 use App\Models\TaskStatisticsSyncRun;
 use App\Models\User;
-use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 use App\Services\Amo\AmoCatalogsService;
 use App\Services\Amo\AmoLeadTransferService;
 use App\Services\Amo\AmoOAuthTokenExchanger;

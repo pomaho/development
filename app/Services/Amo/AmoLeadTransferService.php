@@ -2,6 +2,8 @@
 
 namespace App\Services\Amo;
 
+use App\Services\Amo\Client\AmoFallbackHttpClient;
+
 use App\Models\AmoAccount;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineStatusSnapshot;

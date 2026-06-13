@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAmoAccountRequest;
 use App\Jobs\SyncAmoUsersAndRolesJob;
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

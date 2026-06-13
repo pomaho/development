@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Services\Amo;
+namespace App\Services\Amo\Client;
 
 use AmoCRM\Client\AmoCRMApiClient;
 use App\Models\AmoAccount;

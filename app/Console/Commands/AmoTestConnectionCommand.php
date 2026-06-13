@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 use Illuminate\Console\Command;
 
 class AmoTestConnectionCommand extends Command

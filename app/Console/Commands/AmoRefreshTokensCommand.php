@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\AmoAccount;
 use App\Models\AmoCredential;
-use App\Services\Amo\AmoTokenManager;
+use App\Services\Amo\Client\AmoTokenManager;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Throwable;

@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\Internal;
 use App\Http\Controllers\Controller;
 use App\Jobs\SyncAmoUsersAndRolesJob;
 use App\Models\AmoAccount;
-use App\Services\Amo\AmoFallbackHttpClient;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 use Illuminate\Http\JsonResponse;
 
 class AmoAccountApiController extends Controller
