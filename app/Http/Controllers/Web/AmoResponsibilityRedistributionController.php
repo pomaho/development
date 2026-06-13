@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccount;
 use App\Models\ResponsibilityRedistributionRun;
-use App\Services\Amo\AmoResponsibilityRedistributionService;
+use App\Services\Amo\Automation\AmoResponsibilityRedistributionService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
