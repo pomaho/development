@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AmoAccount;
 use App\Models\TaskStatisticsSyncRun;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Carbon;

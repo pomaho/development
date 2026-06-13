@@ -7,7 +7,7 @@ use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use App\Services\Amo\Client\AmoFallbackHttpClient;
 use Illuminate\Support\Carbon;
 

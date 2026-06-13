@@ -4,7 +4,7 @@ namespace App\Http\Controllers\Widget;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccountDashboardWidget;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;

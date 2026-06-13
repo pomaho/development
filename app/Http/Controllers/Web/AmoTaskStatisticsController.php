@@ -7,7 +7,7 @@ use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\AmoAccount;
 use App\Models\CrmEntitySnapshot;
 use App\Models\TaskStatisticsSyncRun;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use App\Services\Exports\TableExportService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;

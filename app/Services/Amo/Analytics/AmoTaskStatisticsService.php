@@ -1,10 +1,9 @@
 <?php
 
-namespace App\Services\Amo;
-
-use App\Services\Amo\Client\AmoFallbackHttpClient;
+namespace App\Services\Amo\Analytics;
 
 use App\Models\AmoAccount;
+use App\Services\Amo\Client\AmoFallbackHttpClient;
 use App\Models\AmoUsersSnapshot;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;

@@ -4,7 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\AmoAccount;
 use App\Models\AmoAccountDashboardWidget;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 

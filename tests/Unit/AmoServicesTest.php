@@ -18,7 +18,7 @@ use App\Services\Amo\Client\AmoFallbackHttpClient;
 use App\Services\Amo\Automation\AmoLeadTransferService;
 use App\Services\Amo\Structure\AmoPipelinesService;
 use App\Services\Amo\Automation\AmoResponsibilityRedistributionService;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use App\Services\Amo\Client\AmoTokenManager;
 use App\Services\Amo\Structure\AmoUsersService;
 use App\Services\Amo\AmoWebhookService;

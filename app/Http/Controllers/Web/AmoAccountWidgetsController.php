@@ -8,7 +8,7 @@ use App\Models\AmoAccountDashboardWidget;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\DashboardWidget;
-use App\Services\Amo\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
