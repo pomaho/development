@@ -1347,6 +1347,49 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->has('links.current_account.crm_audit'));
     }
 
+    public function test_amo_analytics_center_groups_reports_and_local_data_counts(): void
+    {
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        foreach (['leads', 'tasks', 'events'] as $entityType) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => $entityType,
+                'external_id' => "100-{$entityType}",
+                'name' => $entityType,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+        $widget = DashboardWidget::query()->create([
+            'code' => 'task_overdue_dashboard',
+            'name' => 'Просроченные выполненные задачи',
+            'component_key' => 'amo_iframe_task_overdue_dashboard',
+            'sort_order' => 70,
+            'is_enabled' => true,
+        ]);
+        AmoAccountDashboardWidget::query()->create([
+            'amo_account_id' => $account->id,
+            'dashboard_widget_id' => $widget->id,
+            'public_key' => 'public-widget-key',
+            'is_enabled' => true,
+        ]);
+
+        $this->actingAs($viewer)
+            ->get("/amo-accounts/{$account->id}/analytics")
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('AmoAccounts/AnalyticsCenter/Index')
+                ->where('account.name', 'Client')
+                ->where('summary.leads_count', 1)
+                ->where('summary.tasks_count', 1)
+                ->where('summary.events_count', 1)
+                ->where('summary.dashboard_widgets_count', 1)
+                ->has('links.current_account.task_statistics')
+                ->has('links.current_account.leads')
+                ->has('links.current_account.widgets'));
+    }
+
     public function test_task_dashboard_ui_keeps_task_and_lead_reports_separate(): void
     {
         $source = file_get_contents(resource_path('js/Pages/Widgets/Amo/TaskOverdueDashboard.tsx'));

@@ -63,6 +63,7 @@ type Props = {
             events_sync?: string;
             lead_sync_schedules?: string;
             sync_center?: string;
+            analytics_center?: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -86,6 +87,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     const eventsSyncHref = currentAccount ? currentLinks?.events_sync || `/amo-accounts/${currentAccount.id}/events-sync` : null;
     const leadSyncSchedulesHref = currentAccount ? currentLinks?.lead_sync_schedules || `/amo-accounts/${currentAccount.id}/lead-sync-schedules` : null;
     const syncCenterHref = currentAccount ? currentLinks?.sync_center || `/amo-accounts/${currentAccount.id}/sync` : null;
+    const analyticsCenterHref = currentAccount ? currentLinks?.analytics_center || `/amo-accounts/${currentAccount.id}/analytics` : null;
     const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
@@ -139,6 +141,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
     ] : [];
 
     const analyticsLinks: NavLink[] = currentAccount && currentLinks ? [
+        ...(analyticsCenterHref ? [{ label: 'Центр аналитики', href: analyticsCenterHref, icon: <BarChart3 />, active: url === `/amo-accounts/${currentAccount.id}/analytics` }] : []),
         ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
     ] : [];
 
