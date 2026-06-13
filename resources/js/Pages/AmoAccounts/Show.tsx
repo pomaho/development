@@ -52,6 +52,11 @@ type Props = {
             test: string;
             sync: string;
             deactivate: string;
+            data_center: string;
+            crm_structure_center: string;
+            sync_center: string;
+            automation_center: string;
+            analytics_center: string;
             users: string;
             roles: string;
             leads: string;
@@ -62,6 +67,7 @@ type Props = {
             task_statistics: string;
             responsibility_redistribution: string;
             crm_audit: string;
+            crm_fields: string;
             integrations: string;
             widgets: string;
         };
@@ -76,8 +82,9 @@ export default function AmoAccountShow({ account, summary, logs, can, links }: P
     const workspaceGroups = [
         {
             title: 'CRM-данные',
-            description: 'Операционные snapshots по сущностям клиента.',
+            description: 'Локальные snapshots сделок, задач, событий и будущих сущностей.',
             links: [
+                ['Центр данных', accountLinks.data_center],
                 ['Сделки', accountLinks.leads],
             ],
         },
@@ -85,27 +92,44 @@ export default function AmoAccountShow({ account, summary, logs, can, links }: P
             title: 'CRM-структура',
             description: 'Воронки, поля, списки, пользователи и права.',
             links: [
+                ['Центр структуры', accountLinks.crm_structure_center],
                 ['Воронки', accountLinks.pipelines],
+                ['Поля CRM', accountLinks.crm_fields],
                 ['Списки', accountLinks.catalogs],
                 ['Пользователи', accountLinks.users],
                 ['Роли и права', accountLinks.roles],
-                ['CRM-аудит', accountLinks.crm_audit],
             ],
         },
         {
             title: 'Синхронизация',
             description: 'Расписания, ручная загрузка и обновление событий.',
             links: [
+                ['Центр синхронизации', accountLinks.sync_center],
                 ['Расписания сделок', accountLinks.lead_sync_schedules],
                 ['События', accountLinks.events_sync],
+                ['CRM-аудит', accountLinks.crm_audit],
             ],
         },
         {
-            title: 'Автоматизация и аналитика',
-            description: 'Массовые действия, отчеты и dashboard-виджеты.',
+            title: 'Автоматизация',
+            description: 'Массовые действия, переносы и изменения данных amoCRM.',
             links: [
+                ['Центр автоматизации', accountLinks.automation_center],
                 ['Ответственные', accountLinks.responsibility_redistribution],
+            ],
+        },
+        {
+            title: 'Аналитика',
+            description: 'Отчеты, рабочий стол amoCRM и локальные витрины.',
+            links: [
+                ['Центр аналитики', accountLinks.analytics_center],
                 ['Задачи', accountLinks.task_statistics],
+            ],
+        },
+        {
+            title: 'Интеграции',
+            description: 'Подключаемые модули и настройки публичных виджетов.',
+            links: [
                 ['Интеграции', accountLinks.integrations],
                 ['Dashboard-блоки', accountLinks.widgets],
             ],

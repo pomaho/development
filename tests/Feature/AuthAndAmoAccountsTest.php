@@ -217,6 +217,11 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('account.settings.timezone', 'Europe/Moscow')
                 ->where('account.auth_type', AmoCredential::AUTH_OAUTH)
                 ->where('can.update', false)
+                ->has('links.current_account.data_center')
+                ->has('links.current_account.crm_structure_center')
+                ->has('links.current_account.sync_center')
+                ->has('links.current_account.automation_center')
+                ->has('links.current_account.analytics_center')
                 ->has('links.current_account.pipelines')
                 ->has('links.current_account.catalogs')
                 ->has('links.current_account.lead_sync_schedules')
@@ -1635,7 +1640,11 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('CRM-данные', $source);
         $this->assertStringContainsString('CRM-структура', $source);
         $this->assertStringContainsString('Синхронизация', $source);
-        $this->assertStringContainsString('Автоматизация и аналитика', $source);
+        $this->assertStringContainsString('Автоматизация', $source);
+        $this->assertStringContainsString('Аналитика', $source);
+        $this->assertStringContainsString('Интеграции', $source);
+        $this->assertStringContainsString('Центр данных', $source);
+        $this->assertStringContainsString('Центр структуры', $source);
         $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
     }
 
