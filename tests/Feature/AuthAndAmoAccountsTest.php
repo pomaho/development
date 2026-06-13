@@ -217,7 +217,11 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('account.settings.timezone', 'Europe/Moscow')
                 ->where('account.auth_type', AmoCredential::AUTH_OAUTH)
                 ->where('can.update', false)
-                ->has('links.current_account.pipelines'));
+                ->has('links.current_account.pipelines')
+                ->has('links.current_account.catalogs')
+                ->has('links.current_account.lead_sync_schedules')
+                ->has('links.current_account.task_statistics')
+                ->has('links.current_account.responsibility_redistribution'));
     }
 
     public function test_admin_can_open_pipeline_create_form_and_viewer_cannot_create_pipeline(): void
@@ -1379,7 +1383,11 @@ class AuthAndAmoAccountsTest extends TestCase
 
         $this->assertStringContainsString('Client profile', $source);
         $this->assertStringContainsString('primaryButtonClass', $source);
-        $this->assertStringContainsString('quickLinkClass', $source);
+        $this->assertStringContainsString('workspaceGroups', $source);
+        $this->assertStringContainsString('CRM-данные', $source);
+        $this->assertStringContainsString('CRM-структура', $source);
+        $this->assertStringContainsString('Синхронизация', $source);
+        $this->assertStringContainsString('Автоматизация и аналитика', $source);
         $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
     }
 

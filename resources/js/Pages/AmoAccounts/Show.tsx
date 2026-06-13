@@ -56,6 +56,11 @@ type Props = {
             roles: string;
             leads: string;
             pipelines: string;
+            catalogs: string;
+            lead_sync_schedules: string;
+            events_sync: string;
+            task_statistics: string;
+            responsibility_redistribution: string;
             crm_audit: string;
             integrations: string;
             widgets: string;
@@ -68,7 +73,44 @@ export default function AmoAccountShow({ account, summary, logs, can, links }: P
     const settings = account.settings || {};
     const secondaryButtonClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
     const primaryButtonClass = 'inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600';
-    const quickLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
+    const workspaceGroups = [
+        {
+            title: 'CRM-данные',
+            description: 'Операционные snapshots по сущностям клиента.',
+            links: [
+                ['Сделки', accountLinks.leads],
+            ],
+        },
+        {
+            title: 'CRM-структура',
+            description: 'Воронки, поля, списки, пользователи и права.',
+            links: [
+                ['Воронки', accountLinks.pipelines],
+                ['Списки', accountLinks.catalogs],
+                ['Пользователи', accountLinks.users],
+                ['Роли и права', accountLinks.roles],
+                ['CRM-аудит', accountLinks.crm_audit],
+            ],
+        },
+        {
+            title: 'Синхронизация',
+            description: 'Расписания, ручная загрузка и обновление событий.',
+            links: [
+                ['Расписания сделок', accountLinks.lead_sync_schedules],
+                ['События', accountLinks.events_sync],
+            ],
+        },
+        {
+            title: 'Автоматизация и аналитика',
+            description: 'Массовые действия, отчеты и dashboard-виджеты.',
+            links: [
+                ['Ответственные', accountLinks.responsibility_redistribution],
+                ['Задачи', accountLinks.task_statistics],
+                ['Интеграции', accountLinks.integrations],
+                ['Dashboard-блоки', accountLinks.widgets],
+            ],
+        },
+    ];
 
     return (
         <AuthenticatedLayout
@@ -118,16 +160,21 @@ export default function AmoAccountShow({ account, summary, logs, can, links }: P
                 </div>
             ) : null}
 
-            <div className="mt-6 flex flex-wrap gap-3">
-                <a className={quickLinkClass} href={accountLinks.dashboard}>Dashboard клиента</a>
-                <a className={quickLinkClass} href={accountLinks.leads}>Сделки</a>
-                <a className={quickLinkClass} href={accountLinks.users}>Пользователи</a>
-                <a className={quickLinkClass} href={accountLinks.roles}>Роли</a>
-                <a className={quickLinkClass} href={accountLinks.pipelines}>Воронки</a>
-                <a className={quickLinkClass} href={accountLinks.crm_audit}>CRM-аудит</a>
-                <a className={quickLinkClass} href={accountLinks.integrations}>Интеграции</a>
-                <a className={quickLinkClass} href={accountLinks.widgets}>Dashboard-блоки</a>
-            </div>
+            <section className="mt-6 grid gap-4 xl:grid-cols-2">
+                {workspaceGroups.map((group) => (
+                    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm" key={group.title}>
+                        <h2 className="text-lg font-semibold text-gray-900">{group.title}</h2>
+                        <p className="mt-1 text-theme-sm text-gray-500">{group.description}</p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            {group.links.map(([label, href]) => (
+                                <a className="inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500" href={href} key={label}>
+                                    {label}
+                                </a>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </section>
 
             {can.sync && account.webhook_url ? (
                 <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm">
