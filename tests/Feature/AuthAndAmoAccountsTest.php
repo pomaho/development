@@ -2744,6 +2744,74 @@ class AuthAndAmoAccountsTest extends TestCase
         ]);
     }
 
+    public function test_webhook_controller_accepts_valid_key_and_dispatches_job(): void
+    {
+        Queue::fake();
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'is_active' => true,
+        ]);
+
+        $this->post("/webhooks/amo/{$account->webhook_key}", [
+            'leads' => ['create' => [['id' => 42, 'name' => 'Lead 42']]],
+        ])->assertOk()->assertJson(['ok' => true, 'events_accepted' => 1]);
+
+        Queue::assertPushed(ProcessAmoWebhookEventJob::class, function (ProcessAmoWebhookEventJob $job): bool {
+            return $job->webhookEventId > 0;
+        });
+
+        $this->assertDatabaseHas('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'entity_id' => '42',
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+        ]);
+    }
+
+    public function test_webhook_controller_returns_404_for_invalid_key(): void
+    {
+        $this->post('/webhooks/amo/invalid-key-xyz', [
+            'leads' => ['create' => [['id' => 1]]],
+        ])->assertNotFound();
+    }
+
+    public function test_webhook_controller_returns_404_for_inactive_account(): void
+    {
+        $account = AmoAccount::query()->create([
+            'name' => 'Inactive',
+            'base_domain' => 'inactive.amocrm.ru',
+            'is_active' => false,
+        ]);
+
+        $this->post("/webhooks/amo/{$account->webhook_key}", [
+            'leads' => ['create' => [['id' => 1]]],
+        ])->assertNotFound();
+    }
+
+    public function test_webhook_controller_accepts_unknown_payload_as_skippable_event(): void
+    {
+        Queue::fake();
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'is_active' => true,
+        ]);
+
+        $this->post("/webhooks/amo/{$account->webhook_key}", [
+            'some_unknown_key' => 'value',
+        ])->assertOk()->assertJson(['ok' => true, 'events_accepted' => 1]);
+
+        $this->assertDatabaseHas('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'event_type' => 'unknown',
+            'entity_type' => null,
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+        ]);
+    }
+
     public function test_admin_oauth_pages_render_inertia_without_secrets(): void
     {
         $admin = User::factory()->admin()->create();

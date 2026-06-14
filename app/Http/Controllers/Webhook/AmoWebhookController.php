@@ -8,6 +8,7 @@ use App\Models\AmoAccount;
 use App\Services\Amo\Webhooks\AmoWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AmoWebhookController extends Controller
 {
@@ -20,11 +21,17 @@ class AmoWebhookController extends Controller
             ->where('is_active', true)
             ->firstOrFail();
 
-        $events = $webhookService->createEvents($account, $request->all());
+        $events = DB::transaction(function () use ($account, $request, $webhookService): array {
+            $created = $webhookService->createEvents($account, $request->all());
 
-        foreach ($events as $event) {
-            ProcessAmoWebhookEventJob::dispatch($event->id)->delay(now()->addSeconds(self::PROCESSING_DELAY_SECONDS));
-        }
+            foreach ($created as $event) {
+                ProcessAmoWebhookEventJob::dispatch($event->id)
+                    ->delay(now()->addSeconds(self::PROCESSING_DELAY_SECONDS))
+                    ->afterCommit();
+            }
+
+            return $created;
+        });
 
         return response()->json([
             'ok' => true,
