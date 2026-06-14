@@ -77,7 +77,9 @@ class AmoFallbackHttpClient
     private function handleStatus(AmoAccount $account, int $status, string $url, ?array $payload): void
     {
         if ($status < 400) {
-            $account->forceFill(['auth_status' => 'ok'])->save();
+            if ($account->auth_status !== 'ok') {
+                $account->forceFill(['auth_status' => 'ok'])->save();
+            }
             return;
         }
 

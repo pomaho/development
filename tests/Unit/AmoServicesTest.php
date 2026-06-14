@@ -1388,6 +1388,33 @@ class AmoServicesTest extends TestCase
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');
     }
 
+    public function test_fallback_http_client_skips_auth_status_write_when_already_ok(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+        $account->forceFill(['auth_status' => 'ok'])->save();
+        $savedCount = $account->apiRequestLogs()->count();
+
+        Http::fake(['client.amocrm.ru/*' => Http::response(['_embedded' => []], 200)]);
+
+        app(AmoFallbackHttpClient::class)->get($account, '/api/v4/leads');
+
+        $account->refresh();
+        $this->assertSame('ok', $account->auth_status);
+        $this->assertSame(1, $account->apiRequestLogs()->count() - $savedCount);
+    }
+
+    public function test_fallback_http_client_writes_auth_status_ok_when_transitioning_from_error(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+        $account->forceFill(['auth_status' => 'reauth_required'])->save();
+
+        Http::fake(['client.amocrm.ru/*' => Http::response(['_embedded' => []], 200)]);
+
+        app(AmoFallbackHttpClient::class)->get($account, '/api/v4/leads');
+
+        $this->assertSame('ok', $account->fresh()->auth_status);
+    }
+
     public function test_fallback_http_client_truncates_large_api_log_payloads(): void
     {
         config(['amo.api_log_payload_max_bytes' => 512]);
