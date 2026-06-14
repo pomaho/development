@@ -354,8 +354,59 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                 </ReportSection>
 
                 <ReportSection
+                    eyebrow="Весь отдел рекрутинга"
+                    title="Всего передано менеджерам по командам"
+                    description={`Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по полю “${recruiterTeamCityBreakdown.team_field_name}”.`}
+                    aside={(
+                        <AccentSummary
+                            label="Передано менеджерам"
+                            value={recruiterTeamCityBreakdown.total_leads_count}
+                            note="по всему отделу"
+                            tone="warning"
+                        />
+                    )}
+                >
+                    <BreakdownReportContent rows={departmentTeamRows(recruiterTeamCityBreakdown)} />
+                </ReportSection>
+
+                <ReportSection
+                    eyebrow="Весь отдел рекрутинга"
+                    title="Всего передано менеджерам по городам"
+                    description={`Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по полю “${recruiterTeamCityBreakdown.city_field_name}”.`}
+                    aside={(
+                        <AccentSummary
+                            label="Передано менеджерам"
+                            value={recruiterTeamCityBreakdown.total_leads_count}
+                            note="по всему отделу"
+                            tone="warning"
+                        />
+                    )}
+                >
+                    <BreakdownReportContent rows={departmentCityRows(recruiterTeamCityBreakdown)} />
+                </ReportSection>
+
+                <ReportSection
+                    eyebrow="Весь отдел рекрутинга"
+                    title="Общая таблица по городам и источникам"
+                    description={`Разрез по командам, городам и источникам. Источник: ${recruiterTeamCityBreakdown.source_field_found ? recruiterTeamCityBreakdown.source_field_name : 'поле не найдено'}.`}
+                    aside={(
+                        <AccentSummary
+                            label="Сделок в таблице"
+                            value={recruiterTeamCityBreakdown.total_leads_count}
+                            note="по всему отделу"
+                            tone="warning"
+                        />
+                    )}
+                >
+                    <SourceBreakdownTable
+                        sourceColumns={recruiterTeamCityBreakdown.source_columns}
+                        rows={departmentSourceRows(recruiterTeamCityBreakdown)}
+                    />
+                </ReportSection>
+
+                <ReportSection
                     eyebrow="Передачи рекрутеров"
-                    title={`${recruiterTeamCityBreakdown.team_field_name} / ${recruiterTeamCityBreakdown.city_field_name}`}
+                    title="Подробно по каждому рекрутеру"
                     description="Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по команде, городу и источнику."
                     aside={(
                         <AccentSummary
@@ -367,36 +418,8 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     )}
                 >
                     <div className="grid gap-4 p-5">
-                        {recruiterTeamCityBreakdown.recruiters.length > 0 ? (
-                            <>
-                                <article className="overflow-hidden rounded-2xl border border-brand-100 bg-brand-50/30">
-                                    <div className="border-b border-brand-100 bg-white px-5 py-4">
-                                        <div className="text-theme-xs font-semibold uppercase text-brand-600">Весь отдел рекрутинга</div>
-                                        <h3 className="mt-1 text-base font-semibold text-gray-900">Сводка передач менеджерам</h3>
-                                    </div>
-
-                                    <div className="grid gap-4 border-b border-brand-100 p-4 xl:grid-cols-2">
-                                        <BreakdownCard
-                                            title="Всего передано менеджерам по командам"
-                                            description={`Поле “${recruiterTeamCityBreakdown.team_field_name}”`}
-                                            rows={departmentTeamRows(recruiterTeamCityBreakdown)}
-                                        />
-                                        <BreakdownCard
-                                            title="Всего передано менеджерам по городам"
-                                            description={`Поле “${recruiterTeamCityBreakdown.city_field_name}”`}
-                                            rows={departmentCityRows(recruiterTeamCityBreakdown)}
-                                        />
-                                    </div>
-
-                                    <SourceBreakdownTable
-                                        sourceColumns={recruiterTeamCityBreakdown.source_columns}
-                                        rows={departmentSourceRows(recruiterTeamCityBreakdown)}
-                                        title="Общая таблица по городам и источникам"
-                                    />
-                                </article>
-
-                                {recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
-                                    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50" key={recruiter.enum_id}>
+                        {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
+                            <article className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50" key={recruiter.enum_id}>
                                 <div className="flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4">
                                     <h3 className="text-base font-semibold text-gray-900">{recruiter.name}</h3>
                                     <span className="rounded-full bg-brand-50 px-2.5 py-1 text-theme-xs font-medium tabular-nums text-brand-600">
@@ -404,7 +427,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                     </span>
                                 </div>
 
-                                <div className="grid gap-4 border-b border-gray-200 p-4 xl:grid-cols-2">
+                                <div className="grid gap-4 border-b border-gray-200 p-4">
                                     <BreakdownCard
                                         title="Передано менеджерам по командам"
                                         description={`Поле “${recruiterTeamCityBreakdown.team_field_name}”`}
@@ -458,9 +481,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                     </table>
                                 </div>
                             </article>
-                                ))}
-                            </>
-                        ) : (
+                        )) : (
                             <EmptyState>
                                 Нет данных для отчета. Проверьте, что выбраны поля “Команда” и “Город”, а в сделках заполнены рекрутер и менеджер.
                             </EmptyState>
@@ -531,12 +552,9 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
     );
 }
 
-function SourceBreakdownTable({ title, rows, sourceColumns }: { title: string; rows: SourceBreakdownRow[]; sourceColumns: string[] }) {
+function SourceBreakdownTable({ rows, sourceColumns }: { rows: SourceBreakdownRow[]; sourceColumns: string[] }) {
     return (
-        <div className="overflow-x-auto">
-            <div className="border-b border-gray-200 bg-white px-5 py-3 text-theme-xs font-semibold uppercase text-gray-500">
-                {title}
-            </div>
+        <div className="overflow-x-auto p-5">
             <table className="w-full min-w-[760px] text-left text-theme-sm">
                 <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                     <tr>
@@ -571,6 +589,15 @@ function SourceBreakdownTable({ title, rows, sourceColumns }: { title: string; r
     );
 }
 
+function BreakdownReportContent({ rows }: { rows: BreakdownRow[] }) {
+    return (
+        <div className="space-y-5 p-5">
+            <BreakdownTable rows={rows} />
+            <PieChart rows={rows} total={rows.reduce((sum, row) => sum + row.count, 0)} />
+        </div>
+    );
+}
+
 function BreakdownCard({ title, description, rows }: { title: string; description: string; rows: BreakdownRow[] }) {
     const total = rows.reduce((sum, row) => sum + row.count, 0);
 
@@ -587,30 +614,8 @@ function BreakdownCard({ title, description, rows }: { title: string; descriptio
             </div>
 
             {rows.length > 0 ? (
-                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_220px] lg:items-start">
-                    <div className="overflow-hidden rounded-xl border border-gray-200">
-                        <table className="w-full text-left text-theme-sm">
-                            <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
-                                <tr>
-                                    <th className="px-4 py-3">Значение</th>
-                                    <th className="px-4 py-3 text-right">Сделок</th>
-                                    <th className="px-4 py-3 text-right">Доля</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {rows.map((row, index) => (
-                                    <tr className="hover:bg-brand-50/40" key={row.name}>
-                                        <td className="px-4 py-3">
-                                            <span className="mr-2 inline-block size-2.5 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
-                                            <span className="font-medium text-gray-900">{row.name}</span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">{row.count}</td>
-                                        <td className="px-4 py-3 text-right tabular-nums text-gray-600">{percentOf(row.count, total)}%</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                <div className="mt-4 space-y-4">
+                    <BreakdownTable rows={rows} />
                     <PieChart rows={rows} total={total} />
                 </div>
             ) : (
@@ -618,6 +623,44 @@ function BreakdownCard({ title, description, rows }: { title: string; descriptio
                     Нет данных для разреза.
                 </div>
             )}
+        </div>
+    );
+}
+
+function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+
+    if (rows.length === 0) {
+        return (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-theme-sm text-gray-500">
+                Нет данных для разреза.
+            </div>
+        );
+    }
+
+    return (
+        <div className="overflow-hidden rounded-xl border border-gray-200">
+            <table className="w-full text-left text-theme-sm">
+                <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
+                    <tr>
+                        <th className="px-4 py-3">Значение</th>
+                        <th className="px-4 py-3 text-right">Сделок</th>
+                        <th className="px-4 py-3 text-right">Доля</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                    {rows.map((row, index) => (
+                        <tr className="hover:bg-brand-50/40" key={row.name}>
+                            <td className="px-4 py-3">
+                                <span className="mr-2 inline-block size-2.5 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                                <span className="font-medium text-gray-900">{row.name}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">{row.count}</td>
+                            <td className="px-4 py-3 text-right tabular-nums text-gray-600">{percentOf(row.count, total)}%</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
