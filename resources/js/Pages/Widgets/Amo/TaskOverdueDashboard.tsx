@@ -167,6 +167,22 @@ const departmentCityRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow
     return sortedBreakdownRows(rows);
 };
 
+const departmentSourceChartRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+
+    breakdown.recruiters.forEach((recruiter) => {
+        recruiter.teams.forEach((team) => {
+            team.cities.forEach((city) => {
+                breakdown.source_columns.forEach((source) => {
+                    rows.set(source, (rows.get(source) || 0) + (city.sources[source] || 0));
+                });
+            });
+        });
+    });
+
+    return sortedBreakdownRows(rows);
+};
+
 const departmentSourceRows = (breakdown: RecruiterTeamCityBreakdown): SourceBreakdownRow[] => {
     const rows = new Map<string, SourceBreakdownRow>();
 
@@ -383,6 +399,22 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     )}
                 >
                     <BreakdownReportContent compactLegend rows={departmentCityRows(recruiterTeamCityBreakdown)} />
+                </ReportSection>
+
+                <ReportSection
+                    eyebrow="Весь отдел рекрутинга"
+                    title="Всего передано менеджерам по источникам"
+                    description={`Сделки с заполненными полями “Рекрутер” и “Менеджер”, сгруппированные по полю “${recruiterTeamCityBreakdown.source_field_name}”.`}
+                    aside={(
+                        <AccentSummary
+                            label="Передано менеджерам"
+                            value={recruiterTeamCityBreakdown.total_leads_count}
+                            note="по всему отделу"
+                            tone="warning"
+                        />
+                    )}
+                >
+                    <BreakdownReportContent compactLegend rows={departmentSourceChartRows(recruiterTeamCityBreakdown)} />
                 </ReportSection>
 
                 <ReportSection

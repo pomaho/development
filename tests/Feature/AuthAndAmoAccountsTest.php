@@ -1572,6 +1572,8 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('Весь отдел рекрутинга', $source);
         $this->assertStringContainsString('Всего передано менеджерам по командам', $source);
         $this->assertStringContainsString('Всего передано менеджерам по городам', $source);
+        $this->assertStringContainsString('Всего передано менеджерам по источникам', $source);
+        $this->assertStringContainsString('departmentSourceChartRows', $source);
         $this->assertStringContainsString('Общая таблица по городам и источникам', $source);
         $this->assertStringContainsString('SourceBreakdownTable', $source);
         $this->assertStringContainsString('BreakdownReportContent', $source);
