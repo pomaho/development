@@ -11,6 +11,8 @@ use Illuminate\Http\Request;
 
 class AmoWebhookController extends Controller
 {
+    private const PROCESSING_DELAY_SECONDS = 60;
+
     public function __invoke(Request $request, string $webhookKey, AmoWebhookService $webhookService): JsonResponse
     {
         $account = AmoAccount::query()
@@ -21,7 +23,7 @@ class AmoWebhookController extends Controller
         $events = $webhookService->createEvents($account, $request->all());
 
         foreach ($events as $event) {
-            ProcessAmoWebhookEventJob::dispatch($event->id);
+            ProcessAmoWebhookEventJob::dispatch($event->id)->delay(now()->addSeconds(self::PROCESSING_DELAY_SECONDS));
         }
 
         return response()->json([

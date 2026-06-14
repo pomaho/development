@@ -100,6 +100,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/amo-accounts/{amo_account}/events-sync', [AmoTaskStatisticsController::class, 'syncEvents'])->name('amo-accounts.events-sync.sync');
     Route::post('/amo-accounts/{amo_account}/events-sync/settings', [AmoTaskStatisticsController::class, 'updateEventSettings'])->name('amo-accounts.events-sync.settings');
     Route::get('/amo-accounts/{amo_account}/sync', AmoSyncCenterController::class)->name('amo-accounts.sync.index');
+    Route::post('/amo-accounts/{amo_account}/sync/webhooks/retry-failed', [AmoSyncCenterController::class, 'retryFailedWebhooks'])->name('amo-accounts.sync.webhooks.retry-failed');
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::get('/amo-accounts/{amo_account}/crm-audit/fields', [CrmAuditController::class, 'fields'])->name('amo-accounts.crm-audit.fields');
     Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');

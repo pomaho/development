@@ -23,6 +23,10 @@ class ProcessAmoWebhookEventJob implements ShouldQueue
     {
         $event = AmoWebhookEvent::query()->findOrFail($this->webhookEventId);
 
+        if ($event->status !== AmoWebhookEvent::STATUS_PENDING) {
+            return;
+        }
+
         try {
             $webhookService->process($event);
         } catch (Throwable $exception) {

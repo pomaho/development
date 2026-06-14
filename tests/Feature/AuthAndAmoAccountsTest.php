@@ -1277,8 +1277,49 @@ class AuthAndAmoAccountsTest extends TestCase
             'status' => AmoWebhookEvent::STATUS_PENDING,
         ]);
         Queue::assertPushed(ProcessAmoWebhookEventJob::class, 2);
+        Queue::assertPushed(ProcessAmoWebhookEventJob::class, fn (ProcessAmoWebhookEventJob $job): bool => $job->delay !== null);
 
         $this->post('/webhooks/amo/wrong-key', [])->assertNotFound();
+    }
+
+    public function test_amo_webhook_endpoint_reuses_pending_entity_event(): void
+    {
+        Queue::fake();
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'webhook_key' => 'secret-webhook-key',
+        ]);
+
+        $this->post('/webhooks/amo/secret-webhook-key', [
+            'leads' => [
+                'update' => [
+                    ['id' => 100, 'updated_at' => 1781455200],
+                ],
+            ],
+        ])->assertOk();
+        $this->post('/webhooks/amo/secret-webhook-key', [
+            'leads' => [
+                'update' => [
+                    ['id' => 100, 'updated_at' => 1781455300],
+                ],
+            ],
+        ])->assertOk();
+
+        $this->assertSame(1, AmoWebhookEvent::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->where('entity_id', '100')
+            ->where('status', AmoWebhookEvent::STATUS_PENDING)
+            ->count());
+        $this->assertDatabaseHas('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+        ]);
+        Queue::assertPushed(ProcessAmoWebhookEventJob::class, 2);
     }
 
     public function test_amo_account_page_shows_webhook_url_only_to_sync_users(): void
@@ -1346,10 +1387,66 @@ class AuthAndAmoAccountsTest extends TestCase
                 ->where('summary.lead_schedules_enabled', 1)
                 ->where('summary.webhook_events_pending', 1)
                 ->where('summary.webhook_events_failed', 1)
+                ->where('can.retry_webhooks', false)
                 ->where('recentWebhookEvents.0.event_type', 'leads.update')
+                ->has('links.retry_failed_webhooks')
                 ->has('links.current_account.lead_sync_schedules')
                 ->has('links.current_account.events_sync')
                 ->has('links.current_account.crm_audit'));
+    }
+
+    public function test_admin_can_retry_failed_webhook_events(): void
+    {
+        Queue::fake();
+
+        $admin = User::factory()->admin()->create();
+        $viewer = User::factory()->create();
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $failed = AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'leads.update',
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'payload' => ['id' => 100],
+            'status' => AmoWebhookEvent::STATUS_FAILED,
+            'received_at' => now(),
+            'processed_at' => now(),
+            'error_message' => 'API error',
+        ]);
+
+        $this->actingAs($viewer)
+            ->post("/amo-accounts/{$account->id}/sync/webhooks/retry-failed")
+            ->assertForbidden();
+
+        $this->actingAs($admin)
+            ->post("/amo-accounts/{$account->id}/sync/webhooks/retry-failed")
+            ->assertRedirect();
+
+        $failed->refresh();
+        $this->assertSame(AmoWebhookEvent::STATUS_PENDING, $failed->status);
+        $this->assertNull($failed->error_message);
+        $this->assertNull($failed->processed_at);
+        Queue::assertPushed(ProcessAmoWebhookEventJob::class, fn (ProcessAmoWebhookEventJob $job): bool => $job->webhookEventId === $failed->id && $job->delay !== null);
+    }
+
+    public function test_processed_webhook_job_is_not_processed_again(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        $event = AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'leads.update',
+            'entity_type' => 'leads',
+            'entity_id' => '100',
+            'payload' => ['id' => 100],
+            'status' => AmoWebhookEvent::STATUS_PROCESSED,
+            'received_at' => now(),
+            'processed_at' => now(),
+        ]);
+
+        $service = Mockery::mock(\App\Services\Amo\Webhooks\AmoWebhookService::class);
+        $service->shouldNotReceive('process');
+
+        (new ProcessAmoWebhookEventJob($event->id))->handle($service);
     }
 
     public function test_amo_data_center_groups_local_crm_entities(): void
@@ -1662,6 +1759,15 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('Центр данных', $source);
         $this->assertStringContainsString('Центр структуры', $source);
         $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
+    }
+
+    public function test_sync_center_ui_allows_failed_webhook_retry(): void
+    {
+        $source = file_get_contents(resource_path('js/Pages/AmoAccounts/SyncCenter/Index.tsx'));
+
+        $this->assertStringContainsString('Переобработать ошибки', $source);
+        $this->assertStringContainsString('retry_failed_webhooks', $source);
+        $this->assertStringContainsString('can.retry_webhooks', $source);
     }
 
     public function test_amo_account_edit_uses_tailadmin_form_layout(): void

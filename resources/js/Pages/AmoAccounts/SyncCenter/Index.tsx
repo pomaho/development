@@ -27,6 +27,9 @@ type Props = {
         webhook_events_pending: number;
         webhook_events_failed: number;
     };
+    can: {
+        retry_webhooks: boolean;
+    };
     recentWebhookEvents: WebhookEvent[];
     links: {
         dashboard: string;
@@ -34,6 +37,7 @@ type Props = {
         oauth: string;
         api_logs: string;
         logout: string;
+        retry_failed_webhooks: string;
         current_account: {
             dashboard: string;
             show: string;
@@ -54,8 +58,9 @@ type Props = {
     };
 };
 
-export default function SyncCenterIndex({ account, summary, recentWebhookEvents, links }: Props) {
+export default function SyncCenterIndex({ account, summary, can, recentWebhookEvents, links }: Props) {
     const accountLinks = links.current_account;
+    const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const cards = [
         {
             title: 'Расписания сделок',
@@ -121,10 +126,20 @@ export default function SyncCenterIndex({ account, summary, recentWebhookEvents,
                         <h2 className="text-lg font-semibold text-gray-900">Последние webhook events</h2>
                         <p className="mt-1 text-theme-sm text-gray-500">Оперативные события, которые amoCRM отправила в сервис.</p>
                     </div>
-                    <span className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1 text-theme-xs font-medium text-gray-600">
-                        <DatabaseZap size={14} />
-                        amo_webhook_events
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                        {can.retry_webhooks && summary.webhook_events_failed > 0 ? (
+                            <form action={links.retry_failed_webhooks} method="post">
+                                <input name="_token" type="hidden" value={csrf} />
+                                <button className="inline-flex h-9 items-center rounded-lg bg-error-500 px-3 text-theme-xs font-medium text-white shadow-theme-xs hover:bg-error-600" type="submit">
+                                    Переобработать ошибки
+                                </button>
+                            </form>
+                        ) : null}
+                        <span className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1 text-theme-xs font-medium text-gray-600">
+                            <DatabaseZap size={14} />
+                            amo_webhook_events
+                        </span>
+                    </div>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px] text-left text-theme-sm">

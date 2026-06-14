@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessAmoWebhookEventJob;
 use App\Models\AmoAccount;
 use App\Models\AmoWebhookEvent;
 use App\Models\LeadSyncSchedule;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class AmoSyncCenterController extends Controller
 {
+    private const WEBHOOK_RETRY_DELAY_SECONDS = 60;
+
     public function __invoke(AmoAccount $amoAccount): Response
     {
         $this->authorize('view', $amoAccount);
@@ -26,6 +30,9 @@ class AmoSyncCenterController extends Controller
                 'lead_schedules_enabled' => LeadSyncSchedule::query()->where('amo_account_id', $amoAccount->id)->where('is_enabled', true)->count(),
                 'webhook_events_pending' => AmoWebhookEvent::query()->where('amo_account_id', $amoAccount->id)->where('status', AmoWebhookEvent::STATUS_PENDING)->count(),
                 'webhook_events_failed' => AmoWebhookEvent::query()->where('amo_account_id', $amoAccount->id)->where('status', AmoWebhookEvent::STATUS_FAILED)->count(),
+            ],
+            'can' => [
+                'retry_webhooks' => request()->user()?->can('sync', $amoAccount) ?? false,
             ],
             'recentWebhookEvents' => AmoWebhookEvent::query()
                 ->where('amo_account_id', $amoAccount->id)
@@ -48,6 +55,7 @@ class AmoSyncCenterController extends Controller
                 'oauth' => route('amo-oauth.external.index'),
                 'api_logs' => route('logs.api'),
                 'logout' => route('logout'),
+                'retry_failed_webhooks' => route('amo-accounts.sync.webhooks.retry-failed', $amoAccount),
                 'current_account' => [
                     'dashboard' => route('amo-accounts.dashboard', $amoAccount),
                     'show' => route('amo-accounts.show', $amoAccount),
@@ -67,5 +75,29 @@ class AmoSyncCenterController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function retryFailedWebhooks(AmoAccount $amoAccount): RedirectResponse
+    {
+        $this->authorize('sync', $amoAccount);
+
+        $events = AmoWebhookEvent::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->where('status', AmoWebhookEvent::STATUS_FAILED)
+            ->latest('received_at')
+            ->limit(100)
+            ->get();
+
+        foreach ($events as $event) {
+            $event->forceFill([
+                'status' => AmoWebhookEvent::STATUS_PENDING,
+                'error_message' => null,
+                'processed_at' => null,
+            ])->save();
+
+            ProcessAmoWebhookEventJob::dispatch($event->id)->delay(now()->addSeconds(self::WEBHOOK_RETRY_DELAY_SECONDS));
+        }
+
+        return back()->with('status', "Webhook events отправлены на повторную обработку: {$events->count()}.");
     }
 }

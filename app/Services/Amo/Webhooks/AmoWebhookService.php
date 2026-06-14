@@ -49,7 +49,33 @@ class AmoWebhookService
             ];
         }
 
-        return array_map(fn (array $event): AmoWebhookEvent => AmoWebhookEvent::query()->create([
+        return array_map(fn (array $event): AmoWebhookEvent => $this->createOrRefreshPendingEvent($account, $event), $events);
+    }
+
+    private function createOrRefreshPendingEvent(AmoAccount $account, array $event): AmoWebhookEvent
+    {
+        $existing = $event['entity_type'] && $event['entity_id']
+            ? AmoWebhookEvent::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', $event['entity_type'])
+                ->where('entity_id', $event['entity_id'])
+                ->where('status', AmoWebhookEvent::STATUS_PENDING)
+                ->latest('received_at')
+                ->first()
+            : null;
+
+        if ($existing) {
+            $existing->forceFill([
+                'event_type' => $event['event_type'],
+                'payload' => $event['payload'],
+                'received_at' => now(),
+                'error_message' => null,
+            ])->save();
+
+            return $existing;
+        }
+
+        return AmoWebhookEvent::query()->create([
             'amo_account_id' => $account->id,
             'event_type' => $event['event_type'],
             'entity_type' => $event['entity_type'],
@@ -57,7 +83,7 @@ class AmoWebhookService
             'payload' => $event['payload'],
             'status' => AmoWebhookEvent::STATUS_PENDING,
             'received_at' => now(),
-        ]), $events);
+        ]);
     }
 
     public function process(AmoWebhookEvent $event): void
