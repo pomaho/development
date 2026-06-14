@@ -42,6 +42,31 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function showV2(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): Response
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to, $periodMeta] = $this->period($request);
+
+        return Inertia::render('Widgets/Amo/TaskOverdueDashboardV2', [
+            'account' => [
+                'name' => $installation->account->name,
+                'base_domain' => $installation->account->base_domain,
+            ],
+            'period' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                ...$periodMeta,
+            ],
+            'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
+            'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
+            'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
+            'links' => [
+                'self' => route('widgets.amo.task-overdue-dashboard-v2.show', $publicKey),
+                'api' => route('api.widgets.amo.task-overdue-dashboard.show', $publicKey),
+            ],
+        ]);
+    }
+
     public function json(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey);

@@ -49,6 +49,9 @@ Route::get('/install', [AmoExternalOAuthController::class, 'install'])->name('am
 Route::get('/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'show'])
     ->middleware('amo-widget-frame-policy')
     ->name('widgets.amo.task-overdue-dashboard.show');
+Route::get('/widgets/amo/{publicKey}/task-overdue-dashboard-v2', [AmoTaskOverdueDashboardController::class, 'showV2'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('widgets.amo.task-overdue-dashboard-v2.show');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'json'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard.show');
