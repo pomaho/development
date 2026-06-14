@@ -49,10 +49,12 @@ class AmoAccountWidgetsController extends Controller
                             'public_key' => $installation->public_key,
                             'is_enabled' => $installation->is_enabled,
                             'settings_url' => route('amo-accounts.widgets.settings', [$amoAccount, $widget]),
-                            'iframe_url' => $widget->code === 'task_overdue_dashboard'
-                                ? route('widgets.amo.task-overdue-dashboard.show', $installation->public_key)
-                                : null,
-                            'api_url' => $widget->code === 'task_overdue_dashboard'
+                            'iframe_url' => match ($widget->code) {
+                                'task_overdue_dashboard' => route('widgets.amo.task-overdue-dashboard.show', $installation->public_key),
+                                'task_overdue_dashboard_v2' => route('widgets.amo.task-overdue-dashboard-v2.show', $installation->public_key),
+                                default => null,
+                            },
+                            'api_url' => in_array($widget->code, ['task_overdue_dashboard', 'task_overdue_dashboard_v2'])
                                 ? route('api.widgets.amo.task-overdue-dashboard.show', $installation->public_key)
                                 : null,
                         ],

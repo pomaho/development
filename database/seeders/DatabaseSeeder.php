@@ -47,6 +47,14 @@ class DatabaseSeeder extends Seeder
                 'sort_order' => 70,
                 'is_enabled' => true,
             ],
+            [
+                'code' => 'task_overdue_dashboard_v2',
+                'name' => 'Просроченные задачи и рекрутинг — Premium',
+                'description' => 'Обновлённый дизайн: тёмный хедер, градиенты, анимированные диаграммы.',
+                'component_key' => 'amo_iframe_task_overdue_dashboard_v2',
+                'sort_order' => 71,
+                'is_enabled' => true,
+            ],
         ];
     }
 
