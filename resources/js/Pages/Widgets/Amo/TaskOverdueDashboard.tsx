@@ -107,6 +107,13 @@ type BreakdownRow = {
     count: number;
 };
 
+type SourceBreakdownRow = {
+    team: string;
+    city: string;
+    count: number;
+    sources: Record<string, number>;
+};
+
 const chartColors = ['#465FFF', '#12B76A', '#F79009', '#F04438', '#7A5AF8', '#06AED4', '#DB2777', '#64748B'];
 
 const progressWidth = (value: number) => `${Math.min(Math.max(value, 0), 100)}%`;
@@ -133,6 +140,65 @@ const recruiterCityRows = (recruiter: RecruiterTeamCityBreakdown['recruiters'][n
         .map(([name, count]) => ({ name, count }))
         .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
 };
+
+const departmentTeamRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+
+    breakdown.recruiters.forEach((recruiter) => {
+        recruiter.teams.forEach((team) => {
+            rows.set(team.name, (rows.get(team.name) || 0) + team.total_leads_count);
+        });
+    });
+
+    return sortedBreakdownRows(rows);
+};
+
+const departmentCityRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+
+    breakdown.recruiters.forEach((recruiter) => {
+        recruiter.teams.forEach((team) => {
+            team.cities.forEach((city) => {
+                rows.set(city.name, (rows.get(city.name) || 0) + city.leads_count);
+            });
+        });
+    });
+
+    return sortedBreakdownRows(rows);
+};
+
+const departmentSourceRows = (breakdown: RecruiterTeamCityBreakdown): SourceBreakdownRow[] => {
+    const rows = new Map<string, SourceBreakdownRow>();
+
+    breakdown.recruiters.forEach((recruiter) => {
+        recruiter.teams.forEach((team) => {
+            team.cities.forEach((city) => {
+                const key = `${team.name}|||${city.name}`;
+                const row = rows.get(key) || {
+                    team: team.name,
+                    city: city.name,
+                    count: 0,
+                    sources: {},
+                };
+
+                row.count += city.leads_count;
+                breakdown.source_columns.forEach((source) => {
+                    row.sources[source] = (row.sources[source] || 0) + (city.sources[source] || 0);
+                });
+                rows.set(key, row);
+            });
+        });
+    });
+
+    return Array.from(rows.values())
+        .sort((left, right) => left.team.localeCompare(right.team) || right.count - left.count || left.city.localeCompare(right.city));
+};
+
+const sortedBreakdownRows = (rows: Map<string, number>): BreakdownRow[] => (
+    Array.from(rows.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
+);
 
 export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
     const debugIframe = useMemo(() => {
@@ -301,8 +367,36 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     )}
                 >
                     <div className="grid gap-4 p-5">
-                        {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
-                            <article className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50" key={recruiter.enum_id}>
+                        {recruiterTeamCityBreakdown.recruiters.length > 0 ? (
+                            <>
+                                <article className="overflow-hidden rounded-2xl border border-brand-100 bg-brand-50/30">
+                                    <div className="border-b border-brand-100 bg-white px-5 py-4">
+                                        <div className="text-theme-xs font-semibold uppercase text-brand-600">Весь отдел рекрутинга</div>
+                                        <h3 className="mt-1 text-base font-semibold text-gray-900">Сводка передач менеджерам</h3>
+                                    </div>
+
+                                    <div className="grid gap-4 border-b border-brand-100 p-4 xl:grid-cols-2">
+                                        <BreakdownCard
+                                            title="Всего передано менеджерам по командам"
+                                            description={`Поле “${recruiterTeamCityBreakdown.team_field_name}”`}
+                                            rows={departmentTeamRows(recruiterTeamCityBreakdown)}
+                                        />
+                                        <BreakdownCard
+                                            title="Всего передано менеджерам по городам"
+                                            description={`Поле “${recruiterTeamCityBreakdown.city_field_name}”`}
+                                            rows={departmentCityRows(recruiterTeamCityBreakdown)}
+                                        />
+                                    </div>
+
+                                    <SourceBreakdownTable
+                                        sourceColumns={recruiterTeamCityBreakdown.source_columns}
+                                        rows={departmentSourceRows(recruiterTeamCityBreakdown)}
+                                        title="Общая таблица по городам и источникам"
+                                    />
+                                </article>
+
+                                {recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
+                                    <article className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50" key={recruiter.enum_id}>
                                 <div className="flex items-start justify-between gap-3 border-b border-gray-200 bg-white px-5 py-4">
                                     <h3 className="text-base font-semibold text-gray-900">{recruiter.name}</h3>
                                     <span className="rounded-full bg-brand-50 px-2.5 py-1 text-theme-xs font-medium tabular-nums text-brand-600">
@@ -364,7 +458,9 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                     </table>
                                 </div>
                             </article>
-                        )) : (
+                                ))}
+                            </>
+                        ) : (
                             <EmptyState>
                                 Нет данных для отчета. Проверьте, что выбраны поля “Команда” и “Город”, а в сделках заполнены рекрутер и менеджер.
                             </EmptyState>
@@ -431,6 +527,46 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     </div>
                 </ReportSection>
             </div>
+        </div>
+    );
+}
+
+function SourceBreakdownTable({ title, rows, sourceColumns }: { title: string; rows: SourceBreakdownRow[]; sourceColumns: string[] }) {
+    return (
+        <div className="overflow-x-auto">
+            <div className="border-b border-gray-200 bg-white px-5 py-3 text-theme-xs font-semibold uppercase text-gray-500">
+                {title}
+            </div>
+            <table className="w-full min-w-[760px] text-left text-theme-sm">
+                <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
+                    <tr>
+                        <th className="px-5 py-3">Команда</th>
+                        <th className="px-4 py-3">Город</th>
+                        <th className="px-4 py-3 text-right">Всего</th>
+                        {sourceColumns.map((source) => (
+                            <th className="px-4 py-3 text-right" key={source}>{source}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                    {rows.map((row) => (
+                        <tr className="text-gray-700 hover:bg-brand-50/40" key={`${row.team}-${row.city}`}>
+                            <td className="px-5 py-3 align-top font-semibold text-gray-900">{row.team}</td>
+                            <td className="px-4 py-3 font-medium text-gray-900">{row.city}</td>
+                            <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">{row.count}</td>
+                            {sourceColumns.map((source) => {
+                                const count = row.sources[source] || 0;
+
+                                return (
+                                    <td className={count > 0 ? 'px-4 py-3 text-right font-medium tabular-nums text-brand-600' : 'px-4 py-3 text-right tabular-nums text-gray-400'} key={source}>
+                                        {count}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
