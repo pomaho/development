@@ -4,10 +4,9 @@ namespace App\Jobs;
 
 use App\Models\AmoAccount;
 use App\Models\TaskStatisticsSyncRun;
-use App\Services\Amo\Analytics\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskSyncService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Support\Carbon;
 use Throwable;
 
 class SyncAmoTaskStatisticsJob implements ShouldQueue
@@ -21,12 +20,12 @@ class SyncAmoTaskStatisticsJob implements ShouldQueue
     {
     }
 
-    public function handle(AmoTaskStatisticsService $statisticsService): void
+    public function handle(AmoTaskSyncService $syncService): void
     {
         $run = TaskStatisticsSyncRun::query()->findOrFail($this->runId);
         $account = AmoAccount::query()->findOrFail($run->amo_account_id);
 
-        $statisticsService->sync($account, $run->period_from, $run->period_to, $run);
+        $syncService->sync($account, $run->period_from, $run->period_to, $run);
 
         if ($run->period_to !== null && $run->period_to->gt($account->taskStatisticsLastSuccessfulSyncAt() ?? now()->subYears(20))) {
             $account->markTaskStatisticsSyncedUntil($run->period_to);

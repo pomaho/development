@@ -19,6 +19,7 @@ use App\Services\Amo\Automation\AmoLeadTransferService;
 use App\Services\Amo\Structure\AmoPipelinesService;
 use App\Services\Amo\Automation\AmoResponsibilityRedistributionService;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
+use App\Services\Amo\Analytics\AmoTaskSyncService;
 use App\Services\Amo\Client\AmoTokenManager;
 use App\Services\Amo\Structure\AmoUsersService;
 use App\Services\Amo\Webhooks\AmoWebhookService;
@@ -869,10 +870,11 @@ class AmoServicesTest extends TestCase
             'period_from' => $from,
             'period_to' => $to,
         ]);
-        $service = new AmoTaskStatisticsService($http);
-        $syncCounts = $service->sync($account, $from, $to, $run);
+        $statisticsService = new AmoTaskStatisticsService();
+        $syncService = new AmoTaskSyncService($http, $statisticsService);
+        $syncCounts = $syncService->sync($account, $from, $to, $run);
         $run->refresh();
-        $rows = $service->statistics($account, $from, $to);
+        $rows = $statisticsService->statistics($account, $from, $to);
 
         $this->assertSame(['completed' => 1, 'completion_events' => 1, 'open' => 2, 'events' => 1], $syncCounts);
         $this->assertSame(TaskStatisticsSyncRun::STATUS_COMPLETED, $run->status);
@@ -894,7 +896,7 @@ class AmoServicesTest extends TestCase
         $this->assertSame(2, $rows[0]['overdue_count']);
         $this->assertSame(66.7, $rows[0]['overdue_rate']);
 
-        $groups = $service->completedOverdueDashboard($account, $from, $to);
+        $groups = $statisticsService->completedOverdueDashboard($account, $from, $to);
 
         $this->assertSame('Группа 20', $groups[0]['group_name']);
         $this->assertSame(1, $groups[0]['completed_count']);
@@ -920,7 +922,7 @@ class AmoServicesTest extends TestCase
             'synced_at' => now(),
         ]);
 
-        $service = new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class));
+        $service = new AmoTaskStatisticsService();
         $from = now()->subDays(3)->startOfDay();
         $to = now()->endOfDay();
 
@@ -1005,7 +1007,7 @@ class AmoServicesTest extends TestCase
             ]);
         }
 
-        $distribution = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
+        $distribution = (new AmoTaskStatisticsService())
             ->recruiterLeadDistribution($account, now()->subDays(7), now(), [
                 'pipeline_id' => 10,
                 'pipeline_name' => 'Массовый подбор',
@@ -1078,7 +1080,7 @@ class AmoServicesTest extends TestCase
             'synced_at' => now(),
         ]);
 
-        $diagnostics = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
+        $diagnostics = (new AmoTaskStatisticsService())
             ->recruiterLeadDistributionDiagnostics($account, now()->subDays(7), now(), [
                 'pipeline_id' => 10,
                 'pipeline_name' => 'Массовый подбор',
@@ -1150,7 +1152,7 @@ class AmoServicesTest extends TestCase
             ]);
         }
 
-        $breakdown = (new AmoTaskStatisticsService(Mockery::mock(AmoFallbackHttpClient::class)))
+        $breakdown = (new AmoTaskStatisticsService())
             ->recruiterTeamCityBreakdown($account, now()->subDays(7), now(), [
                 'pipeline_id' => 10,
                 'recruiter_field_id' => 777,
@@ -1187,13 +1189,13 @@ class AmoServicesTest extends TestCase
             'period_from' => now()->subHour(),
             'period_to' => now(),
         ]);
-        $service = Mockery::mock(AmoTaskStatisticsService::class);
-        $service->shouldReceive('sync')
+        $syncService = Mockery::mock(AmoTaskSyncService::class);
+        $syncService->shouldReceive('sync')
             ->once()
             ->with(Mockery::type(AmoAccount::class), Mockery::any(), Mockery::any(), Mockery::type(TaskStatisticsSyncRun::class))
             ->andReturn(['completed' => 0, 'completion_events' => 0, 'open' => 0]);
 
-        (new SyncAmoTaskStatisticsJob($run->id))->handle($service);
+        (new SyncAmoTaskStatisticsJob($run->id))->handle($syncService);
 
         $this->assertSame($run->period_to->toIso8601String(), $account->refresh()->taskStatisticsLastSuccessfulSyncAt()?->toIso8601String());
     }
