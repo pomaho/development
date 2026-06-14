@@ -2,6 +2,7 @@
 
 namespace App\Services\Amo\Client;
 
+use App\Exceptions\AmoRateLimitException;
 use App\Models\AmoAccount;
 use App\Models\ApiRequestLog;
 use Illuminate\Http\Client\Response;
@@ -97,7 +98,13 @@ class AmoFallbackHttpClient
             default => 'amoCRM API error.',
         };
 
-        throw new RuntimeException($message.' '.$url.' Status: '.$status.' Response: '.json_encode($payload, JSON_UNESCAPED_UNICODE));
+        $detail = $message.' '.$url.' Status: '.$status.' Response: '.json_encode($payload, JSON_UNESCAPED_UNICODE);
+
+        if ($status === 429) {
+            throw new AmoRateLimitException($detail);
+        }
+
+        throw new RuntimeException($detail);
     }
 
     private function jsonPayload(Response $response): ?array

@@ -14,6 +14,7 @@ class SyncCrmAuditJob implements ShouldQueue
 
     public int $tries = 2;
     public int $timeout = 600;
+    public array $backoff = [60, 120];
 
     public function __construct(
         public readonly int $amoAccountId,

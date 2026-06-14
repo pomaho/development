@@ -1425,6 +1425,29 @@ class AmoServicesTest extends TestCase
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');
     }
 
+    public function test_fallback_http_client_throws_rate_limit_exception_on_429(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+
+        Http::fake(['client.amocrm.ru/*' => Http::response([], 429)]);
+
+        $this->expectException(\App\Exceptions\AmoRateLimitException::class);
+
+        app(AmoFallbackHttpClient::class)->get($account, '/api/v4/leads');
+    }
+
+    public function test_fallback_http_client_throws_runtime_exception_on_other_errors(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+
+        Http::fake(['client.amocrm.ru/*' => Http::response([], 403)]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/403/');
+
+        app(AmoFallbackHttpClient::class)->get($account, '/api/v4/leads');
+    }
+
     public function test_fallback_http_client_skips_auth_status_write_when_already_ok(): void
     {
         $account = $this->accountWithToken($this->longLivedJwt());
