@@ -44,7 +44,7 @@ class AmoTaskOverdueDashboardController extends Controller
 
     public function showV2(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): Response
     {
-        $installation = $this->installation($publicKey);
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to, $periodMeta] = $this->period($request);
 
         return Inertia::render('Widgets/Amo/TaskOverdueDashboardV2', [
@@ -92,14 +92,14 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
-    private function installation(string $publicKey): AmoAccountDashboardWidget
+    private function installation(string $publicKey, string $widgetCode = 'task_overdue_dashboard'): AmoAccountDashboardWidget
     {
         return AmoAccountDashboardWidget::query()
             ->with(['account', 'widget'])
             ->where('public_key', $publicKey)
             ->where('is_enabled', true)
             ->whereHas('widget', fn ($query) => $query
-                ->where('code', 'task_overdue_dashboard')
+                ->where('code', $widgetCode)
                 ->where('is_enabled', true))
             ->firstOrFail();
     }
