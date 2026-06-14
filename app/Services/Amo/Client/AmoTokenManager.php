@@ -8,6 +8,7 @@ use App\Models\AmoAccount;
 use App\Models\AmoCredential;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use League\OAuth2\Client\Token\AccessToken;
 use RuntimeException;
@@ -24,8 +25,13 @@ class AmoTokenManager
         }
 
         if ($this->shouldRefresh($credential->token_expires_at)) {
-            $this->refreshOAuthToken($account);
-            $credential->refresh();
+            Cache::lock("amo_token_refresh_{$account->id}", 30)->block(15, function () use ($account, &$credential): void {
+                $credential->refresh();
+                if ($this->shouldRefresh($credential->token_expires_at)) {
+                    $this->refreshOAuthToken($account);
+                    $credential->refresh();
+                }
+            });
         }
 
         return (string) $credential->access_token;

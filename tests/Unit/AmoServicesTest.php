@@ -41,6 +41,43 @@ class AmoServicesTest extends TestCase
         $this->assertSame($token, app(AmoTokenManager::class)->accessTokenFor($account));
     }
 
+    public function test_token_manager_skips_refresh_when_token_already_freshened_in_db(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'OAuth Client', 'base_domain' => 'oauth.amocrm.ru']);
+
+        $account->credentials()->create([
+            'auth_type' => AmoCredential::AUTH_OAUTH,
+            'access_token' => 'old-token',
+            'refresh_token' => 'refresh-token',
+            'client_id' => 'client-id',
+            'client_secret' => 'client-secret',
+            'redirect_uri' => 'https://example.com/callback',
+            'token_expires_at' => now()->subMinute(),
+        ]);
+        $account->load('credentials');
+
+        // Simulate: another process already refreshed the token in DB while we hold stale in-memory copy.
+        $account->credentials()->update(['token_expires_at' => now()->addHour()]);
+
+        $refreshCallCount = 0;
+        $onRefresh = function () use (&$refreshCallCount): void { $refreshCallCount++; };
+        $manager = new class($onRefresh) extends AmoTokenManager {
+            public function __construct(private readonly \Closure $onRefresh) {}
+
+            public function refreshOAuthToken(\App\Models\AmoAccount $account): \App\Models\AmoCredential
+            {
+                ($this->onRefresh)();
+                return $account->credentials()->firstOrFail();
+            }
+        };
+
+        // In-memory credential still has expired token_expires_at, but DB has fresh value.
+        // The lock re-check should catch this and skip the actual refresh call.
+        $manager->accessTokenFor($account);
+
+        $this->assertSame(0, $refreshCallCount, 'Refresh should be skipped when DB credential is already fresh');
+    }
+
     public function test_client_factory_targets_account_domain(): void
     {
         $account = $this->accountWithToken($this->longLivedJwt());
