@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
     AlertTriangle,
     ArrowRightLeft,
-    BarChart3,
     CalendarDays,
     CheckCircle2,
     Database,
@@ -103,7 +102,37 @@ type MessageLog = {
     data: unknown;
 };
 
+type BreakdownRow = {
+    name: string;
+    count: number;
+};
+
+const chartColors = ['#465FFF', '#12B76A', '#F79009', '#F04438', '#7A5AF8', '#06AED4', '#DB2777', '#64748B'];
+
 const progressWidth = (value: number) => `${Math.min(Math.max(value, 0), 100)}%`;
+
+const percentOf = (value: number, total: number) => total > 0 ? Math.round((value / total) * 1000) / 10 : 0;
+
+const recruiterTeamRows = (recruiter: RecruiterTeamCityBreakdown['recruiters'][number]): BreakdownRow[] => (
+    recruiter.teams.map((team) => ({
+        name: team.name,
+        count: team.total_leads_count,
+    }))
+);
+
+const recruiterCityRows = (recruiter: RecruiterTeamCityBreakdown['recruiters'][number]): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+
+    recruiter.teams.forEach((team) => {
+        team.cities.forEach((city) => {
+            rows.set(city.name, (rows.get(city.name) || 0) + city.leads_count);
+        });
+    });
+
+    return Array.from(rows.entries())
+        .map(([name, count]) => ({ name, count }))
+        .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
+};
 
 export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
     const debugIframe = useMemo(() => {
@@ -281,7 +310,23 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                     </span>
                                 </div>
 
+                                <div className="grid gap-4 border-b border-gray-200 p-4 xl:grid-cols-2">
+                                    <BreakdownCard
+                                        title="Передано менеджерам по командам"
+                                        description={`Поле “${recruiterTeamCityBreakdown.team_field_name}”`}
+                                        rows={recruiterTeamRows(recruiter)}
+                                    />
+                                    <BreakdownCard
+                                        title="Всего по городам"
+                                        description={`Поле “${recruiterTeamCityBreakdown.city_field_name}”`}
+                                        rows={recruiterCityRows(recruiter)}
+                                    />
+                                </div>
+
                                 <div className="overflow-x-auto">
+                                    <div className="border-b border-gray-200 bg-white px-5 py-3 text-theme-xs font-semibold uppercase text-gray-500">
+                                        Детализация по городам и источникам
+                                    </div>
                                     <table className="w-full min-w-[760px] text-left text-theme-sm">
                                         <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
                                             <tr>
@@ -385,6 +430,109 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                         )}
                     </div>
                 </ReportSection>
+            </div>
+        </div>
+    );
+}
+
+function BreakdownCard({ title, description, rows }: { title: string; description: string; rows: BreakdownRow[] }) {
+    const total = rows.reduce((sum, row) => sum + row.count, 0);
+
+    return (
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-xs">
+            <div className="flex items-start justify-between gap-3">
+                <div>
+                    <h4 className="text-theme-sm font-semibold text-gray-900">{title}</h4>
+                    <div className="mt-1 text-theme-xs text-gray-500">{description}</div>
+                </div>
+                <div className="rounded-full bg-gray-100 px-2.5 py-1 text-theme-xs font-semibold tabular-nums text-gray-700">
+                    {total}
+                </div>
+            </div>
+
+            {rows.length > 0 ? (
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_220px] lg:items-start">
+                    <div className="overflow-hidden rounded-xl border border-gray-200">
+                        <table className="w-full text-left text-theme-sm">
+                            <thead className="bg-gray-50 text-theme-xs font-semibold uppercase text-gray-500">
+                                <tr>
+                                    <th className="px-4 py-3">Значение</th>
+                                    <th className="px-4 py-3 text-right">Сделок</th>
+                                    <th className="px-4 py-3 text-right">Доля</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                                {rows.map((row, index) => (
+                                    <tr className="hover:bg-brand-50/40" key={row.name}>
+                                        <td className="px-4 py-3">
+                                            <span className="mr-2 inline-block size-2.5 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
+                                            <span className="font-medium text-gray-900">{row.name}</span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right font-semibold tabular-nums text-gray-900">{row.count}</td>
+                                        <td className="px-4 py-3 text-right tabular-nums text-gray-600">{percentOf(row.count, total)}%</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                    <PieChart rows={rows} total={total} />
+                </div>
+            ) : (
+                <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-theme-sm text-gray-500">
+                    Нет данных для разреза.
+                </div>
+            )}
+        </div>
+    );
+}
+
+function PieChart({ rows, total }: { rows: BreakdownRow[]; total: number }) {
+    let cumulative = 0;
+    const radius = 15.91549430918954;
+    const slices = rows.map((row, index) => {
+        const value = total > 0 ? (row.count / total) * 100 : 0;
+        const slice = {
+            ...row,
+            color: chartColors[index % chartColors.length],
+            dasharray: `${value} ${100 - value}`,
+            dashoffset: 25 - cumulative,
+        };
+        cumulative += value;
+
+        return slice;
+    });
+
+    return (
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="flex justify-center">
+                <svg className="size-36 -rotate-90" viewBox="0 0 36 36" role="img" aria-label="Круговая диаграмма">
+                    <circle cx="18" cy="18" r={radius} fill="transparent" stroke="#E5E7EB" strokeWidth="4" />
+                    {slices.map((slice) => (
+                        <circle
+                            cx="18"
+                            cy="18"
+                            fill="transparent"
+                            key={slice.name}
+                            r={radius}
+                            stroke={slice.color}
+                            strokeDasharray={slice.dasharray}
+                            strokeDashoffset={slice.dashoffset}
+                            strokeLinecap="butt"
+                            strokeWidth="4"
+                        />
+                    ))}
+                </svg>
+            </div>
+            <div className="mt-3 space-y-2">
+                {slices.map((slice) => (
+                    <div className="flex items-center justify-between gap-3 text-theme-xs" key={slice.name}>
+                        <div className="flex min-w-0 items-center gap-2">
+                            <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
+                            <span className="truncate text-gray-700">{slice.name}</span>
+                        </div>
+                        <span className="font-semibold tabular-nums text-gray-900">{slice.count}</span>
+                    </div>
+                ))}
             </div>
         </div>
     );

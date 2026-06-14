@@ -1567,6 +1567,10 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('MetricCard', $source);
         $this->assertStringContainsString('rounded-2xl border border-gray-200 bg-white shadow-theme-sm', $source);
         $this->assertStringContainsString('Источник:', $source);
+        $this->assertStringContainsString('Передано менеджерам по командам', $source);
+        $this->assertStringContainsString('Всего по городам', $source);
+        $this->assertStringContainsString('Круговая диаграмма', $source);
+        $this->assertStringContainsString('PieChart', $source);
         $this->assertStringContainsString('source_columns.map', $source);
         $this->assertStringContainsString('city.sources[source]', $source);
         $this->assertLessThan(strpos($source, 'Отчет по задачам'), strpos($source, 'Передачи рекрутеров'));
