@@ -382,7 +382,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                         />
                     )}
                 >
-                    <BreakdownReportContent rows={departmentCityRows(recruiterTeamCityBreakdown)} />
+                    <BreakdownReportContent compactLegend rows={departmentCityRows(recruiterTeamCityBreakdown)} />
                 </ReportSection>
 
                 <ReportSection
@@ -434,6 +434,7 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                                         rows={recruiterTeamRows(recruiter)}
                                     />
                                     <BreakdownCard
+                                        compactLegend
                                         title="Всего по городам"
                                         description={`Поле “${recruiterTeamCityBreakdown.city_field_name}”`}
                                         rows={recruiterCityRows(recruiter)}
@@ -589,16 +590,16 @@ function SourceBreakdownTable({ rows, sourceColumns }: { rows: SourceBreakdownRo
     );
 }
 
-function BreakdownReportContent({ rows }: { rows: BreakdownRow[] }) {
+function BreakdownReportContent({ rows, compactLegend = false }: { rows: BreakdownRow[]; compactLegend?: boolean }) {
     return (
-        <div className="space-y-5 p-5">
+        <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
             <BreakdownTable rows={rows} />
-            <PieChart rows={rows} total={rows.reduce((sum, row) => sum + row.count, 0)} />
+            <PieChart compactLegend={compactLegend} rows={rows} total={rows.reduce((sum, row) => sum + row.count, 0)} />
         </div>
     );
 }
 
-function BreakdownCard({ title, description, rows }: { title: string; description: string; rows: BreakdownRow[] }) {
+function BreakdownCard({ title, description, rows, compactLegend = false }: { title: string; description: string; rows: BreakdownRow[]; compactLegend?: boolean }) {
     const total = rows.reduce((sum, row) => sum + row.count, 0);
 
     return (
@@ -614,9 +615,9 @@ function BreakdownCard({ title, description, rows }: { title: string; descriptio
             </div>
 
             {rows.length > 0 ? (
-                <div className="mt-4 space-y-4">
+                <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px] xl:items-start">
                     <BreakdownTable rows={rows} />
-                    <PieChart rows={rows} total={total} />
+                    <PieChart compactLegend={compactLegend} rows={rows} total={total} />
                 </div>
             ) : (
                 <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4 text-theme-sm text-gray-500">
@@ -665,7 +666,7 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
     );
 }
 
-function PieChart({ rows, total }: { rows: BreakdownRow[]; total: number }) {
+function PieChart({ rows, total, compactLegend = false }: { rows: BreakdownRow[]; total: number; compactLegend?: boolean }) {
     let cumulative = 0;
     const radius = 15.91549430918954;
     const slices = rows.map((row, index) => {
@@ -702,9 +703,9 @@ function PieChart({ rows, total }: { rows: BreakdownRow[]; total: number }) {
                     ))}
                 </svg>
             </div>
-            <div className="mt-3 space-y-2">
+            <div className={compactLegend ? 'mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1' : 'mt-3 space-y-2'}>
                 {slices.map((slice) => (
-                    <div className="flex items-center justify-between gap-3 text-theme-xs" key={slice.name}>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-white px-2.5 py-2 text-theme-xs shadow-theme-xs" key={slice.name}>
                         <div className="flex min-w-0 items-center gap-2">
                             <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: slice.color }} />
                             <span className="truncate text-gray-700">{slice.name}</span>

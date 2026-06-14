@@ -1576,6 +1576,9 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->assertStringContainsString('SourceBreakdownTable', $source);
         $this->assertStringContainsString('BreakdownReportContent', $source);
         $this->assertStringContainsString('Подробно по каждому рекрутеру', $source);
+        $this->assertStringContainsString('compactLegend', $source);
+        $this->assertStringContainsString('xl:grid-cols-[minmax(0,1fr)_360px]', $source);
+        $this->assertStringContainsString('xl:grid-cols-[minmax(0,1fr)_320px]', $source);
         $this->assertStringContainsString('Круговая диаграмма', $source);
         $this->assertStringContainsString('PieChart', $source);
         $this->assertStringContainsString('source_columns.map', $source);
