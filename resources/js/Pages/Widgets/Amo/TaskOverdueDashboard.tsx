@@ -5,6 +5,7 @@ import {
     CalendarDays,
     CheckCircle2,
     Database,
+    Inbox,
     Percent,
     Users,
 } from 'lucide-react';
@@ -699,6 +700,13 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
 }
 
 function PieChart({ rows, total, compactLegend = false }: { rows: BreakdownRow[]; total: number; compactLegend?: boolean }) {
+    const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+        const id = requestAnimationFrame(() => requestAnimationFrame(() => setReady(true)));
+        return () => cancelAnimationFrame(id);
+    }, []);
+
     let cumulative = 0;
     const radius = 15.91549430918954;
     const slices = rows.map((row, index) => {
@@ -719,7 +727,7 @@ function PieChart({ rows, total, compactLegend = false }: { rows: BreakdownRow[]
             <div className="flex justify-center">
                 <svg className="size-36 -rotate-90" viewBox="0 0 36 36" role="img" aria-label="Круговая диаграмма">
                     <circle cx="18" cy="18" r={radius} fill="transparent" stroke="#E5E7EB" strokeWidth="4" />
-                    {slices.map((slice) => (
+                    {slices.map((slice, index) => (
                         <circle
                             cx="18"
                             cy="18"
@@ -727,10 +735,11 @@ function PieChart({ rows, total, compactLegend = false }: { rows: BreakdownRow[]
                             key={slice.name}
                             r={radius}
                             stroke={slice.color}
-                            strokeDasharray={slice.dasharray}
+                            strokeDasharray={ready ? slice.dasharray : '0 100'}
                             strokeDashoffset={slice.dashoffset}
                             strokeLinecap="butt"
                             strokeWidth="4"
+                            style={{ transition: `stroke-dasharray 0.5s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.08}s` }}
                         />
                     ))}
                 </svg>
@@ -881,7 +890,8 @@ function Progress({ value, tone }: { value: number; tone: 'brand' | 'warning' | 
 
 function EmptyState({ children }: { children: ReactNode }) {
     return (
-        <div className="rounded-2xl border border-gray-200 bg-gray-50 p-6 text-theme-sm text-gray-500">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-8 text-center text-theme-sm text-gray-500">
+            <Inbox className="size-8 text-gray-300" />
             {children}
         </div>
     );
