@@ -1510,6 +1510,63 @@ class AmoServicesTest extends TestCase
         $this->assertStringNotContainsString('Lead Lead Lead', json_encode($log->response_payload));
     }
 
+    public function test_task_sync_service_saves_task_snapshot_and_preserves_existing_completion_stats(): void
+    {
+        $account = $this->accountWithToken('abcdef123456');
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $statisticsService = new AmoTaskStatisticsService();
+
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'tasks',
+            'external_id' => '42',
+            'name' => 'Old task',
+            'responsible_user_id' => 10,
+            'raw' => ['id' => 42, '_task_statistics' => ['completed_at' => 1000, 'completed_by' => 99]],
+            'synced_at' => now()->subHour(),
+        ]);
+
+        $http->shouldReceive('get')
+            ->once()
+            ->with($account, '/api/v4/tasks', Mockery::on(fn (array $q): bool => ($q['filter[is_completed]'] ?? null) === 1))
+            ->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['tasks' => [[
+                'id' => 42,
+                'responsible_user_id' => 10,
+                'text' => 'Updated task',
+                'is_completed' => true,
+                'created_at' => now()->subDay()->timestamp,
+                'updated_at' => now()->timestamp,
+                'complete_till' => now()->subHour()->timestamp,
+            ]]]]);
+        $http->shouldReceive('get')->with($account, '/api/v4/events', Mockery::on(fn (array $q): bool => isset($q['filter[entity][]'])))->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['events' => []]]);
+        $http->shouldReceive('get')->with($account, '/api/v4/tasks', Mockery::on(fn (array $q): bool => ($q['filter[is_completed]'] ?? null) === 0))->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['tasks' => []]]);
+        $http->shouldReceive('get')->with($account, '/api/v4/events', Mockery::on(fn (array $q): bool => ! isset($q['filter[entity][]'])))->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => ['events' => []]]);
+
+        $syncService = new AmoTaskSyncService($http, $statisticsService);
+        $counts = $syncService->sync($account);
+
+        $this->assertSame(1, $counts['completed']);
+        $snapshot = CrmEntitySnapshot::query()->where('external_id', '42')->where('entity_type', 'tasks')->firstOrFail();
+        $this->assertSame('Updated task', $snapshot->name);
+        $this->assertSame(1000, $snapshot->raw['_task_statistics']['completed_at'], 'existing completion stats must be preserved');
+    }
+
+    public function test_task_sync_service_refreshes_dashboard_cache_version_after_sync(): void
+    {
+        Cache::flush();
+        $account = $this->accountWithToken('abcdef123456');
+        $statisticsService = new AmoTaskStatisticsService();
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')->andReturn(['_page' => 1, '_page_count' => 1, '_embedded' => []]);
+
+        $versionBefore = Cache::get("amo_task_overdue_dashboard_version:{$account->id}");
+
+        (new AmoTaskSyncService($http, $statisticsService))->sync($account);
+
+        $versionAfter = Cache::get("amo_task_overdue_dashboard_version:{$account->id}");
+        $this->assertNotSame($versionBefore, $versionAfter, 'dashboard cache version must be bumped after sync');
+    }
+
     private function accountWithToken(string $token): AmoAccount
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
