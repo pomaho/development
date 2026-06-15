@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Events\AmoAccountSyncQueued;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAmoAccountRequest;
 use App\Jobs\SyncAmoUsersAndRolesJob;
@@ -239,6 +240,7 @@ class AmoAccountController extends Controller
     {
         $this->authorize('sync', $amoAccount);
         SyncAmoUsersAndRolesJob::dispatch($amoAccount->id);
+        AmoAccountSyncQueued::dispatch($amoAccount);
 
         return back()->with('status', 'Синхронизация поставлена в очередь.');
     }

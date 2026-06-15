@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Events\AmoAccountSynced;
 use App\Models\AmoAccount;
 use App\Models\ApiRequestLog;
 use App\Services\Amo\Structure\AmoUsersService;
@@ -29,6 +30,7 @@ class SyncAmoUsersAndRolesJob implements ShouldQueue
         try {
             $usersService->syncUsersAndRoles($account);
             Log::info('amoCRM users and roles synced', ['amo_account_id' => $account->id]);
+            AmoAccountSynced::dispatch($account);
         } catch (Throwable $exception) {
             ApiRequestLog::query()->create([
                 'amo_account_id' => $account->id,
