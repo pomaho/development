@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\CustomFieldValues;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -30,7 +31,7 @@ class CrmEntitySnapshot extends Model
             'entity_created_at' => 'datetime',
             'entity_updated_at' => 'datetime',
             'entity_closed_at' => 'datetime',
-            'custom_fields_values' => 'array',
+            'custom_fields_values' => CustomFieldValues::class,
             'embedded' => 'array',
             'raw' => 'array',
             'synced_at' => 'datetime',
