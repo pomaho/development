@@ -555,7 +555,8 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
     }
     return (
         <div className="overflow-hidden rounded-xl ring-1 ring-slate-200/80 shadow-sm">
-            <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[260px] text-left text-sm">
                 <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
                     <tr>
                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Значение</th>
@@ -576,6 +577,7 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
                     ))}
                 </tbody>
             </table>
+            </div>
         </div>
     );
 }
