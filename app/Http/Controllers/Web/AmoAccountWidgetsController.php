@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\UpdateWidgetSettingsRequest;
 use App\Models\AmoAccount;
 use App\Models\AmoAccountDashboardWidget;
 use App\Models\CrmCustomFieldSnapshot;
@@ -10,7 +11,6 @@ use App\Models\CrmPipelineSnapshot;
 use App\Models\DashboardWidget;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -150,18 +150,9 @@ class AmoAccountWidgetsController extends Controller
         ]);
     }
 
-    public function updateSettings(Request $request, AmoAccount $amoAccount, DashboardWidget $dashboardWidget): RedirectResponse
+    public function updateSettings(UpdateWidgetSettingsRequest $request, AmoAccount $amoAccount, DashboardWidget $dashboardWidget): RedirectResponse
     {
-        $this->authorize('update', $amoAccount);
-
-        $data = $request->validate([
-            'pipeline_id' => ['nullable', 'integer', 'min:1'],
-            'recruiter_field_id' => ['nullable', 'integer', 'min:1'],
-            'manager_field_id' => ['nullable', 'integer', 'min:1'],
-            'team_field_id' => ['nullable', 'integer', 'min:1'],
-            'city_field_id' => ['nullable', 'integer', 'min:1'],
-            'source_field_id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $data = $request->validated();
         $pipeline = isset($data['pipeline_id'])
             ? CrmPipelineSnapshot::query()
                 ->where('amo_account_id', $amoAccount->id)

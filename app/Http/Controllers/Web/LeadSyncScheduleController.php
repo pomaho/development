@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreLeadSyncScheduleRequest;
+use App\Http\Requests\UpdateLeadSyncScheduleRequest;
 use App\Models\AmoAccount;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\LeadSyncSchedule;
 use App\Services\Amo\Sync\LeadSyncScheduleRunner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -101,11 +102,9 @@ class LeadSyncScheduleController extends Controller
         ]);
     }
 
-    public function store(Request $request, AmoAccount $amoAccount): RedirectResponse
+    public function store(StoreLeadSyncScheduleRequest $request, AmoAccount $amoAccount): RedirectResponse
     {
-        $this->authorize('sync', $amoAccount);
-
-        $data = $this->validated($request, $amoAccount);
+        $data = $request->validated();
         $pipeline = $this->pipeline($amoAccount, (int) $data['amo_pipeline_id']);
 
         LeadSyncSchedule::query()->create([
@@ -121,12 +120,11 @@ class LeadSyncScheduleController extends Controller
         return back()->with('status', 'Расписание синхронизации сделок добавлено.');
     }
 
-    public function update(Request $request, AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule): RedirectResponse
+    public function update(UpdateLeadSyncScheduleRequest $request, AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule): RedirectResponse
     {
-        $this->authorize('sync', $amoAccount);
         $this->abortIfWrongAccount($amoAccount, $leadSyncSchedule);
 
-        $data = $this->validated($request, $amoAccount, $leadSyncSchedule);
+        $data = $request->validated();
         $pipeline = $this->pipeline($amoAccount, (int) $data['amo_pipeline_id']);
 
         $leadSyncSchedule->update([
@@ -165,23 +163,6 @@ class LeadSyncScheduleController extends Controller
         $leadSyncSchedule->delete();
 
         return back()->with('status', 'Расписание синхронизации сделок удалено.');
-    }
-
-    private function validated(Request $request, AmoAccount $amoAccount, ?LeadSyncSchedule $schedule = null): array
-    {
-        return $request->validate([
-            'amo_pipeline_id' => [
-                'required',
-                'integer',
-                Rule::exists('crm_pipelines_snapshots', 'amo_pipeline_id')->where('amo_account_id', $amoAccount->id),
-                Rule::unique('lead_sync_schedules', 'amo_pipeline_id')
-                    ->where('amo_account_id', $amoAccount->id)
-                    ->ignore($schedule?->id),
-            ],
-            'interval_minutes' => ['required', 'integer', Rule::in(array_keys(self::INTERVALS))],
-            'lookback_days' => ['required', 'integer', 'min:1', 'max:365'],
-            'is_enabled' => ['nullable', 'boolean'],
-        ]);
     }
 
     private function pipeline(AmoAccount $amoAccount, int $pipelineId): CrmPipelineSnapshot

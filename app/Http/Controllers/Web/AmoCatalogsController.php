@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreCatalogElementsRequest;
+use App\Http\Requests\StoreCatalogRequest;
 use App\Models\AmoAccount;
 use App\Services\Amo\Structure\AmoCatalogsService;
 use Illuminate\Http\RedirectResponse;
@@ -67,17 +69,9 @@ class AmoCatalogsController extends Controller
         ]);
     }
 
-    public function storeCatalog(Request $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
+    public function storeCatalog(StoreCatalogRequest $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
     {
-        $this->authorize('sync', $amoAccount);
-
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'sort' => ['nullable', 'integer', 'min:1', 'max:10000'],
-            'can_add_elements' => ['nullable', 'boolean'],
-            'can_show_in_cards' => ['nullable', 'boolean'],
-            'can_link_multiple' => ['nullable', 'boolean'],
-        ]);
+        $data = $request->validated();
         $data['can_add_elements'] = $request->boolean('can_add_elements');
         $data['can_show_in_cards'] = $request->boolean('can_show_in_cards');
         $data['can_link_multiple'] = $request->boolean('can_link_multiple');
@@ -87,14 +81,9 @@ class AmoCatalogsController extends Controller
         return back()->with('status', 'Список отправлен в amoCRM.');
     }
 
-    public function storeElements(Request $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
+    public function storeElements(StoreCatalogElementsRequest $request, AmoAccount $amoAccount, AmoCatalogsService $catalogsService): RedirectResponse
     {
-        $this->authorize('sync', $amoAccount);
-
-        $data = $request->validate([
-            'catalog_id' => ['required', 'integer', 'min:1'],
-            'elements' => ['required', 'string', 'max:10000'],
-        ]);
+        $data = $request->validated();
 
         $names = collect(preg_split('/\R/u', $data['elements']) ?: [])
             ->map(fn (string $name): string => trim($name))
