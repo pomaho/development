@@ -57,6 +57,7 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdu
     ->name('api.widgets.amo.task-overdue-dashboard.show');
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
+    ->middleware('throttle:webhook')
     ->name('webhooks.amo');
 
 Route::middleware('auth')->group(function (): void {
@@ -65,8 +66,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-oauth/external/{connection}', [AmoExternalOAuthController::class, 'show'])->name('amo-oauth.external.show');
     Route::resource('amo-accounts', AmoAccountController::class)->except(['create', 'store']);
     Route::get('/amo-accounts-export', [AmoAccountController::class, 'export'])->name('amo-accounts.export');
-    Route::post('/amo-accounts/{amo_account}/test', [AmoAccountController::class, 'test'])->name('amo-accounts.test');
-    Route::post('/amo-accounts/{amo_account}/sync', [AmoAccountController::class, 'sync'])->name('amo-accounts.sync');
+    Route::post('/amo-accounts/{amo_account}/test', [AmoAccountController::class, 'test'])->middleware('throttle:amo-test-connection')->name('amo-accounts.test');
+    Route::post('/amo-accounts/{amo_account}/sync', [AmoAccountController::class, 'sync'])->middleware('throttle:amo-sync')->name('amo-accounts.sync');
     Route::post('/amo-accounts/{amo_account}/deactivate', [AmoAccountController::class, 'deactivate'])->name('amo-accounts.deactivate');
     Route::get('/amo-accounts/{amo_account}/dashboard', DashboardController::class)->name('amo-accounts.dashboard');
     Route::get('/amo-accounts/{amo_account}/integrations', AmoAccountIntegrationsController::class)->name('amo-accounts.integrations');
@@ -94,10 +95,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/automation', AmoAutomationCenterController::class)->name('amo-accounts.automation.index');
     Route::get('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'index'])->name('amo-accounts.responsibility-redistribution.index');
     Route::post('/amo-accounts/{amo_account}/responsibility-redistribution/preview', [AmoResponsibilityRedistributionController::class, 'preview'])->name('amo-accounts.responsibility-redistribution.preview');
-    Route::post('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'store'])->name('amo-accounts.responsibility-redistribution.store');
+    Route::post('/amo-accounts/{amo_account}/responsibility-redistribution', [AmoResponsibilityRedistributionController::class, 'store'])->middleware('throttle:amo-write')->name('amo-accounts.responsibility-redistribution.store');
     Route::get('/amo-accounts/{amo_account}/analytics', AmoAnalyticsCenterController::class)->name('amo-accounts.analytics.index');
     Route::get('/amo-accounts/{amo_account}/task-statistics', [AmoTaskStatisticsController::class, 'index'])->name('amo-accounts.task-statistics.index');
-    Route::post('/amo-accounts/{amo_account}/task-statistics/sync', [AmoTaskStatisticsController::class, 'sync'])->name('amo-accounts.task-statistics.sync');
+    Route::post('/amo-accounts/{amo_account}/task-statistics/sync', [AmoTaskStatisticsController::class, 'sync'])->middleware('throttle:amo-sync')->name('amo-accounts.task-statistics.sync');
     Route::get('/amo-accounts/{amo_account}/task-statistics-export', [AmoTaskStatisticsController::class, 'export'])->name('amo-accounts.task-statistics.export');
     Route::get('/amo-accounts/{amo_account}/events-sync', [AmoTaskStatisticsController::class, 'events'])->name('amo-accounts.events-sync.index');
     Route::post('/amo-accounts/{amo_account}/events-sync', [AmoTaskStatisticsController::class, 'syncEvents'])->name('amo-accounts.events-sync.sync');
@@ -106,7 +107,7 @@ Route::middleware('auth')->group(function (): void {
     Route::post('/amo-accounts/{amo_account}/sync/webhooks/retry-failed', [AmoSyncCenterController::class, 'retryFailedWebhooks'])->name('amo-accounts.sync.webhooks.retry-failed');
     Route::get('/amo-accounts/{amo_account}/crm-audit', [CrmAuditController::class, 'index'])->name('amo-accounts.crm-audit.index');
     Route::get('/amo-accounts/{amo_account}/crm-audit/fields', [CrmAuditController::class, 'fields'])->name('amo-accounts.crm-audit.fields');
-    Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->name('amo-accounts.crm-audit.sync');
+    Route::post('/amo-accounts/{amo_account}/crm-audit/sync', [CrmAuditController::class, 'sync'])->middleware('throttle:amo-sync')->name('amo-accounts.crm-audit.sync');
     Route::get('/amo-accounts/{amo_account}/lead-sync-schedules', [LeadSyncScheduleController::class, 'index'])->name('amo-accounts.lead-sync-schedules.index');
     Route::post('/amo-accounts/{amo_account}/lead-sync-schedules', [LeadSyncScheduleController::class, 'store'])->name('amo-accounts.lead-sync-schedules.store');
     Route::put('/amo-accounts/{amo_account}/lead-sync-schedules/{lead_sync_schedule}', [LeadSyncScheduleController::class, 'update'])->name('amo-accounts.lead-sync-schedules.update');
