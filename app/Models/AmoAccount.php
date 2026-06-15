@@ -2,16 +2,17 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasAccountSettings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 class AmoAccount extends Model
 {
+    use HasAccountSettings;
     protected $fillable = [
         'owner_user_id',
         'name',
@@ -98,18 +99,4 @@ class AmoAccount extends Model
         return $query->where('is_active', true);
     }
 
-    public function taskStatisticsLastSuccessfulSyncAt(): ?Carbon
-    {
-        $value = data_get($this->settings, 'task_statistics.last_successful_sync_at');
-
-        return $value ? Carbon::parse($value) : null;
-    }
-
-    public function markTaskStatisticsSyncedUntil(Carbon $syncedUntil): void
-    {
-        $settings = $this->settings ?? [];
-        data_set($settings, 'task_statistics.last_successful_sync_at', $syncedUntil->toIso8601String());
-
-        $this->forceFill(['settings' => $settings])->save();
-    }
 }
