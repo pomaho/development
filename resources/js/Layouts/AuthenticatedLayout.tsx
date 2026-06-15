@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import {
     Activity,
     BarChart3,
@@ -10,8 +10,6 @@ import {
     FileText,
     ListTree,
     LayoutDashboard,
-    LogOut,
-    Menu,
     Plug,
     RefreshCcw,
     Settings2,
@@ -19,27 +17,16 @@ import {
     SquareCheckBig,
     UserRoundCog,
     Users,
-    X,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
-import type { AmoAccountSummary, SharedProps } from '../types';
+import type { ReactNode } from 'react';
+import type { SharedProps } from '../types';
+import { useSidebar } from '../hooks/useSidebar';
+import { Header } from './Header';
+import { Sidebar, type NavLink, type NavSection } from './Sidebar';
 
 type Breadcrumb = {
     label: string;
     href?: string | null;
-};
-
-type NavLink = {
-    label: string;
-    href: string;
-    icon: ReactNode;
-    active: boolean;
-    adminOnly?: boolean;
-};
-
-type NavSection = {
-    label: string;
-    items: NavLink[];
 };
 
 type Props = {
@@ -76,31 +63,30 @@ type Props = {
     children: ReactNode;
 };
 
-export default function AuthenticatedLayout({ title, breadcrumbs, links, children }: Props) {
-    const { props, url } = usePage<SharedProps>();
-    const [isMobileOpen, setIsMobileOpen] = useState(false);
-    const user = props.auth.user;
-    const accounts = props.amoAccounts || [];
-    const currentAccount = props.currentAmoAccount;
-    const isAdmin = user?.role === 'admin';
-
+function buildSections(links: Props['links'], url: string, isAdmin: boolean): NavSection[] {
     const currentLinks = links.current_account;
-    const catalogsHref = currentAccount ? currentLinks?.catalogs || `/amo-accounts/${currentAccount.id}/catalogs` : null;
-    const responsibilityHref = currentAccount ? currentLinks?.responsibility_redistribution || `/amo-accounts/${currentAccount.id}/responsibility-redistribution` : null;
-    const taskStatisticsHref = currentAccount ? currentLinks?.task_statistics || `/amo-accounts/${currentAccount.id}/task-statistics` : null;
-    const eventsSyncHref = currentAccount ? currentLinks?.events_sync || `/amo-accounts/${currentAccount.id}/events-sync` : null;
-    const leadSyncSchedulesHref = currentAccount ? currentLinks?.lead_sync_schedules || `/amo-accounts/${currentAccount.id}/lead-sync-schedules` : null;
-    const syncCenterHref = currentAccount ? currentLinks?.sync_center || `/amo-accounts/${currentAccount.id}/sync` : null;
-    const analyticsCenterHref = currentAccount ? currentLinks?.analytics_center || `/amo-accounts/${currentAccount.id}/analytics` : null;
-    const automationCenterHref = currentAccount ? currentLinks?.automation_center || `/amo-accounts/${currentAccount.id}/automation` : null;
-    const crmStructureCenterHref = currentAccount ? currentLinks?.crm_structure_center || `/amo-accounts/${currentAccount.id}/crm-structure` : null;
-    const dataCenterHref = currentAccount ? currentLinks?.data_center || `/amo-accounts/${currentAccount.id}/data` : null;
-    const crmFieldsHref = currentAccount ? `/amo-accounts/${currentAccount.id}/crm-audit/fields` : null;
+    const accountId = url.match(/\/amo-accounts\/(\d+)/)?.[1];
+    const base = accountId ? `/amo-accounts/${accountId}` : null;
+
+    const href = (key: string | undefined, fallback: string | null) =>
+        currentLinks && base ? (key ?? fallback) : null;
+
+    const catalogsHref = href(currentLinks?.catalogs, base ? `${base}/catalogs` : null);
+    const responsibilityHref = href(currentLinks?.responsibility_redistribution, base ? `${base}/responsibility-redistribution` : null);
+    const taskStatisticsHref = href(currentLinks?.task_statistics, base ? `${base}/task-statistics` : null);
+    const eventsSyncHref = href(currentLinks?.events_sync, base ? `${base}/events-sync` : null);
+    const leadSyncSchedulesHref = href(currentLinks?.lead_sync_schedules, base ? `${base}/lead-sync-schedules` : null);
+    const syncCenterHref = href(currentLinks?.sync_center, base ? `${base}/sync` : null);
+    const analyticsCenterHref = href(currentLinks?.analytics_center, base ? `${base}/analytics` : null);
+    const automationCenterHref = href(currentLinks?.automation_center, base ? `${base}/automation` : null);
+    const crmStructureCenterHref = href(currentLinks?.crm_structure_center, base ? `${base}/crm-structure` : null);
+    const dataCenterHref = href(currentLinks?.data_center, base ? `${base}/data` : null);
+    const crmFieldsHref = base ? `${base}/crm-audit/fields` : null;
 
     const mainLinks: NavLink[] = [
         {
             label: 'Dashboard',
-            href: currentAccount && currentLinks ? currentLinks.dashboard : links.dashboard,
+            href: currentLinks ? currentLinks.dashboard : links.dashboard,
             icon: <LayoutDashboard />,
             active: url === '/dashboard' || url.endsWith('/dashboard'),
         },
@@ -108,7 +94,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
             label: 'Клиенты',
             href: links.amo_accounts,
             icon: <BriefcaseBusiness />,
-            active: url.startsWith('/amo-accounts') && ! currentAccount,
+            active: url.startsWith('/amo-accounts') && !currentLinks,
         },
         {
             label: 'OAuth amoCRM',
@@ -119,18 +105,18 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
         },
     ];
 
-    const accountOverviewLinks: NavLink[] = currentAccount && currentLinks ? [
+    const accountOverviewLinks: NavLink[] = currentLinks ? [
         { label: 'Обзор клиента', href: currentLinks.dashboard, icon: <LayoutDashboard />, active: url.endsWith('/dashboard') },
-        { label: 'Профиль аккаунта', href: currentLinks.show, icon: <BriefcaseBusiness />, active: url === `/amo-accounts/${currentAccount.id}` },
+        { label: 'Профиль аккаунта', href: currentLinks.show, icon: <BriefcaseBusiness />, active: url === `${base}` },
     ] : [];
 
-    const crmDataLinks: NavLink[] = currentAccount && currentLinks ? [
-        ...(dataCenterHref ? [{ label: 'Центр данных', href: dataCenterHref, icon: <Database />, active: url === `/amo-accounts/${currentAccount.id}/data` }] : []),
+    const crmDataLinks: NavLink[] = currentLinks ? [
+        ...(dataCenterHref ? [{ label: 'Центр данных', href: dataCenterHref, icon: <Database />, active: url === `${base}/data` }] : []),
         { label: 'Сделки', href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
     ] : [];
 
-    const crmStructureLinks: NavLink[] = currentAccount && currentLinks ? [
-        ...(crmStructureCenterHref ? [{ label: 'Центр структуры', href: crmStructureCenterHref, icon: <ListTree />, active: url === `/amo-accounts/${currentAccount.id}/crm-structure` }] : []),
+    const crmStructureLinks: NavLink[] = currentLinks ? [
+        ...(crmStructureCenterHref ? [{ label: 'Центр структуры', href: crmStructureCenterHref, icon: <ListTree />, active: url === `${base}/crm-structure` }] : []),
         { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 />, active: url.includes('/pipelines') },
         ...(crmFieldsHref ? [{ label: 'Поля CRM', href: crmFieldsHref, icon: <ShieldCheck />, active: url.includes('/crm-audit/fields') }] : []),
         ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree />, active: url.includes('/catalogs') }] : []),
@@ -138,38 +124,33 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
         { label: 'Роли и права', href: currentLinks.roles, icon: <UserRoundCog />, active: url.endsWith('/roles') },
     ] : [];
 
-    const syncLinks: NavLink[] = currentAccount && currentLinks ? [
-        ...(syncCenterHref ? [{ label: 'Центр синхронизации', href: syncCenterHref, icon: <Activity />, active: url === `/amo-accounts/${currentAccount.id}/sync` }] : []),
+    const syncLinks: NavLink[] = currentLinks ? [
+        ...(syncCenterHref ? [{ label: 'Центр синхронизации', href: syncCenterHref, icon: <Activity />, active: url === `${base}/sync` }] : []),
         ...(leadSyncSchedulesHref ? [{ label: 'Расписания сделок', href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
-        { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && ! url.includes('/crm-audit/fields') },
+        { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && !url.includes('/crm-audit/fields') },
         ...(eventsSyncHref ? [{ label: 'События', href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
     ] : [];
 
-    const automationLinks: NavLink[] = currentAccount && currentLinks ? [
-        ...(automationCenterHref ? [{ label: 'Центр автоматизации', href: automationCenterHref, icon: <Settings2 />, active: url === `/amo-accounts/${currentAccount.id}/automation` }] : []),
+    const automationLinks: NavLink[] = currentLinks ? [
+        ...(automationCenterHref ? [{ label: 'Центр автоматизации', href: automationCenterHref, icon: <Settings2 />, active: url === `${base}/automation` }] : []),
         ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
     ] : [];
 
-    const analyticsLinks: NavLink[] = currentAccount && currentLinks ? [
-        ...(analyticsCenterHref ? [{ label: 'Центр аналитики', href: analyticsCenterHref, icon: <BarChart3 />, active: url === `/amo-accounts/${currentAccount.id}/analytics` }] : []),
+    const analyticsLinks: NavLink[] = currentLinks ? [
+        ...(analyticsCenterHref ? [{ label: 'Центр аналитики', href: analyticsCenterHref, icon: <BarChart3 />, active: url === `${base}/analytics` }] : []),
         ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
     ] : [];
 
-    const integrationLinks: NavLink[] = currentAccount && currentLinks ? [
+    const integrationLinks: NavLink[] = currentLinks ? [
         { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 />, active: url.endsWith('/integrations') },
         { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks />, active: url.endsWith('/widgets') },
     ] : [];
 
     const systemLinks: NavLink[] = [
-        {
-            label: 'API-логи',
-            href: links.api_logs,
-            icon: <FileText />,
-            active: url.startsWith('/logs/api'),
-        },
+        { label: 'API-логи', href: links.api_logs, icon: <FileText />, active: url.startsWith('/logs/api') },
     ];
 
-    const sections: NavSection[] = [
+    return [
         { label: 'Основное', items: mainLinks },
         ...(accountOverviewLinks.length > 0 ? [{ label: 'Обзор аккаунта', items: accountOverviewLinks }] : []),
         ...(crmDataLinks.length > 0 ? [{ label: 'CRM-данные', items: crmDataLinks }] : []),
@@ -180,159 +161,52 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
         ...(integrationLinks.length > 0 ? [{ label: 'Интеграции', items: integrationLinks }] : []),
         { label: 'Система', items: systemLinks },
     ];
+}
 
-    const selectAccount = (value: string) => {
-        if (value) {
-            window.location.href = value;
-        }
-    };
+export default function AuthenticatedLayout({ title, breadcrumbs, links, children }: Props) {
+    const { props, url } = usePage<SharedProps>();
+    const sidebar = useSidebar();
+    const user = props.auth.user;
+    const accounts = props.amoAccounts || [];
+    const currentAccount = props.currentAmoAccount;
+    const isAdmin = user?.role === 'admin';
 
-    const visibleItems = (items: NavLink[]) => items.filter((link) => ! link.adminOnly || isAdmin);
+    const sections = buildSections(links, url, isAdmin);
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900">
-            {isMobileOpen ? (
-                <button
-                    className="fixed inset-0 z-40 bg-gray-900/40 lg:hidden"
-                    type="button"
-                    aria-label="Close sidebar backdrop"
-                    onClick={() => setIsMobileOpen(false)}
-                />
-            ) : null}
-
-            <aside
-                className={`fixed left-0 top-0 z-50 flex h-screen w-[290px] flex-col border-r border-gray-200 bg-white px-5 transition-transform duration-300 ease-in-out lg:translate-x-0 ${
-                    isMobileOpen ? 'translate-x-0' : '-translate-x-full'
-                }`}
-            >
-                <div className="flex h-16 items-center justify-between">
-                    <a className="flex min-w-0 items-center gap-3" href={links.dashboard}>
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-500">
-                            <Activity size={22} />
-                        </span>
-                        <span className="min-w-0">
-                            <span className="block truncate text-theme-xl font-semibold text-gray-900">{title}</span>
-                            <span className="block text-theme-xs text-gray-500">amoCRM operations</span>
-                        </span>
-                    </a>
-                    <button
-                        className="flex size-10 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
-                        type="button"
-                        aria-label="Close sidebar"
-                        onClick={() => setIsMobileOpen(false)}
-                    >
-                        <X size={20} />
-                    </button>
-                </div>
-
-                <div className="custom-scrollbar flex-1 overflow-y-auto py-6">
-                    <nav className="space-y-6">
-                        {sections.map((section) => {
-                            const items = visibleItems(section.items);
-
-                            if (items.length === 0) {
-                                return null;
-                            }
-
-                            return (
-                                <div key={section.label}>
-                                    <div className="mb-3 px-3 text-theme-xs font-semibold uppercase tracking-wide text-gray-400">
-                                        {section.label}
-                                    </div>
-                                    <ul className="flex flex-col gap-1.5">
-                                        {items.map((link) => (
-                                            <li key={link.label}>
-                                                <a
-                                                    className={`menu-item group ${link.active ? 'menu-item-active' : 'menu-item-inactive'}`}
-                                                    href={link.href}
-                                                    onClick={() => setIsMobileOpen(false)}
-                                                >
-                                                    <span className={`menu-item-icon-size ${link.active ? 'menu-item-icon-active' : 'menu-item-icon-inactive'}`}>
-                                                        {link.icon}
-                                                    </span>
-                                                    <span>{link.label}</span>
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            );
-                        })}
-                    </nav>
-                </div>
-
-                <div className="border-t border-gray-200 py-4">
-                    <div className="rounded-xl bg-gray-50 p-3">
-                        <div className="text-theme-sm font-medium text-gray-900">{user?.name}</div>
-                        <div className="mt-0.5 text-theme-xs text-gray-500">{user?.email}</div>
-                        <div className="mt-3 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-theme-xs font-medium text-brand-700">
-                            {user?.role}
-                        </div>
-                    </div>
-                </div>
-            </aside>
+            <Sidebar
+                title={title}
+                dashboardHref={links.dashboard}
+                sections={sections}
+                user={user ?? null}
+                isOpen={sidebar.isOpen}
+                isAdmin={isAdmin}
+                onClose={sidebar.close}
+            />
 
             <div className="flex min-h-screen flex-col transition-all duration-300 ease-in-out lg:ml-[290px]">
-                <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
-                    <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between lg:px-6">
-                        <div className="flex items-center justify-between gap-3">
-                            <button
-                                className="flex size-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 shadow-theme-xs hover:bg-gray-50 lg:hidden"
-                                type="button"
-                                aria-label="Toggle sidebar"
-                                onClick={() => setIsMobileOpen(true)}
-                            >
-                                <Menu size={20} />
-                            </button>
-                            <div className="min-w-0">
-                                <div className="text-theme-xs font-semibold uppercase tracking-wide text-gray-400">Workspace</div>
-                                <div className="truncate text-theme-xl font-semibold text-gray-900">
-                                    {currentAccount ? currentAccount.name : 'Все аккаунты'}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-3">
-                            <select
-                                className="h-11 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10"
-                                value={currentAccount?.dashboard_url || links.dashboard}
-                                onChange={(event) => selectAccount(event.target.value)}
-                            >
-                                <option value={links.dashboard}>Все аккаунты</option>
-                                {accounts.map((account: AmoAccountSummary) => (
-                                    <option key={account.id} value={account.dashboard_url}>
-                                        {account.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {currentAccount ? (
-                                <span className="inline-flex h-9 items-center rounded-lg bg-gray-100 px-3 text-theme-sm font-medium text-gray-700">
-                                    {currentAccount.base_domain}
-                                </span>
-                            ) : null}
-                            <button
-                                className="inline-flex h-10 items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50"
-                                type="button"
-                                onClick={() => router.post(links.logout)}
-                            >
-                                <LogOut size={16} />
-                                Выйти
-                            </button>
-                        </div>
-                    </div>
-                </header>
+                <Header
+                    currentAccount={currentAccount}
+                    accounts={accounts}
+                    dashboardHref={links.dashboard}
+                    logoutHref={links.logout}
+                    onMenuOpen={sidebar.open}
+                />
 
                 <main className="mx-auto w-full max-w-[1536px] flex-1 px-4 py-6 md:px-6">
                     <nav className="mb-6 flex flex-wrap items-center gap-2 text-theme-sm text-gray-500" aria-label="Хлебные крошки">
                         {breadcrumbs.map((crumb, index) => (
                             <span className="inline-flex items-center gap-2" key={`${crumb.label}-${index}`}>
-                                {index > 0 ? <ChevronRight size={14} /> : null}
+                                {index > 0 && <ChevronRight size={14} />}
                                 {crumb.href && index < breadcrumbs.length - 1 ? (
                                     <a className="font-medium text-brand-600 hover:text-brand-700" href={crumb.href}>
                                         {crumb.label}
                                     </a>
                                 ) : (
-                                    <span className={index === breadcrumbs.length - 1 ? 'font-medium text-gray-800' : ''}>{crumb.label}</span>
+                                    <span className={index === breadcrumbs.length - 1 ? 'font-medium text-gray-800' : ''}>
+                                        {crumb.label}
+                                    </span>
                                 )}
                             </span>
                         ))}
