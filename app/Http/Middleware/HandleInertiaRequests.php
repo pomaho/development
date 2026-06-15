@@ -3,7 +3,9 @@
 namespace App\Http\Middleware;
 
 use App\Models\AmoAccount;
+use App\Support\InertiaAccountsCache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -49,16 +51,23 @@ class HandleInertiaRequests extends Middleware
                     'role' => $request->user()->role,
                 ] : null,
             ],
-            'amoAccounts' => fn () => $request->user() ? AmoAccount::query()
-                ->orderBy('name')
-                ->get(['id', 'name', 'base_domain', 'is_active'])
-                ->map(fn (AmoAccount $account): array => [
-                    'id' => $account->id,
-                    'name' => $account->name,
-                    'base_domain' => $account->base_domain,
-                    'is_active' => $account->is_active,
-                    'dashboard_url' => route('amo-accounts.dashboard', $account),
-                ]) : [],
+            'amoAccounts' => fn () => $request->user()
+                ? Cache::remember(
+                    InertiaAccountsCache::keyFor($request->user()->id),
+                    300,
+                    fn () => AmoAccount::query()
+                        ->orderBy('name')
+                        ->get(['id', 'name', 'base_domain', 'is_active'])
+                        ->map(fn (AmoAccount $account): array => [
+                            'id' => $account->id,
+                            'name' => $account->name,
+                            'base_domain' => $account->base_domain,
+                            'is_active' => $account->is_active,
+                            'dashboard_url' => route('amo-accounts.dashboard', $account),
+                        ])
+                        ->all()
+                )
+                : [],
             'currentAmoAccount' => $currentAccount ? [
                 'id' => $currentAccount->id,
                 'name' => $currentAccount->name,
