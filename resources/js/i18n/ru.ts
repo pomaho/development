@@ -40,6 +40,7 @@ const ru = {
 
         integrationsList: 'Интеграции',
         dashboardBlocks: 'Dashboard-блоки',
+        webhooks: 'Вебхуки',
 
         apiLogs: 'API-логи',
     },

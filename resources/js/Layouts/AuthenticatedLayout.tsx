@@ -17,6 +17,7 @@ import {
     SquareCheckBig,
     UserRoundCog,
     Users,
+    Webhook,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { SharedProps } from '../types';
@@ -59,6 +60,7 @@ type Props = {
             crm_audit: string;
             integrations: string;
             widgets: string;
+            webhooks?: string;
         } | null;
     };
     children: ReactNode;
@@ -144,9 +146,12 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
         ...(taskStatisticsHref ? [{ label: n.tasks, href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
     ] : [];
 
+    const webhooksHref = currentLinks?.webhooks ?? (base ? `${base}/webhooks` : null);
+
     const integrationLinks: NavLink[] = currentLinks ? [
         { label: n.integrationsList, href: currentLinks.integrations, icon: <Settings2 />, active: url.endsWith('/integrations') },
         { label: n.dashboardBlocks, href: currentLinks.widgets, icon: <Blocks />, active: url.endsWith('/widgets') },
+        ...(webhooksHref ? [{ label: n.webhooks, href: webhooksHref, icon: <Webhook />, active: url.endsWith('/webhooks') }] : []),
     ] : [];
 
     const systemLinks: NavLink[] = [

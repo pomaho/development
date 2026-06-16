@@ -22,6 +22,7 @@ use App\Http\Controllers\Web\AmoSyncCenterController;
 use App\Http\Controllers\Web\AmoTaskStatisticsController;
 use App\Http\Controllers\Web\AmoUsersController;
 use App\Http\Controllers\Web\ApiLogController;
+use App\Http\Controllers\Web\AmoAccountWebhooksController;
 use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\LeadSyncScheduleController;
@@ -72,6 +73,9 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/dashboard', DashboardController::class)->name('amo-accounts.dashboard');
     Route::get('/amo-accounts/{amo_account}/integrations', AmoAccountIntegrationsController::class)->name('amo-accounts.integrations');
     Route::get('/amo-accounts/{amo_account}/widgets', AmoAccountWidgetsController::class)->name('amo-accounts.widgets');
+    Route::get('/amo-accounts/{amo_account}/webhooks', [AmoAccountWebhooksController::class, 'index'])->name('amo-accounts.webhooks.index');
+    Route::post('/amo-accounts/{amo_account}/webhooks', [AmoAccountWebhooksController::class, 'store'])->middleware('throttle:amo-write')->name('amo-accounts.webhooks.store');
+    Route::delete('/amo-accounts/{amo_account}/webhooks', [AmoAccountWebhooksController::class, 'destroy'])->middleware('throttle:amo-write')->name('amo-accounts.webhooks.destroy');
     Route::get('/amo-accounts/{amo_account}/widgets/{dashboard_widget}/settings', [AmoAccountWidgetsController::class, 'settings'])->name('amo-accounts.widgets.settings');
     Route::post('/amo-accounts/{amo_account}/widgets/{dashboard_widget}/settings', [AmoAccountWidgetsController::class, 'updateSettings'])->name('amo-accounts.widgets.settings.update');
     Route::get('/amo-accounts/{amo_account}/catalogs', [AmoCatalogsController::class, 'index'])->name('amo-accounts.catalogs.index');
