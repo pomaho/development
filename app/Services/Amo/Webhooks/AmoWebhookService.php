@@ -147,33 +147,71 @@ class AmoWebhookService
                 continue;
             }
 
+            if ($this->isEntityItem($entityPayload)) {
+                $events[] = $this->eventFromItem($entityType, 'update', $entityPayload);
+
+                continue;
+            }
+
             foreach ($entityPayload as $action => $items) {
                 if (! is_array($items)) {
                     continue;
                 }
 
+                if ($this->isEntityItem($items)) {
+                    $events[] = $this->eventFromItem($entityType, is_string($action) ? $action : 'update', $items);
+
+                    continue;
+                }
+
                 foreach ($items as $item) {
-                    if (! is_array($item)) {
+                    if (! is_array($item) || ! $this->isEntityItem($item)) {
                         continue;
                     }
 
-                    $entityId = $item['id'] ?? $item['entity_id'] ?? null;
-
-                    if (! $entityId) {
-                        continue;
-                    }
-
-                    $events[] = [
-                        'event_type' => "{$entityType}.{$action}",
-                        'entity_type' => $entityType,
-                        'entity_id' => (string) $entityId,
-                        'payload' => $item,
-                    ];
+                    $events[] = $this->eventFromItem($entityType, is_string($action) ? $action : 'update', $item);
                 }
             }
         }
 
+        if ($events === []) {
+            $events = $this->extractFlatEntityEvent($payload);
+        }
+
         return $events;
+    }
+
+    private function isEntityItem(array $item): bool
+    {
+        return isset($item['id']) || isset($item['entity_id']);
+    }
+
+    private function eventFromItem(string $entityType, string $action, array $item): array
+    {
+        return [
+            'event_type' => "{$entityType}.{$action}",
+            'entity_type' => $entityType,
+            'entity_id' => (string) ($item['id'] ?? $item['entity_id']),
+            'payload' => $item,
+        ];
+    }
+
+    private function extractFlatEntityEvent(array $payload): array
+    {
+        $entityType = $payload['entity_type'] ?? $payload['entity'] ?? null;
+        $entityId = $payload['entity_id'] ?? $payload['id'] ?? null;
+
+        if (! is_string($entityType) || ! $entityId) {
+            return [];
+        }
+
+        $entityType = self::PAYLOAD_ENTITY_ALIASES[$entityType] ?? $entityType;
+
+        if (! isset(self::ENTITY_MAP[$entityType])) {
+            return [];
+        }
+
+        return [$this->eventFromItem($entityType, 'update', ['entity_id' => $entityId, ...$payload])];
     }
 
     private function payloadEntityTypes(): array
