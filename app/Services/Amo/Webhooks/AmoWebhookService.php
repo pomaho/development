@@ -33,6 +33,10 @@ class AmoWebhookService
         ],
     ];
 
+    private const PAYLOAD_ENTITY_ALIASES = [
+        'task' => 'tasks',
+    ];
+
     public function __construct(private readonly AmoFallbackHttpClient $http)
     {
     }
@@ -136,8 +140,8 @@ class AmoWebhookService
     {
         $events = [];
 
-        foreach (array_keys(self::ENTITY_MAP) as $entityType) {
-            $entityPayload = Arr::get($payload, $entityType);
+        foreach ($this->payloadEntityTypes() as $payloadEntityType => $entityType) {
+            $entityPayload = Arr::get($payload, $payloadEntityType);
 
             if (! is_array($entityPayload)) {
                 continue;
@@ -170,6 +174,13 @@ class AmoWebhookService
         }
 
         return $events;
+    }
+
+    private function payloadEntityTypes(): array
+    {
+        $types = array_combine(array_keys(self::ENTITY_MAP), array_keys(self::ENTITY_MAP));
+
+        return [...$types, ...self::PAYLOAD_ENTITY_ALIASES];
     }
 
     private function fetchEntity(AmoAccount $account, string $entityType, string $entityId): array

@@ -1282,6 +1282,40 @@ class AuthAndAmoAccountsTest extends TestCase
         $this->post('/webhooks/amo/wrong-key', [])->assertNotFound();
     }
 
+    public function test_amo_webhook_endpoint_accepts_singular_task_payload(): void
+    {
+        Queue::fake();
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'webhook_key' => 'secret-webhook-key',
+        ]);
+
+        $this->post('/webhooks/amo/secret-webhook-key', [
+            'task' => [
+                'update' => [
+                    ['id' => 300, 'updated_at' => 1781455200],
+                ],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('events_accepted', 1);
+
+        $this->assertDatabaseHas('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'event_type' => 'tasks.update',
+            'entity_type' => 'tasks',
+            'entity_id' => '300',
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+        ]);
+        $this->assertDatabaseMissing('amo_webhook_events', [
+            'amo_account_id' => $account->id,
+            'event_type' => 'unknown',
+        ]);
+        Queue::assertPushed(ProcessAmoWebhookEventJob::class, 1);
+    }
+
     public function test_amo_webhook_endpoint_reuses_pending_entity_event(): void
     {
         Queue::fake();
