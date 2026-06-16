@@ -86,23 +86,11 @@ class AmoTaskStatisticsController extends Controller
         return $export->csv("amo-task-statistics-{$amoAccount->id}.csv", [
             'ID пользователя',
             'Пользователь',
-            'Выполнено за период',
-            'Выполнено с просрочкой',
-            'Открыто сейчас',
-            'Открыто просрочено',
-            'Всего просрочено',
-            'Всего в отчете',
-            '% просрочки',
+            'Закрыто задач за период',
         ], collect($statisticsService->statistics($amoAccount, $from, $to))->map(fn (array $row): array => [
             $row['responsible_user_id'],
             $row['responsible_name'],
             $row['completed_count'],
-            $row['completed_overdue_count'],
-            $row['open_count'],
-            $row['open_overdue_count'],
-            $row['overdue_count'],
-            $row['total_count'],
-            $row['overdue_rate'],
         ]));
     }
 

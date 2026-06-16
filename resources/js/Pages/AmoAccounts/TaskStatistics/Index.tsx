@@ -139,7 +139,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
             </form>
 
             <div className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Выполненная задача считается просроченной по событию завершения `task_completed`: если время события позже дедлайна `complete_till`. Если событие еще не найдено, используется fallback по `updated_at`.
+                Отчет считает задачи по событиям `task_completed`: пользователь определяется по полю `created_by` события, период - по времени закрытия задачи.
             </div>
 
             <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
@@ -214,13 +214,7 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                         <thead className="text-gray-500">
                             <tr>
                                 <th className="py-2">Пользователь</th>
-                                <th>Выполнено за период</th>
-                                <th>Выполнено с просрочкой</th>
-                                <th>Открыто сейчас</th>
-                                <th>Открыто просрочено</th>
-                                <th>Всего просрочено</th>
-                                <th>Всего в отчете</th>
-                                <th>% просрочки</th>
+                                <th>Закрыто задач за период</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -228,22 +222,10 @@ export default function TaskStatisticsIndex({ account, rows, runs, filters, can,
                                 <tr className="border-t border-gray-100" key={row.responsible_user_id}>
                                     <td className="py-3 font-medium">{userLabel(row)}</td>
                                     <td>{row.completed_count}</td>
-                                    <td>
-                                        <span className={row.completed_overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.completed_overdue_count}</span>
-                                    </td>
-                                    <td>{row.open_count}</td>
-                                    <td>
-                                        <span className={row.open_overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.open_overdue_count}</span>
-                                    </td>
-                                    <td>
-                                        <span className={row.overdue_count > 0 ? 'font-semibold text-red-700' : ''}>{row.overdue_count}</span>
-                                    </td>
-                                    <td>{row.total_count}</td>
-                                    <td>{row.overdue_rate}%</td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="py-4 text-gray-500" colSpan={8}>Данных пока нет. Запустите синхронизацию задач.</td>
+                                    <td className="py-4 text-gray-500" colSpan={2}>Данных пока нет. Запустите синхронизацию задач.</td>
                                 </tr>
                             )}
                         </tbody>

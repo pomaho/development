@@ -797,6 +797,13 @@ class AmoServicesTest extends TestCase
                     'type' => 'task_completed',
                     'created_by' => 10,
                     'created_at' => now()->subDay()->timestamp,
+                ], [
+                    'id' => 'event-100-duplicate',
+                    'entity_id' => 100,
+                    'entity_type' => 'task',
+                    'type' => 'task_completed',
+                    'created_by' => 10,
+                    'created_at' => now()->subHours(12)->timestamp,
                 ]]],
             ]);
         $http->shouldReceive('get')
@@ -876,12 +883,12 @@ class AmoServicesTest extends TestCase
         $run->refresh();
         $rows = $statisticsService->statistics($account, $from, $to);
 
-        $this->assertSame(['completed' => 1, 'completion_events' => 1, 'open' => 2, 'events' => 1], $syncCounts);
+        $this->assertSame(['completed' => 1, 'completion_events' => 2, 'open' => 2, 'events' => 1], $syncCounts);
         $this->assertSame(TaskStatisticsSyncRun::STATUS_COMPLETED, $run->status);
         $this->assertSame(1, $run->completed_found);
         $this->assertSame(1, $run->completed_synced);
-        $this->assertSame(1, $run->completion_events_found);
-        $this->assertSame(1, $run->completion_events_synced);
+        $this->assertSame(2, $run->completion_events_found);
+        $this->assertSame(2, $run->completion_events_synced);
         $this->assertSame(2, $run->open_found);
         $this->assertSame(2, $run->open_synced);
         $task = CrmEntitySnapshot::query()->where('entity_type', 'tasks')->where('external_id', '100')->firstOrFail();
@@ -890,11 +897,12 @@ class AmoServicesTest extends TestCase
         $this->assertSame('event-100', $task->raw['_task_statistics']['completed_event_id']);
         $this->assertSame('Manager', $rows[0]['responsible_name']);
         $this->assertSame(1, $rows[0]['completed_count']);
-        $this->assertSame(1, $rows[0]['completed_overdue_count']);
-        $this->assertSame(2, $rows[0]['open_count']);
-        $this->assertSame(1, $rows[0]['open_overdue_count']);
-        $this->assertSame(2, $rows[0]['overdue_count']);
-        $this->assertSame(66.7, $rows[0]['overdue_rate']);
+        $this->assertSame(0, $rows[0]['completed_overdue_count']);
+        $this->assertSame(0, $rows[0]['open_count']);
+        $this->assertSame(0, $rows[0]['open_overdue_count']);
+        $this->assertSame(0, $rows[0]['overdue_count']);
+        $this->assertSame(1, $rows[0]['total_count']);
+        $this->assertSame(0.0, $rows[0]['overdue_rate']);
 
         $groups = $statisticsService->completedOverdueDashboard($account, $from, $to);
 

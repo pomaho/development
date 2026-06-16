@@ -28,7 +28,7 @@ class AmoTaskSyncService
             'filter[is_completed]' => 1,
             ...$this->updatedAtQuery($from, $to),
         ], $syncedAt, $run, 'completed');
-        $completionEvents = $this->syncCompletionEvents($account, $from, $to, $run);
+        $completionEvents = $this->syncCompletionEvents($account, $from, $to, $run, $syncedAt);
         $open = $this->syncTaskQuery($account, [
             'filter[is_completed]' => 0,
         ], $syncedAt, $run, 'open');
@@ -79,7 +79,7 @@ class AmoTaskSyncService
         return $total;
     }
 
-    private function syncCompletionEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, ?TaskStatisticsSyncRun $run): int
+    private function syncCompletionEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, ?TaskStatisticsSyncRun $run, Carbon $syncedAt): int
     {
         $page = 1;
         $total = 0;
@@ -96,6 +96,8 @@ class AmoTaskSyncService
             $events = is_array($events) ? $events : [];
 
             foreach ($events as $event) {
+                $this->saveEvent($account, $event, $syncedAt);
+
                 $taskId = (int) ($event['entity_id'] ?? 0);
 
                 if ($taskId <= 0) {
