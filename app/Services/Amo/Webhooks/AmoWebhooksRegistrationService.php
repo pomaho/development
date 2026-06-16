@@ -18,27 +18,29 @@ final class AmoWebhooksRegistrationService
             'restore_lead' => 'Восстановление',
             'status_lead' => 'Смена статуса',
             'responsible_lead' => 'Смена ответственного',
-            'note_lead' => 'Добавление примечания',
+            'note_lead' => 'Примечание',
         ],
         'Контакты' => [
             'add_contact' => 'Создание',
             'update_contact' => 'Изменение',
             'delete_contact' => 'Удаление',
             'restore_contact' => 'Восстановление',
-            'note_contact' => 'Добавление примечания',
+            'responsible_contact' => 'Смена ответственного',
+            'note_contact' => 'Примечание',
         ],
         'Компании' => [
             'add_company' => 'Создание',
             'update_company' => 'Изменение',
             'delete_company' => 'Удаление',
             'restore_company' => 'Восстановление',
-            'note_company' => 'Добавление примечания',
+            'responsible_company' => 'Смена ответственного',
+            'note_company' => 'Примечание',
         ],
         'Задачи' => [
             'add_task' => 'Создание',
             'update_task' => 'Изменение',
             'delete_task' => 'Удаление',
-            'complete_task' => 'Выполнение',
+            'responsible_task' => 'Смена ответственного',
         ],
     ];
 
