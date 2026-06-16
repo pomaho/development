@@ -1313,6 +1313,87 @@ class AmoServicesTest extends TestCase
         ]);
     }
 
+    public function test_amo_webhook_service_refreshes_task_snapshot_and_task_events(): void
+    {
+        Cache::flush();
+
+        $account = $this->accountWithToken($this->longLivedJwt());
+        $event = AmoWebhookEvent::query()->create([
+            'amo_account_id' => $account->id,
+            'event_type' => 'tasks.update',
+            'entity_type' => 'tasks',
+            'entity_id' => '200',
+            'payload' => ['id' => 200],
+            'status' => AmoWebhookEvent::STATUS_PENDING,
+            'received_at' => now(),
+        ]);
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->once()
+            ->with(
+                Mockery::on(fn (AmoAccount $passedAccount): bool => $passedAccount->id === $account->id),
+                '/api/v4/tasks/200',
+                []
+            )
+            ->andReturn([
+                'id' => 200,
+                'text' => str_repeat('Long task text ', 30),
+                'responsible_user_id' => 30,
+                'is_completed' => true,
+                'created_at' => 1781451600,
+                'updated_at' => 1781455200,
+                'complete_till' => 1781450000,
+                'entity_id' => 1000,
+                'entity_type' => 'leads',
+            ]);
+        $http->shouldReceive('get')
+            ->once()
+            ->with(
+                Mockery::on(fn (AmoAccount $passedAccount): bool => $passedAccount->id === $account->id),
+                '/api/v4/events',
+                [
+                    'filter[entity][]' => 'task',
+                    'filter[entity_id]' => '200',
+                    'page' => 1,
+                    'limit' => 250,
+                ]
+            )
+            ->andReturn([
+                '_page' => 1,
+                '_page_count' => 1,
+                '_embedded' => ['events' => [[
+                    'id' => 'event-200',
+                    'entity_id' => 200,
+                    'entity_type' => 'task',
+                    'type' => 'task_completed',
+                    'created_by' => 30,
+                    'created_at' => 1781455300,
+                ]]],
+            ]);
+
+        (new AmoWebhookService($http))->process($event);
+
+        $event->refresh();
+        $task = CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'tasks')
+            ->where('external_id', '200')
+            ->firstOrFail();
+        $storedEvent = CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'events')
+            ->where('external_id', 'event-200')
+            ->firstOrFail();
+
+        $this->assertSame(AmoWebhookEvent::STATUS_PROCESSED, $event->status);
+        $this->assertLessThanOrEqual(250, mb_strlen((string) $task->name));
+        $this->assertSame(1781455300, $task->raw['_task_statistics']['completed_at']);
+        $this->assertSame('event-200', $task->raw['_task_statistics']['completed_event_id']);
+        $this->assertSame('task_completed', $storedEvent->name);
+        $this->assertSame(200, $storedEvent->embedded['entity_id']);
+        $this->assertNotNull(Cache::get("amo_task_overdue_dashboard_version:{$account->id}"));
+    }
+
     public function test_amo_webhook_service_deletes_snapshot_for_delete_event(): void
     {
         $account = $this->accountWithToken($this->longLivedJwt());
