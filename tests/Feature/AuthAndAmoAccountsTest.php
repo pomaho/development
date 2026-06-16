@@ -1697,17 +1697,20 @@ class AuthAndAmoAccountsTest extends TestCase
 
     public function test_authenticated_layout_uses_tailadmin_shell(): void
     {
-        $source = file_get_contents(resource_path('js/Layouts/AuthenticatedLayout.tsx'));
+        $layout = file_get_contents(resource_path('js/Layouts/AuthenticatedLayout.tsx'));
+        $sidebar = file_get_contents(resource_path('js/Layouts/Sidebar.tsx'));
+        $header = file_get_contents(resource_path('js/Layouts/Header.tsx'));
+        $i18n = file_get_contents(resource_path('js/i18n/ru.ts'));
 
-        $this->assertStringContainsString('lg:ml-[290px]', $source);
-        $this->assertStringContainsString('menu-item-active', $source);
-        $this->assertStringContainsString('custom-scrollbar', $source);
-        $this->assertStringContainsString('aria-label="Toggle sidebar"', $source);
-        $this->assertStringContainsString('CRM-данные', $source);
-        $this->assertStringContainsString('CRM-структура', $source);
-        $this->assertStringContainsString('Синхронизация', $source);
-        $this->assertStringContainsString('Автоматизация', $source);
-        $this->assertStringContainsString('Аналитика', $source);
+        $this->assertStringContainsString('lg:ml-[290px]', $layout);
+        $this->assertStringContainsString('menu-item-active', $sidebar);
+        $this->assertStringContainsString('custom-scrollbar', $sidebar);
+        $this->assertStringContainsString('openSidebar', $header);
+        $this->assertStringContainsString('CRM-данные', $i18n);
+        $this->assertStringContainsString('CRM-структура', $i18n);
+        $this->assertStringContainsString('Синхронизация', $i18n);
+        $this->assertStringContainsString('Автоматизация', $i18n);
+        $this->assertStringContainsString('Аналитика', $i18n);
     }
 
     public function test_shared_react_components_use_tailadmin_visual_tokens(): void
