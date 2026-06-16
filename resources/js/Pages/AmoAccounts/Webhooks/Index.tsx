@@ -1,6 +1,6 @@
 import { router, useForm, usePage } from '@inertiajs/react';
 import type { SharedProps } from '../../../types';
-import { Check, Copy, Plus, Trash2, TriangleAlert } from 'lucide-react';
+import { Check, Copy, Pencil, Plus, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useState } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
@@ -103,6 +103,61 @@ function EventsTag({ events, available }: { events: string[]; available: Availab
     );
 }
 
+function EventCheckboxes({
+    availableEvents,
+    selectedEvents,
+    onToggle,
+    onSelectGroup,
+}: {
+    availableEvents: AvailableEvents;
+    selectedEvents: string[];
+    onToggle: (key: string) => void;
+    onSelectGroup: (keys: string[]) => void;
+}) {
+    return (
+        <div className="space-y-3">
+            {Object.entries(availableEvents).map(([groupName, events]) => {
+                const groupKeys = Object.keys(events);
+                const allSelected = groupKeys.every((k) => selectedEvents.includes(k));
+                const someSelected = groupKeys.some((k) => selectedEvents.includes(k));
+
+                return (
+                    <div key={groupName} className="rounded-lg border border-gray-200 p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                                {groupName}
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => onSelectGroup(groupKeys)}
+                                className="text-xs font-medium text-brand-600 hover:text-brand-700"
+                            >
+                                {allSelected ? 'Снять все' : someSelected ? 'Выбрать все' : 'Выбрать все'}
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {Object.entries(events).map(([key, label]) => (
+                                <label
+                                    key={key}
+                                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 hover:bg-gray-50"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedEvents.includes(key)}
+                                        onChange={() => onToggle(key)}
+                                        className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
+                                    />
+                                    <span className="text-theme-sm text-gray-700">{label}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 function RegisterForm({
     incomingUrl,
     availableEvents,
@@ -165,44 +220,12 @@ function RegisterForm({
                 {form.errors.events && (
                     <p className="text-xs text-red-500">{form.errors.events}</p>
                 )}
-                {Object.entries(availableEvents).map(([groupName, events]) => {
-                    const groupKeys = Object.keys(events);
-                    const allSelected = groupKeys.every((k) => form.data.events.includes(k));
-                    const someSelected = groupKeys.some((k) => form.data.events.includes(k));
-
-                    return (
-                        <div key={groupName} className="rounded-lg border border-gray-200 p-4">
-                            <div className="mb-3 flex items-center justify-between">
-                                <span className="text-xs font-semibold uppercase tracking-wide text-gray-500">
-                                    {groupName}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => selectGroup(groupKeys)}
-                                    className="text-xs font-medium text-brand-600 hover:text-brand-700"
-                                >
-                                    {allSelected ? 'Снять все' : someSelected ? 'Выбрать все' : 'Выбрать все'}
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                {Object.entries(events).map(([key, label]) => (
-                                    <label
-                                        key={key}
-                                        className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-gray-50"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={form.data.events.includes(key)}
-                                            onChange={() => toggleEvent(key)}
-                                            className="size-4 rounded border-gray-300 text-brand-600 focus:ring-brand-500"
-                                        />
-                                        <span className="text-theme-sm text-gray-700">{label}</span>
-                                    </label>
-                                ))}
-                            </div>
-                        </div>
-                    );
-                })}
+                <EventCheckboxes
+                    availableEvents={availableEvents}
+                    selectedEvents={form.data.events}
+                    onToggle={toggleEvent}
+                    onSelectGroup={selectGroup}
+                />
             </div>
 
             <button
@@ -214,6 +237,166 @@ function RegisterForm({
                 Зарегистрировать вебхук
             </button>
         </form>
+    );
+}
+
+function EditWebhookForm({
+    webhook,
+    availableEvents,
+    updateUrl,
+    onCancel,
+}: {
+    webhook: Webhook;
+    availableEvents: AvailableEvents;
+    updateUrl: string;
+    onCancel: () => void;
+}) {
+    const form = useForm({
+        old_destination: webhook.destination,
+        destination: webhook.destination,
+        events: webhook.settings as string[],
+    });
+
+    const toggleEvent = (key: string) => {
+        form.setData('events', form.data.events.includes(key)
+            ? form.data.events.filter((e) => e !== key)
+            : [...form.data.events, key],
+        );
+    };
+
+    const selectGroup = (groupKeys: string[]) => {
+        const allSelected = groupKeys.every((k) => form.data.events.includes(k));
+        if (allSelected) {
+            form.setData('events', form.data.events.filter((e) => !groupKeys.includes(e)));
+        } else {
+            const merged = [...new Set([...form.data.events, ...groupKeys])];
+            form.setData('events', merged);
+        }
+    };
+
+    const submit = (e: React.FormEvent) => {
+        e.preventDefault();
+        form.patch(updateUrl, { onSuccess: onCancel });
+    };
+
+    return (
+        <form onSubmit={submit} className="mt-3 rounded-lg border border-brand-200 bg-brand-50/40 p-4">
+            <div className="mb-4">
+                <label className="mb-1.5 block text-xs font-medium text-gray-700">
+                    URL назначения
+                </label>
+                <input
+                    type="url"
+                    value={form.data.destination}
+                    onChange={(e) => form.setData('destination', e.target.value)}
+                    className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-theme-sm text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:ring-brand-500/20"
+                    required
+                />
+                {form.errors.destination && (
+                    <p className="mt-1 text-xs text-red-500">{form.errors.destination}</p>
+                )}
+            </div>
+
+            <div className="mb-4">
+                <label className="mb-2 block text-xs font-medium text-gray-700">
+                    События
+                </label>
+                {form.errors.events && (
+                    <p className="mb-2 text-xs text-red-500">{form.errors.events}</p>
+                )}
+                <EventCheckboxes
+                    availableEvents={availableEvents}
+                    selectedEvents={form.data.events}
+                    onToggle={toggleEvent}
+                    onSelectGroup={selectGroup}
+                />
+            </div>
+
+            <div className="flex items-center gap-2">
+                <button
+                    type="submit"
+                    disabled={form.processing || form.data.events.length === 0}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                    <Check size={13} />
+                    Сохранить
+                </button>
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                >
+                    <X size={13} />
+                    Отмена
+                </button>
+            </div>
+        </form>
+    );
+}
+
+function WebhookRow({
+    wh,
+    availableEvents,
+    updateUrl,
+    onDelete,
+    formatDate,
+}: {
+    wh: Webhook;
+    availableEvents: AvailableEvents;
+    updateUrl: string;
+    onDelete: (destination: string) => void;
+    formatDate: (ts: number | null) => string;
+}) {
+    const [editing, setEditing] = useState(false);
+
+    return (
+        <div className="py-4 first:pt-0 last:pb-0">
+            <div className="flex items-start justify-between gap-4">
+                <code className="min-w-0 flex-1 break-all text-xs text-gray-700">
+                    {wh.destination}
+                </code>
+                <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => setEditing((v) => !v)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                    >
+                        <Pencil size={13} />
+                        Изменить
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => onDelete(wh.destination)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                    >
+                        <Trash2 size={13} />
+                        Удалить
+                    </button>
+                </div>
+            </div>
+
+            {!editing && (
+                <>
+                    <div className="mt-2">
+                        <EventsTag events={wh.settings} available={availableEvents} />
+                    </div>
+                    {wh.created_at && (
+                        <p className="mt-1.5 text-xs text-gray-400">
+                            Зарегистрирован {formatDate(wh.created_at)}
+                        </p>
+                    )}
+                </>
+            )}
+
+            {editing && (
+                <EditWebhookForm
+                    webhook={wh}
+                    availableEvents={availableEvents}
+                    updateUrl={updateUrl}
+                    onCancel={() => setEditing(false)}
+                />
+            )}
+        </div>
     );
 }
 
@@ -298,29 +481,14 @@ export default function WebhooksIndex({ account, webhooks, incomingUrl, availabl
                         {webhooks.length > 0 && (
                             <div className="divide-y divide-gray-100">
                                 {webhooks.map((wh) => (
-                                    <div key={wh.destination} className="py-4 first:pt-0 last:pb-0">
-                                        <div className="mb-2 flex items-start justify-between gap-4">
-                                            <code className="min-w-0 flex-1 break-all text-xs text-gray-700">
-                                                {wh.destination}
-                                            </code>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleDelete(wh.destination)}
-                                                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                                            >
-                                                <Trash2 size={13} />
-                                                Удалить
-                                            </button>
-                                        </div>
-                                        <div className="mb-1.5">
-                                            <EventsTag events={wh.settings} available={availableEvents} />
-                                        </div>
-                                        {wh.created_at && (
-                                            <p className="text-xs text-gray-400">
-                                                Зарегистрирован {formatDate(wh.created_at)}
-                                            </p>
-                                        )}
-                                    </div>
+                                    <WebhookRow
+                                        key={wh.destination}
+                                        wh={wh}
+                                        availableEvents={availableEvents}
+                                        updateUrl={accountLinks.webhooks}
+                                        onDelete={handleDelete}
+                                        formatDate={formatDate}
+                                    />
                                 ))}
                             </div>
                         )}
