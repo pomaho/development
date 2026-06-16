@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\DeleteAmoWebhookRequest;
 use App\Http\Requests\StoreAmoWebhookRequest;
+use App\Http\Requests\UpdateAmoWebhookRequest;
 use App\Models\AmoAccount;
 use App\Services\Amo\Webhooks\AmoWebhooksRegistrationService;
 use Illuminate\Http\RedirectResponse;
@@ -79,6 +80,22 @@ class AmoAccountWebhooksController extends Controller
         }
 
         return back()->with('success', 'Вебхук успешно зарегистрирован в amoCRM.');
+    }
+
+    public function update(UpdateAmoWebhookRequest $request, AmoAccount $amoAccount): RedirectResponse
+    {
+        try {
+            $this->service->unsubscribe($amoAccount, $request->string('old_destination')->toString());
+            $this->service->register(
+                $amoAccount,
+                $request->string('destination')->toString(),
+                $request->validated('events'),
+            );
+        } catch (Throwable $exception) {
+            return back()->with('error', 'Не удалось обновить вебхук: ' . $exception->getMessage());
+        }
+
+        return back()->with('success', 'Вебхук обновлён.');
     }
 
     public function destroy(DeleteAmoWebhookRequest $request, AmoAccount $amoAccount): RedirectResponse
