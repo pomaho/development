@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { SharedProps } from '../types';
+import ru from '../i18n/ru';
 import { useSidebar } from '../hooks/useSidebar';
 import { Header } from './Header';
 import { Sidebar, type NavLink, type NavSection } from './Sidebar';
@@ -83,21 +84,23 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
     const dataCenterHref = href(currentLinks?.data_center, base ? `${base}/data` : null);
     const crmFieldsHref = base ? `${base}/crm-audit/fields` : null;
 
+    const n = ru.nav;
+
     const mainLinks: NavLink[] = [
         {
-            label: 'Dashboard',
+            label: n.dashboard,
             href: currentLinks ? currentLinks.dashboard : links.dashboard,
             icon: <LayoutDashboard />,
             active: url === '/dashboard' || url.endsWith('/dashboard'),
         },
         {
-            label: 'Клиенты',
+            label: n.clients,
             href: links.amo_accounts,
             icon: <BriefcaseBusiness />,
             active: url.startsWith('/amo-accounts') && !currentLinks,
         },
         {
-            label: 'OAuth amoCRM',
+            label: n.oauthAmo,
             href: links.oauth,
             icon: <Plug />,
             active: url.startsWith('/amo-oauth/external'),
@@ -106,60 +109,60 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
     ];
 
     const accountOverviewLinks: NavLink[] = currentLinks ? [
-        { label: 'Обзор клиента', href: currentLinks.dashboard, icon: <LayoutDashboard />, active: url.endsWith('/dashboard') },
-        { label: 'Профиль аккаунта', href: currentLinks.show, icon: <BriefcaseBusiness />, active: url === `${base}` },
+        { label: n.clientOverview, href: currentLinks.dashboard, icon: <LayoutDashboard />, active: url.endsWith('/dashboard') },
+        { label: n.accountProfile, href: currentLinks.show, icon: <BriefcaseBusiness />, active: url === `${base}` },
     ] : [];
 
     const crmDataLinks: NavLink[] = currentLinks ? [
-        ...(dataCenterHref ? [{ label: 'Центр данных', href: dataCenterHref, icon: <Database />, active: url === `${base}/data` }] : []),
-        { label: 'Сделки', href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
+        ...(dataCenterHref ? [{ label: n.dataCenter, href: dataCenterHref, icon: <Database />, active: url === `${base}/data` }] : []),
+        { label: n.leads, href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
     ] : [];
 
     const crmStructureLinks: NavLink[] = currentLinks ? [
-        ...(crmStructureCenterHref ? [{ label: 'Центр структуры', href: crmStructureCenterHref, icon: <ListTree />, active: url === `${base}/crm-structure` }] : []),
-        { label: 'Воронки', href: currentLinks.pipelines, icon: <BarChart3 />, active: url.includes('/pipelines') },
-        ...(crmFieldsHref ? [{ label: 'Поля CRM', href: crmFieldsHref, icon: <ShieldCheck />, active: url.includes('/crm-audit/fields') }] : []),
-        ...(catalogsHref ? [{ label: 'Списки', href: catalogsHref, icon: <ListTree />, active: url.includes('/catalogs') }] : []),
-        { label: 'Пользователи', href: currentLinks.users, icon: <Users />, active: url.endsWith('/users') },
-        { label: 'Роли и права', href: currentLinks.roles, icon: <UserRoundCog />, active: url.endsWith('/roles') },
+        ...(crmStructureCenterHref ? [{ label: n.structureCenter, href: crmStructureCenterHref, icon: <ListTree />, active: url === `${base}/crm-structure` }] : []),
+        { label: n.pipelines, href: currentLinks.pipelines, icon: <BarChart3 />, active: url.includes('/pipelines') },
+        ...(crmFieldsHref ? [{ label: n.crmFields, href: crmFieldsHref, icon: <ShieldCheck />, active: url.includes('/crm-audit/fields') }] : []),
+        ...(catalogsHref ? [{ label: n.lists, href: catalogsHref, icon: <ListTree />, active: url.includes('/catalogs') }] : []),
+        { label: n.users, href: currentLinks.users, icon: <Users />, active: url.endsWith('/users') },
+        { label: n.roles, href: currentLinks.roles, icon: <UserRoundCog />, active: url.endsWith('/roles') },
     ] : [];
 
     const syncLinks: NavLink[] = currentLinks ? [
-        ...(syncCenterHref ? [{ label: 'Центр синхронизации', href: syncCenterHref, icon: <Activity />, active: url === `${base}/sync` }] : []),
-        ...(leadSyncSchedulesHref ? [{ label: 'Расписания сделок', href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
-        { label: 'CRM-аудит', href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && !url.includes('/crm-audit/fields') },
-        ...(eventsSyncHref ? [{ label: 'События', href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
+        ...(syncCenterHref ? [{ label: n.syncCenter, href: syncCenterHref, icon: <Activity />, active: url === `${base}/sync` }] : []),
+        ...(leadSyncSchedulesHref ? [{ label: n.leadSyncSchedules, href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
+        { label: n.crmAudit, href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && !url.includes('/crm-audit/fields') },
+        ...(eventsSyncHref ? [{ label: n.events, href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
     ] : [];
 
     const automationLinks: NavLink[] = currentLinks ? [
-        ...(automationCenterHref ? [{ label: 'Центр автоматизации', href: automationCenterHref, icon: <Settings2 />, active: url === `${base}/automation` }] : []),
-        ...(responsibilityHref ? [{ label: 'Ответственные', href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
+        ...(automationCenterHref ? [{ label: n.automationCenter, href: automationCenterHref, icon: <Settings2 />, active: url === `${base}/automation` }] : []),
+        ...(responsibilityHref ? [{ label: n.responsible, href: responsibilityHref, icon: <UserRoundCog />, active: url.includes('/responsibility-redistribution') }] : []),
     ] : [];
 
     const analyticsLinks: NavLink[] = currentLinks ? [
-        ...(analyticsCenterHref ? [{ label: 'Центр аналитики', href: analyticsCenterHref, icon: <BarChart3 />, active: url === `${base}/analytics` }] : []),
-        ...(taskStatisticsHref ? [{ label: 'Задачи', href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
+        ...(analyticsCenterHref ? [{ label: n.analyticsCenter, href: analyticsCenterHref, icon: <BarChart3 />, active: url === `${base}/analytics` }] : []),
+        ...(taskStatisticsHref ? [{ label: n.tasks, href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
     ] : [];
 
     const integrationLinks: NavLink[] = currentLinks ? [
-        { label: 'Интеграции', href: currentLinks.integrations, icon: <Settings2 />, active: url.endsWith('/integrations') },
-        { label: 'Dashboard-блоки', href: currentLinks.widgets, icon: <Blocks />, active: url.endsWith('/widgets') },
+        { label: n.integrationsList, href: currentLinks.integrations, icon: <Settings2 />, active: url.endsWith('/integrations') },
+        { label: n.dashboardBlocks, href: currentLinks.widgets, icon: <Blocks />, active: url.endsWith('/widgets') },
     ] : [];
 
     const systemLinks: NavLink[] = [
-        { label: 'API-логи', href: links.api_logs, icon: <FileText />, active: url.startsWith('/logs/api') },
+        { label: n.apiLogs, href: links.api_logs, icon: <FileText />, active: url.startsWith('/logs/api') },
     ];
 
     return [
-        { label: 'Основное', items: mainLinks },
-        ...(accountOverviewLinks.length > 0 ? [{ label: 'Обзор аккаунта', items: accountOverviewLinks }] : []),
-        ...(crmDataLinks.length > 0 ? [{ label: 'CRM-данные', items: crmDataLinks }] : []),
-        ...(crmStructureLinks.length > 0 ? [{ label: 'CRM-структура', items: crmStructureLinks }] : []),
-        ...(syncLinks.length > 0 ? [{ label: 'Синхронизация', items: syncLinks }] : []),
-        ...(automationLinks.length > 0 ? [{ label: 'Автоматизация', items: automationLinks }] : []),
-        ...(analyticsLinks.length > 0 ? [{ label: 'Аналитика', items: analyticsLinks }] : []),
-        ...(integrationLinks.length > 0 ? [{ label: 'Интеграции', items: integrationLinks }] : []),
-        { label: 'Система', items: systemLinks },
+        { label: n.main, items: mainLinks },
+        ...(accountOverviewLinks.length > 0 ? [{ label: n.accountOverview, items: accountOverviewLinks }] : []),
+        ...(crmDataLinks.length > 0 ? [{ label: n.crmData, items: crmDataLinks }] : []),
+        ...(crmStructureLinks.length > 0 ? [{ label: n.crmStructure, items: crmStructureLinks }] : []),
+        ...(syncLinks.length > 0 ? [{ label: n.sync, items: syncLinks }] : []),
+        ...(automationLinks.length > 0 ? [{ label: n.automation, items: automationLinks }] : []),
+        ...(analyticsLinks.length > 0 ? [{ label: n.analytics, items: analyticsLinks }] : []),
+        ...(integrationLinks.length > 0 ? [{ label: n.integrations, items: integrationLinks }] : []),
+        { label: n.system, items: systemLinks },
     ];
 }
 
@@ -195,7 +198,7 @@ export default function AuthenticatedLayout({ title, breadcrumbs, links, childre
                 />
 
                 <main className="mx-auto w-full max-w-[1536px] flex-1 px-4 py-6 md:px-6">
-                    <nav className="mb-6 flex flex-wrap items-center gap-2 text-theme-sm text-gray-500" aria-label="Хлебные крошки">
+                    <nav className="mb-6 flex flex-wrap items-center gap-2 text-theme-sm text-gray-500" aria-label={ru.breadcrumbs.label}>
                         {breadcrumbs.map((crumb, index) => (
                             <span className="inline-flex items-center gap-2" key={`${crumb.label}-${index}`}>
                                 {index > 0 && <ChevronRight size={14} />}

@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { LogOut, Menu } from 'lucide-react';
 import type { AmoAccountSummary } from '../types';
+import ru from '../i18n/ru';
 
 type Props = {
     currentAccount: AmoAccountSummary | null | undefined;
@@ -24,15 +25,15 @@ export function Header({ currentAccount, accounts, dashboardHref, logoutHref, on
                     <button
                         className="flex size-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 shadow-theme-xs hover:bg-gray-50 lg:hidden"
                         type="button"
-                        aria-label="Открыть боковую панель"
+                        aria-label={ru.header.openSidebar}
                         onClick={onMenuOpen}
                     >
                         <Menu size={20} />
                     </button>
                     <div className="min-w-0">
-                        <div className="text-theme-xs font-semibold uppercase tracking-wide text-gray-400">Workspace</div>
+                        <div className="text-theme-xs font-semibold uppercase tracking-wide text-gray-400">{ru.header.workspace}</div>
                         <div className="truncate text-theme-xl font-semibold text-gray-900">
-                            {currentAccount ? currentAccount.name : 'Все аккаунты'}
+                            {currentAccount ? currentAccount.name : ru.header.allAccounts}
                         </div>
                     </div>
                 </div>
@@ -42,9 +43,9 @@ export function Header({ currentAccount, accounts, dashboardHref, logoutHref, on
                         className="h-11 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10"
                         value={currentAccount?.dashboard_url || dashboardHref}
                         onChange={(e) => handleAccountChange(e.target.value)}
-                        aria-label="Выбрать аккаунт"
+                        aria-label={ru.header.selectAccount}
                     >
-                        <option value={dashboardHref}>Все аккаунты</option>
+                        <option value={dashboardHref}>{ru.header.allAccounts}</option>
                         {accounts.map((account: AmoAccountSummary) => (
                             <option key={account.id} value={account.dashboard_url}>
                                 {account.name}
@@ -64,7 +65,7 @@ export function Header({ currentAccount, accounts, dashboardHref, logoutHref, on
                         onClick={() => router.post(logoutHref)}
                     >
                         <LogOut size={16} />
-                        Выйти
+                        {ru.header.logout}
                     </button>
                 </div>
             </div>

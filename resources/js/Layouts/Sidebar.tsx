@@ -1,5 +1,6 @@
 import { Activity, X } from 'lucide-react';
 import type { ReactNode } from 'react';
+import ru from '../i18n/ru';
 
 export type NavLink = {
     label: string;
@@ -39,7 +40,7 @@ export function Sidebar({ title, dashboardHref, sections, user, isOpen, isAdmin,
                 <button
                     className="fixed inset-0 z-40 bg-gray-900/40 lg:hidden"
                     type="button"
-                    aria-label="Закрыть панель"
+                    aria-label={ru.sidebar.closePanel}
                     onClick={onClose}
                 />
             )}
@@ -56,13 +57,13 @@ export function Sidebar({ title, dashboardHref, sections, user, isOpen, isAdmin,
                         </span>
                         <span className="min-w-0">
                             <span className="block truncate text-theme-xl font-semibold text-gray-900">{title}</span>
-                            <span className="block text-theme-xs text-gray-500">amoCRM operations</span>
+                            <span className="block text-theme-xs text-gray-500">{ru.sidebar.appSubtitle}</span>
                         </span>
                     </a>
                     <button
                         className="flex size-10 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
                         type="button"
-                        aria-label="Закрыть боковую панель"
+                        aria-label={ru.sidebar.closeSidebar}
                         onClick={onClose}
                     >
                         <X size={20} />
@@ -70,7 +71,7 @@ export function Sidebar({ title, dashboardHref, sections, user, isOpen, isAdmin,
                 </div>
 
                 <div className="custom-scrollbar flex-1 overflow-y-auto py-6">
-                    <nav className="space-y-6" aria-label="Основная навигация">
+                    <nav className="space-y-6" aria-label={ru.sidebar.mainNavLabel}>
                         {sections.map((section) => {
                             const items = visibleItems(section.items);
                             if (items.length === 0) return null;

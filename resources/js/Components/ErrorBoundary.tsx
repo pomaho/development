@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import ru from '../i18n/ru';
 
 interface Props {
     children: ReactNode;
@@ -32,7 +33,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
             return (
                 <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-                    <p className="text-sm font-medium text-red-700">Что-то пошло не так</p>
+                    <p className="text-sm font-medium text-red-700">{ru.errorBoundary.title}</p>
                     {this.state.error && (
                         <p className="max-w-md text-xs text-red-500">{this.state.error.message}</p>
                     )}
@@ -41,7 +42,7 @@ export default class ErrorBoundary extends Component<Props, State> {
                         className="mt-1 rounded px-3 py-1.5 text-xs font-medium text-red-700 ring-1 ring-red-300 hover:bg-red-100"
                         onClick={() => this.setState({ hasError: false, error: null })}
                     >
-                        Попробовать снова
+                        {ru.errorBoundary.retry}
                     </button>
                 </div>
             );
