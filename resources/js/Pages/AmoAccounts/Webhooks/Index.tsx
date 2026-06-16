@@ -70,10 +70,12 @@ function CopyButton({ value }: { value: string }) {
 }
 
 function EventsTag({ events, available }: { events: string[]; available: AvailableEvents }) {
-    const allLabels: Record<string, string> = Object.values(available).reduce(
-        (acc, group) => ({ ...acc, ...group }),
-        {},
-    );
+    const lookup: Record<string, { group: string; label: string }> = {};
+    for (const [group, groupEvents] of Object.entries(available)) {
+        for (const [code, label] of Object.entries(groupEvents)) {
+            lookup[code] = { group, label };
+        }
+    }
 
     if (events.length === 0) {
         return <span className="text-gray-400 text-xs">Нет событий</span>;
@@ -81,14 +83,22 @@ function EventsTag({ events, available }: { events: string[]; available: Availab
 
     return (
         <div className="flex flex-wrap gap-1">
-            {events.map((ev) => (
-                <span
-                    key={ev}
-                    className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700"
-                >
-                    {allLabels[ev] ?? ev}
-                </span>
-            ))}
+            {events.map((ev) => {
+                const info = lookup[ev];
+                return (
+                    <span
+                        key={ev}
+                        className="inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700"
+                    >
+                        {info ? (
+                            <>
+                                <span className="opacity-60">{info.group}:</span>
+                                &nbsp;{info.label}
+                            </>
+                        ) : ev}
+                    </span>
+                );
+            })}
         </div>
     );
 }
