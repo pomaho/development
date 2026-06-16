@@ -64,10 +64,8 @@ final class AmoWebhooksRegistrationService
     public function register(AmoAccount $account, string $destination, array $events): void
     {
         $this->http->post($account, '/api/v4/webhooks', [
-            [
-                'destination' => $destination,
-                'settings' => $events,
-            ],
+            'destination' => $destination,
+            'settings' => $events,
         ]);
     }
 
