@@ -68,21 +68,29 @@ class AmoAccountWebhooksController extends Controller
 
     public function store(StoreAmoWebhookRequest $request, AmoAccount $amoAccount): RedirectResponse
     {
-        $this->service->register(
-            $amoAccount,
-            $request->string('destination')->toString(),
-            $request->validated('events'),
-        );
+        try {
+            $this->service->register(
+                $amoAccount,
+                $request->string('destination')->toString(),
+                $request->validated('events'),
+            );
+        } catch (Throwable $exception) {
+            return back()->with('error', 'Не удалось зарегистрировать вебхук: ' . $exception->getMessage());
+        }
 
         return back()->with('success', 'Вебхук успешно зарегистрирован в amoCRM.');
     }
 
     public function destroy(DeleteAmoWebhookRequest $request, AmoAccount $amoAccount): RedirectResponse
     {
-        $this->service->unsubscribe(
-            $amoAccount,
-            $request->string('destination')->toString(),
-        );
+        try {
+            $this->service->unsubscribe(
+                $amoAccount,
+                $request->string('destination')->toString(),
+            );
+        } catch (Throwable $exception) {
+            return back()->with('error', 'Не удалось удалить вебхук: ' . $exception->getMessage());
+        }
 
         return back()->with('success', 'Вебхук удалён из amoCRM.');
     }

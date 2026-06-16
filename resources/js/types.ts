@@ -19,4 +19,8 @@ export type SharedProps = {
     };
     amoAccounts: AmoAccountSummary[];
     currentAmoAccount: AmoAccountSummary | null;
+    flash: {
+        success: string | null;
+        error: string | null;
+    };
 };

@@ -1,4 +1,5 @@
 import { router, useForm, usePage } from '@inertiajs/react';
+import type { SharedProps } from '../../../types';
 import { Check, Copy, Plus, Trash2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
@@ -207,7 +208,7 @@ function RegisterForm({
 }
 
 export default function WebhooksIndex({ account, webhooks, incomingUrl, availableEvents, fetchError, links }: Props) {
-    const { props } = usePage<{ flash?: { success?: string } }>();
+    const { props } = usePage<SharedProps>();
     const flash = props.flash;
     const accountLinks = links.current_account;
 
@@ -240,6 +241,13 @@ export default function WebhooksIndex({ account, webhooks, incomingUrl, availabl
                 <div className="mb-6 flex items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-theme-sm text-green-700">
                     <Check size={16} className="shrink-0" />
                     {flash.success}
+                </div>
+            )}
+
+            {flash?.error && (
+                <div className="mb-6 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-theme-sm text-red-700">
+                    <TriangleAlert size={16} className="mt-0.5 shrink-0" />
+                    {flash.error}
                 </div>
             )}
 
