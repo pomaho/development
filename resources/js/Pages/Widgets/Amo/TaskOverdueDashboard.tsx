@@ -31,6 +31,18 @@ type GroupRow = {
     users: UserRow[];
 };
 
+type TaskStatRow = {
+    responsible_user_id: number;
+    responsible_name: string | null;
+    completed_count: number;
+    completed_overdue_count: number;
+    open_count: number;
+    open_overdue_count: number;
+    overdue_count: number;
+    total_count: number;
+    overdue_rate: number;
+};
+
 type RecruiterLeadRow = {
     enum_id: number;
     name: string;
@@ -89,6 +101,7 @@ type Props = {
         label: string;
     };
     groups: GroupRow[];
+    taskStatistics: TaskStatRow[];
     recruiterLeads: RecruiterLeads;
     recruiterTeamCityBreakdown: RecruiterTeamCityBreakdown;
     links: {
@@ -217,7 +230,7 @@ const sortedBreakdownRows = (rows: Map<string, number>): BreakdownRow[] => (
         .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
 );
 
-export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
+export default function TaskOverdueDashboard({ account, period, groups, taskStatistics, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
     const debugIframe = useMemo(() => {
         if (typeof window === 'undefined') {
             return false;
@@ -523,6 +536,8 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     </div>
                 </ReportSection>
 
+                <TaskStatisticsSection taskStatistics={taskStatistics} />
+
                 <ReportSection
                     eyebrow="Отчет по задачам"
                     title="Выполненные просроченные задачи"
@@ -583,6 +598,81 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                 </ReportSection>
             </div>
         </div>
+    );
+}
+
+function TaskStatisticsSection({ taskStatistics }: { taskStatistics: TaskStatRow[] }) {
+    const totalCompleted = taskStatistics.reduce((s, r) => s + r.completed_count, 0);
+    const totalOverdue = taskStatistics.reduce((s, r) => s + r.completed_overdue_count, 0);
+    const totalOpen = taskStatistics.reduce((s, r) => s + r.open_count, 0);
+    const totalOpenOverdue = taskStatistics.reduce((s, r) => s + r.open_overdue_count, 0);
+    const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
+
+    return (
+        <ReportSection
+            eyebrow="Отчет по задачам"
+            title="Все задачи по пользователям"
+            description="Выполненные и открытые задачи с детализацией просрочки по каждому пользователю за выбранный период."
+            aside={<AccentSummary label="Выполнено за период" value={totalCompleted} note={`просрочено: ${totalOverdue}`} tone="brand" />}
+        >
+            <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
+                <MetricCard label="Выполнено" value={totalCompleted} icon={<CheckCircle2 className="size-5" />} tone="success" progress={100} />
+                <MetricCard label="Вып. с просрочкой" value={totalOverdue} icon={<AlertTriangle className="size-5" />} tone="warning" progress={totalRate} />
+                <MetricCard label="Открытые" value={totalOpen} icon={<Inbox className="size-5" />} tone="neutral" />
+                <MetricCard label="Откр. просрочены" value={totalOpenOverdue} icon={<AlertTriangle className="size-5" />} tone="danger" progress={totalOpen > 0 ? Math.round((totalOpenOverdue / totalOpen) * 1000) / 10 : 0} />
+            </div>
+
+            <div className="overflow-x-auto p-5 pt-0">
+                {taskStatistics.length > 0 ? (
+                    <table className="w-full min-w-[640px] text-left text-theme-sm">
+                        <thead className="border-b border-gray-100 bg-gray-50">
+                            <tr>
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">Пользователь</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Выполнено</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Вып. с просрочкой</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Открытые</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Откр. просрочены</th>
+                                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500">% просрочки (вып.)</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {taskStatistics.map((row) => (
+                                <tr className="hover:bg-brand-50/30 transition-colors" key={row.responsible_user_id}>
+                                    <td className="px-5 py-3 font-semibold text-gray-900">
+                                        {row.responsible_name ?? `ID ${row.responsible_user_id}`}
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-mono tabular-nums text-gray-700">{row.completed_count}</td>
+                                    <td className="px-4 py-3 text-right">
+                                        {row.completed_overdue_count > 0 ? (
+                                            <span className="inline-flex rounded-full bg-warning-50 px-2.5 py-1 text-xs font-bold tabular-nums text-warning-700 ring-1 ring-warning-200">
+                                                {row.completed_overdue_count}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-300">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-right font-mono tabular-nums text-gray-700">{row.open_count}</td>
+                                    <td className="px-4 py-3 text-right">
+                                        {row.open_overdue_count > 0 ? (
+                                            <span className="inline-flex rounded-full bg-error-50 px-2.5 py-1 text-xs font-bold tabular-nums text-error-700 ring-1 ring-error-200">
+                                                {row.open_overdue_count}
+                                            </span>
+                                        ) : (
+                                            <span className="text-gray-300">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3">
+                                        <Progress value={row.overdue_rate} tone={row.overdue_rate > 20 ? 'danger' : 'warning'} />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <EmptyState>Нет данных за выбранный период. Запустите синхронизацию статистики задач в сервисе.</EmptyState>
+                )}
+            </div>
+        </ReportSection>
     );
 }
 
