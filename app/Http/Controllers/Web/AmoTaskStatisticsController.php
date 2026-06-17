@@ -131,9 +131,49 @@ class AmoTaskStatisticsController extends Controller
 
     public function events(Request $request, AmoAccount $amoAccount): Response
     {
-        $eventsQuery = CrmEntitySnapshot::query()
+        $baseQuery = CrmEntitySnapshot::query()
             ->where('amo_account_id', $amoAccount->id)
             ->where('entity_type', 'events');
+
+        $eventType = $request->input('event_type');
+        $entityType = $request->input('entity_type');
+        $createdBy = $request->input('created_by');
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        $listQuery = (clone $baseQuery)->orderByDesc('entity_created_at');
+
+        if ($eventType) {
+            $listQuery->where('name', $eventType);
+        }
+
+        if ($entityType) {
+            $listQuery->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(embedded, '$.entity_type')) = ?", [$entityType]);
+        }
+
+        if ($createdBy) {
+            $listQuery->where('responsible_user_id', (int) $createdBy);
+        }
+
+        if ($dateFrom) {
+            $listQuery->where('entity_created_at', '>=', $request->date('date_from')->startOfDay());
+        }
+
+        if ($dateTo) {
+            $listQuery->where('entity_created_at', '<=', $request->date('date_to')->endOfDay());
+        }
+
+        $userMap = $amoAccount->usersSnapshots()
+            ->orderBy('name')
+            ->get(['amo_user_id', 'name'])
+            ->keyBy('amo_user_id');
+
+        $eventTypes = (clone $baseQuery)
+            ->selectRaw('name, COUNT(*) as cnt')
+            ->whereNotNull('name')
+            ->groupBy('name')
+            ->orderByDesc('cnt')
+            ->pluck('name');
 
         return Inertia::render('AmoAccounts/EventsSync/Index', [
             'account' => [
@@ -142,10 +182,10 @@ class AmoTaskStatisticsController extends Controller
                 'base_domain' => $amoAccount->base_domain,
             ],
             'coverage' => [
-                'events_count' => (clone $eventsQuery)->count(),
-                'period_from' => (clone $eventsQuery)->min('entity_created_at'),
-                'period_to' => (clone $eventsQuery)->max('entity_created_at'),
-                'last_synced_at' => (clone $eventsQuery)->max('synced_at'),
+                'events_count' => (clone $baseQuery)->count(),
+                'period_from' => (clone $baseQuery)->min('entity_created_at'),
+                'period_to' => (clone $baseQuery)->max('entity_created_at'),
+                'last_synced_at' => (clone $baseQuery)->max('synced_at'),
                 'cursor' => $amoAccount->taskStatisticsLastSuccessfulSyncAt()?->format('Y-m-d H:i:s'),
             ],
             'reportSettings' => [
@@ -157,27 +197,33 @@ class AmoTaskStatisticsController extends Controller
                 ->groupBy('group_id')
                 ->map(fn ($users, $groupId): array => [
                     'id' => (int) $groupId,
-                    'name' => data_get($users->first()?->raw, '_embedded.group.name')
-                        ?: data_get($users->first()?->raw, 'group.name')
+                    'name' => data_get($users->first()?->raw, '_embedded.groups.0.name')
+                        ?: data_get($users->first()?->raw, '_embedded.group.name')
                         ?: "Группа {$groupId}",
                     'users_count' => $users->count(),
                 ])
                 ->sortBy('name')
                 ->values()
                 ->all(),
-            'runs' => $amoAccount->taskStatisticsSyncRuns()
-                ->latest()
-                ->limit(10)
-                ->get()
-                ->map(fn (TaskStatisticsSyncRun $run): array => [
-                    'id' => $run->id,
-                    'status' => $run->status,
-                    'period_from' => $run->period_from?->toDateString(),
-                    'period_to' => $run->period_to?->toDateString(),
-                    'created_at' => $run->created_at?->format('Y-m-d H:i:s'),
-                    'finished_at' => $run->finished_at?->format('Y-m-d H:i:s'),
-                    'error_message' => $run->error_message,
-                ]),
+            'events' => $listQuery->paginate(100)->withQueryString()->through(fn (CrmEntitySnapshot $event): array => [
+                'id' => $event->id,
+                'external_id' => $event->external_id,
+                'event_type' => $event->name ?? '-',
+                'entity_type' => $event->embedded['entity_type'] ?? null,
+                'entity_id' => $event->embedded['entity_id'] ?? null,
+                'created_by_id' => $event->responsible_user_id,
+                'created_by_name' => $userMap->get($event->responsible_user_id)?->name,
+                'created_at' => $event->entity_created_at?->format('d.m.Y H:i'),
+            ]),
+            'eventTypes' => $eventTypes->values(),
+            'users' => $userMap->values()->map(fn ($u): array => ['id' => $u->amo_user_id, 'name' => $u->name]),
+            'filters' => [
+                'event_type' => $eventType ?? '',
+                'entity_type' => $entityType ?? '',
+                'created_by' => $createdBy ?? '',
+                'date_from' => $dateFrom ?? '',
+                'date_to' => $dateTo ?? '',
+            ],
             'can' => [
                 'sync' => $request->user()?->can('sync', $amoAccount) ?? false,
             ],
