@@ -1,4 +1,4 @@
-import { Database, RefreshCw } from 'lucide-react';
+import { Database } from 'lucide-react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
 type Account = {
@@ -48,7 +48,6 @@ type Props = {
         oauth: string;
         api_logs: string;
         logout: string;
-        events_sync_start: string;
         events_sync_settings: string;
         current_account: {
             dashboard: string;
@@ -165,30 +164,14 @@ export default function EventsSyncIndex({ account, coverage, reportSettings, gro
             </section>
 
             <section className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <Database className="h-5 w-5 text-brand-600" />
-                            <h2 className="font-semibold">Покрытие загруженных событий</h2>
-                        </div>
-                        <div className="mt-2 text-theme-sm text-gray-600">
-                            Отчеты строятся по локальной базе. Hourly sync догружает новые события от курсора с overlap, а ночной safety refresh обновляет последние 3 дня.
-                        </div>
-                        <div className="mt-1 text-theme-sm text-gray-500">Последняя запись событий в БД: {coverage.last_synced_at || '-'}</div>
-                    </div>
-
-                    <form action={links.events_sync_start} method="post">
-                        <input name="_token" type="hidden" value={csrf} />
-                        <button
-                            className="inline-flex items-center gap-2 inline-flex h-10 items-center rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600 disabled:opacity-50"
-                            disabled={! can.sync}
-                            type="submit"
-                        >
-                            <RefreshCw size={16} />
-                            Синхронизировать 45 дней
-                        </button>
-                    </form>
+                <div className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-brand-600" />
+                    <h2 className="font-semibold">Покрытие загруженных событий</h2>
                 </div>
+                <div className="mt-2 text-theme-sm text-gray-600">
+                    Отчеты строятся по локальной базе. Hourly sync догружает новые события от курсора с overlap, а ночной safety refresh обновляет последние 3 дня.
+                </div>
+                <div className="mt-1 text-theme-sm text-gray-500">Последняя запись событий в БД: {coverage.last_synced_at || '-'}</div>
             </section>
 
             <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm">
