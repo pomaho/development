@@ -93,10 +93,12 @@ class AmoUsersService
             'lang' => $user['lang'] ?? null,
             'rights' => $rights,
             'role_id' => $user['role_id']
+                ?? $user['_embedded']['roles'][0]['id']
                 ?? $user['_embedded']['role']['id']
                 ?? $user['role']['id']
                 ?? null,
             'group_id' => $user['group_id']
+                ?? $user['_embedded']['groups'][0]['id']
                 ?? $user['_embedded']['group']['id']
                 ?? $user['group']['id']
                 ?? null,
