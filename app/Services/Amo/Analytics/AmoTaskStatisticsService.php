@@ -24,8 +24,20 @@ class AmoTaskStatisticsService
             ->where('is_active', true)
             ->get()
             ->keyBy('amo_user_id');
-        $rows = [];
         $now = now();
+
+        $rows = $users->mapWithKeys(fn (AmoUsersSnapshot $user): array => [
+            $user->amo_user_id => [
+                'responsible_user_id' => $user->amo_user_id,
+                'responsible_name' => $user->name,
+                'completed_count' => 0,
+                'completed_overdue_count' => 0,
+                'open_count' => 0,
+                'open_overdue_count' => 0,
+                'overdue_count' => 0,
+                'total_count' => 0,
+            ],
+        ])->all();
 
         CrmEntitySnapshot::query()
             ->where('amo_account_id', $account->id)
@@ -39,17 +51,6 @@ class AmoTaskStatisticsService
                     if ($responsibleId <= 0 || ! $users->has($responsibleId)) {
                         continue;
                     }
-
-                    $rows[$responsibleId] ??= [
-                        'responsible_user_id' => $responsibleId,
-                        'responsible_name' => $users->get($responsibleId)?->name,
-                        'completed_count' => 0,
-                        'completed_overdue_count' => 0,
-                        'open_count' => 0,
-                        'open_overdue_count' => 0,
-                        'overdue_count' => 0,
-                        'total_count' => 0,
-                    ];
 
                     $isCompleted = (bool) ($raw['is_completed'] ?? false);
                     $completeTill = $this->timestamp($raw['complete_till'] ?? null);
