@@ -33,7 +33,6 @@ class AmoTaskOverdueDashboardController extends Controller
                 ...$periodMeta,
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
-            'taskStatistics' => $statisticsService->statistics($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
             'links' => [
@@ -59,7 +58,6 @@ class AmoTaskOverdueDashboardController extends Controller
                 ...$periodMeta,
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
-            'taskStatistics' => $statisticsService->statistics($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
             'links' => [
@@ -89,7 +87,6 @@ class AmoTaskOverdueDashboardController extends Controller
                 ...$periodMeta,
             ],
             'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
-            'taskStatistics' => $statisticsService->statistics($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
         ]);
