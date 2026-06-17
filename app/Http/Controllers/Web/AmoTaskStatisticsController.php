@@ -19,42 +19,77 @@ class AmoTaskStatisticsController extends Controller
 {
     private const SYNC_PERIOD_LIMIT_DAYS = 45;
 
-    public function index(Request $request, AmoAccount $amoAccount, AmoTaskStatisticsService $statisticsService): Response
+    public function index(Request $request, AmoAccount $amoAccount): Response
     {
-        [$from, $to] = $this->period($request);
+        $status = $request->input('status');
+        $overdue = $request->input('overdue');
+        $responsibleUserId = $request->input('responsible_user_id');
 
-        return Inertia::render('AmoAccounts/TaskStatistics/Index', [
+        $query = CrmEntitySnapshot::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->where('entity_type', 'tasks')
+            ->orderByDesc('entity_created_at');
+
+        if ($status === 'open') {
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(raw, '$.is_completed')) != 'true'");
+        } elseif ($status === 'closed') {
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(raw, '$.is_completed')) = 'true'");
+        }
+
+        if ($overdue === '1') {
+            $query->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(raw, '$.is_completed')) != 'true'")
+                ->whereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(raw, '$.complete_till')) AS UNSIGNED) > 0")
+                ->whereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(raw, '$.complete_till')) AS UNSIGNED) < UNIX_TIMESTAMP(NOW())");
+        } elseif ($overdue === '0') {
+            $query->where(fn ($q) => $q
+                ->whereRaw("JSON_UNQUOTE(JSON_EXTRACT(raw, '$.is_completed')) = 'true'")
+                ->orWhereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(raw, '$.complete_till')) AS UNSIGNED) = 0")
+                ->orWhereRaw("CAST(JSON_UNQUOTE(JSON_EXTRACT(raw, '$.complete_till')) AS UNSIGNED) >= UNIX_TIMESTAMP(NOW())")
+            );
+        }
+
+        if ($responsibleUserId) {
+            $query->where('responsible_user_id', (int) $responsibleUserId);
+        }
+
+        $userMap = $amoAccount->usersSnapshots()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['amo_user_id', 'name'])
+            ->keyBy('amo_user_id');
+
+        $now = now()->timestamp;
+
+        return Inertia::render('AmoAccounts/Tasks/Index', [
             'account' => [
                 'id' => $amoAccount->id,
                 'name' => $amoAccount->name,
                 'base_domain' => $amoAccount->base_domain,
             ],
-            'rows' => $statisticsService->statistics($amoAccount, $from, $to),
-            'runs' => $amoAccount->taskStatisticsSyncRuns()
-                ->latest()
-                ->limit(10)
-                ->get()
-                ->map(fn (TaskStatisticsSyncRun $run): array => [
-                    'id' => $run->id,
-                    'status' => $run->status,
-                    'period_from' => $run->period_from?->toDateString(),
-                    'period_to' => $run->period_to?->toDateString(),
-                    'completed_found' => $run->completed_found,
-                    'completed_synced' => $run->completed_synced,
-                    'completion_events_found' => $run->completion_events_found,
-                    'completion_events_synced' => $run->completion_events_synced,
-                    'open_found' => $run->open_found,
-                    'open_synced' => $run->open_synced,
-                    'error_message' => $run->error_message,
-                    'created_at' => $run->created_at?->format('Y-m-d H:i:s'),
-                    'finished_at' => $run->finished_at?->format('Y-m-d H:i:s'),
-                ]),
+            'tasks' => $query->paginate(50)->withQueryString()->through(fn (CrmEntitySnapshot $task): array => [
+                'id' => $task->id,
+                'external_id' => $task->external_id,
+                'text' => $task->raw['text'] ?? $task->name ?? '-',
+                'responsible_user_id' => $task->responsible_user_id,
+                'responsible_name' => $userMap->get($task->responsible_user_id)?->name,
+                'deadline' => isset($task->raw['complete_till']) && $task->raw['complete_till'] > 0
+                    ? \Illuminate\Support\Carbon::createFromTimestamp($task->raw['complete_till'])->format('d.m.Y H:i')
+                    : null,
+                'is_completed' => (bool) ($task->raw['is_completed'] ?? false),
+                'is_overdue' => !($task->raw['is_completed'] ?? false)
+                    && isset($task->raw['complete_till'])
+                    && (int) $task->raw['complete_till'] > 0
+                    && (int) $task->raw['complete_till'] < $now,
+                'created_at' => $task->entity_created_at?->format('d.m.Y H:i'),
+            ]),
+            'users' => $userMap->values()->map(fn ($u): array => [
+                'id' => $u->amo_user_id,
+                'name' => $u->name,
+            ]),
             'filters' => [
-                'from' => $request->string('from')->toString(),
-                'to' => $request->string('to')->toString(),
-            ],
-            'can' => [
-                'sync' => $request->user()?->can('sync', $amoAccount) ?? false,
+                'status' => $status ?? '',
+                'overdue' => $overdue ?? '',
+                'responsible_user_id' => $responsibleUserId ?? '',
             ],
             'links' => $this->links($amoAccount, $request),
         ]);
@@ -236,6 +271,7 @@ class AmoTaskStatisticsController extends Controller
                 'catalogs' => route('amo-accounts.catalogs.index', $amoAccount),
                 'responsibility_redistribution' => route('amo-accounts.responsibility-redistribution.index', $amoAccount),
                 'task_statistics' => route('amo-accounts.task-statistics.index', $amoAccount),
+                'tasks' => route('amo-accounts.task-statistics.index', $amoAccount),
                 'events_sync' => route('amo-accounts.events-sync.index', $amoAccount),
                 'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
                 'integrations' => route('amo-accounts.integrations', $amoAccount),

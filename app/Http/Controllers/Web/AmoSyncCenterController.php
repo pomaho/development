@@ -68,6 +68,7 @@ class AmoSyncCenterController extends Controller
                     'lead_sync_schedules' => route('amo-accounts.lead-sync-schedules.index', $amoAccount),
                     'events_sync' => route('amo-accounts.events-sync.index', $amoAccount),
                     'task_statistics' => route('amo-accounts.task-statistics.index', $amoAccount),
+                    'tasks' => route('amo-accounts.task-statistics.index', $amoAccount),
                     'responsibility_redistribution' => route('amo-accounts.responsibility-redistribution.index', $amoAccount),
                     'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
                     'integrations' => route('amo-accounts.integrations', $amoAccount),

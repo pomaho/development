@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, DatabaseZap, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { Activity, AlertTriangle, CheckSquare, DatabaseZap, RefreshCcw, ShieldCheck, TrendingUp } from 'lucide-react';
 import DashboardMetric from '../../../Components/DashboardMetric';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
@@ -54,6 +54,7 @@ type Props = {
             crm_audit: string;
             integrations: string;
             widgets: string;
+            tasks: string;
         };
     };
 };
@@ -61,10 +62,11 @@ type Props = {
 export default function SyncCenterIndex({ account, summary, can, recentWebhookEvents, links }: Props) {
     const accountLinks = links.current_account;
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
-    const cards = [
+
+    const syncCards = [
         {
-            title: 'Расписания сделок',
-            description: 'Настройка регулярной и ручной загрузки сделок по конкретным воронкам.',
+            title: 'Расписания синхронизаций',
+            description: 'Настройка регулярной и ручной загрузки сделок, задач и событий.',
             href: accountLinks.lead_sync_schedules,
             icon: <RefreshCcw size={20} />,
         },
@@ -75,8 +77,29 @@ export default function SyncCenterIndex({ account, summary, can, recentWebhookEv
             icon: <ShieldCheck size={20} />,
         },
         {
-            title: 'События',
+            title: 'События (синхронизация)',
             description: 'Загрузка истории событий amoCRM для отчетов и анализа процессов.',
+            href: accountLinks.events_sync,
+            icon: <Activity size={20} />,
+        },
+    ];
+
+    const crmDataCards = [
+        {
+            title: 'Сделки',
+            description: 'Список сделок, загруженных из amoCRM по настроенным расписаниям.',
+            href: accountLinks.leads,
+            icon: <TrendingUp size={20} />,
+        },
+        {
+            title: 'Задачи',
+            description: 'Список задач amoCRM с фильтрами по статусу и просроченности.',
+            href: accountLinks.tasks,
+            icon: <CheckSquare size={20} />,
+        },
+        {
+            title: 'События',
+            description: 'Покрытие и история синхронизации событий amoCRM.',
             href: accountLinks.events_sync,
             icon: <Activity size={20} />,
         },
@@ -108,17 +131,37 @@ export default function SyncCenterIndex({ account, summary, can, recentWebhookEv
                 <DashboardMetric label="Webhook ошибки" value={summary.webhook_events_failed} />
             </div>
 
-            <section className="mt-6 grid gap-4 xl:grid-cols-3">
-                {cards.map((card) => (
-                    <a className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm transition hover:border-brand-300 hover:shadow-theme-md" href={card.href} key={card.title}>
-                        <div className="flex size-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
-                            {card.icon}
-                        </div>
-                        <h2 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-brand-600">{card.title}</h2>
-                        <p className="mt-2 text-theme-sm text-gray-500">{card.description}</p>
-                    </a>
-                ))}
-            </section>
+            <div className="mt-6 space-y-6">
+                <section>
+                    <h2 className="mb-3 text-theme-xs font-semibold uppercase tracking-wider text-gray-400">Синхронизация</h2>
+                    <div className="grid gap-4 xl:grid-cols-3">
+                        {syncCards.map((card) => (
+                            <a className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm transition hover:border-brand-300 hover:shadow-theme-md" href={card.href} key={card.title}>
+                                <div className="flex size-11 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                                    {card.icon}
+                                </div>
+                                <h3 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-brand-600">{card.title}</h3>
+                                <p className="mt-2 text-theme-sm text-gray-500">{card.description}</p>
+                            </a>
+                        ))}
+                    </div>
+                </section>
+
+                <section>
+                    <h2 className="mb-3 text-theme-xs font-semibold uppercase tracking-wider text-gray-400">CRM данные</h2>
+                    <div className="grid gap-4 xl:grid-cols-3">
+                        {crmDataCards.map((card) => (
+                            <a className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm transition hover:border-brand-300 hover:shadow-theme-md" href={card.href} key={card.title}>
+                                <div className="flex size-11 items-center justify-center rounded-xl bg-success-50 text-success-600">
+                                    {card.icon}
+                                </div>
+                                <h3 className="mt-4 text-lg font-semibold text-gray-900 group-hover:text-brand-600">{card.title}</h3>
+                                <p className="mt-2 text-theme-sm text-gray-500">{card.description}</p>
+                            </a>
+                        ))}
+                    </div>
+                </section>
+            </div>
 
             <section className="mt-6 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-theme-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-5 py-4">

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Web;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreLeadSyncScheduleRequest;
 use App\Http\Requests\UpdateLeadSyncScheduleRequest;
+use App\Jobs\SyncAmoTaskStatisticsJob;
 use App\Models\AmoAccount;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\LeadSyncSchedule;
+use App\Models\TaskStatisticsSyncRun;
 use App\Services\Amo\Sync\LeadSyncScheduleRunner;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +26,12 @@ class LeadSyncScheduleController extends Controller
         360 => 'Каждые 6 часов',
         720 => 'Каждые 12 часов',
         1440 => 'Раз в день',
+    ];
+
+    private const ENTITY_LABELS = [
+        LeadSyncSchedule::ENTITY_TYPE_LEADS => 'Сделки',
+        LeadSyncSchedule::ENTITY_TYPE_TASKS => 'Задачи',
+        LeadSyncSchedule::ENTITY_TYPE_EVENTS => 'События',
     ];
 
     public function index(AmoAccount $amoAccount): Response
@@ -50,6 +58,10 @@ class LeadSyncScheduleController extends Controller
                 'minutes' => $minutes,
                 'label' => $label,
             ])->values(),
+            'entityTypes' => collect(self::ENTITY_LABELS)->map(fn (string $label, string $type): array => [
+                'type' => $type,
+                'label' => $label,
+            ])->values(),
             'pipelines' => $pipelines->map(fn (CrmPipelineSnapshot $pipeline): array => [
                 'amo_pipeline_id' => $pipeline->amo_pipeline_id,
                 'name' => $pipeline->name,
@@ -58,10 +70,13 @@ class LeadSyncScheduleController extends Controller
             'schedules' => LeadSyncSchedule::query()
                 ->where('amo_account_id', $amoAccount->id)
                 ->orderByDesc('is_enabled')
+                ->orderBy('entity_type')
                 ->orderBy('pipeline_name')
                 ->get()
                 ->map(fn (LeadSyncSchedule $schedule): array => [
                     'id' => $schedule->id,
+                    'entity_type' => $schedule->entity_type,
+                    'entity_label' => self::ENTITY_LABELS[$schedule->entity_type] ?? $schedule->entity_type,
                     'amo_pipeline_id' => $schedule->amo_pipeline_id,
                     'pipeline_name' => $schedule->pipeline_name,
                     'interval_minutes' => $schedule->interval_minutes,
@@ -105,19 +120,28 @@ class LeadSyncScheduleController extends Controller
     public function store(StoreLeadSyncScheduleRequest $request, AmoAccount $amoAccount): RedirectResponse
     {
         $data = $request->validated();
-        $pipeline = $this->pipeline($amoAccount, (int) $data['amo_pipeline_id']);
+        $entityType = $data['entity_type'];
 
-        LeadSyncSchedule::query()->create([
+        $payload = [
             'amo_account_id' => $amoAccount->id,
-            'amo_pipeline_id' => $pipeline->amo_pipeline_id,
-            'pipeline_name' => $pipeline->name,
+            'entity_type' => $entityType,
             'interval_minutes' => (int) $data['interval_minutes'],
             'lookback_days' => (int) $data['lookback_days'],
             'is_enabled' => $request->boolean('is_enabled'),
             'next_run_at' => now(),
-        ]);
+        ];
 
-        return back()->with('status', 'Расписание синхронизации сделок добавлено.');
+        if ($entityType === LeadSyncSchedule::ENTITY_TYPE_LEADS) {
+            $pipeline = $this->pipeline($amoAccount, (int) $data['amo_pipeline_id']);
+            $payload['amo_pipeline_id'] = $pipeline->amo_pipeline_id;
+            $payload['pipeline_name'] = $pipeline->name;
+        }
+
+        LeadSyncSchedule::query()->create($payload);
+
+        $label = self::ENTITY_LABELS[$entityType] ?? $entityType;
+
+        return back()->with('status', "Расписание синхронизации ({$label}) добавлено.");
     }
 
     public function update(UpdateLeadSyncScheduleRequest $request, AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule): RedirectResponse
@@ -125,20 +149,28 @@ class LeadSyncScheduleController extends Controller
         $this->abortIfWrongAccount($amoAccount, $leadSyncSchedule);
 
         $data = $request->validated();
-        $pipeline = $this->pipeline($amoAccount, (int) $data['amo_pipeline_id']);
+        $entityType = $leadSyncSchedule->entity_type;
 
-        $leadSyncSchedule->update([
-            'amo_pipeline_id' => $pipeline->amo_pipeline_id,
-            'pipeline_name' => $pipeline->name,
+        $payload = [
             'interval_minutes' => (int) $data['interval_minutes'],
             'lookback_days' => (int) $data['lookback_days'],
             'is_enabled' => $request->boolean('is_enabled'),
             'next_run_at' => $request->boolean('is_enabled')
                 ? ($leadSyncSchedule->next_run_at ?? now())
                 : null,
-        ]);
+        ];
 
-        return back()->with('status', 'Расписание синхронизации сделок обновлено.');
+        if ($entityType === LeadSyncSchedule::ENTITY_TYPE_LEADS) {
+            $pipeline = $this->pipeline($amoAccount, (int) $data['amo_pipeline_id']);
+            $payload['amo_pipeline_id'] = $pipeline->amo_pipeline_id;
+            $payload['pipeline_name'] = $pipeline->name;
+        }
+
+        $leadSyncSchedule->update($payload);
+
+        $label = self::ENTITY_LABELS[$entityType] ?? $entityType;
+
+        return back()->with('status', "Расписание синхронизации ({$label}) обновлено.");
     }
 
     public function run(Request $request, AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule, LeadSyncScheduleRunner $runner): RedirectResponse
@@ -150,9 +182,15 @@ class LeadSyncScheduleController extends Controller
             'lookback_days' => ['required', 'integer', 'min:1', 'max:365'],
         ]);
 
-        $syncedCount = $runner->run($leadSyncSchedule->load('account'), (int) $data['lookback_days'], false);
+        if ($leadSyncSchedule->entity_type === LeadSyncSchedule::ENTITY_TYPE_LEADS) {
+            $syncedCount = $runner->run($leadSyncSchedule->load('account'), (int) $data['lookback_days'], false);
 
-        return back()->with('status', "Разовая синхронизация завершена. Загружено сделок: {$syncedCount}.");
+            return back()->with('status', "Разовая синхронизация завершена. Загружено сделок: {$syncedCount}.");
+        }
+
+        $run = $this->dispatchNonLeadsSync($amoAccount, (int) $data['lookback_days']);
+
+        return back()->with('status', "Синхронизация поставлена в очередь. Запуск #{$run->id}.");
     }
 
     public function destroy(AmoAccount $amoAccount, LeadSyncSchedule $leadSyncSchedule): RedirectResponse
@@ -162,7 +200,26 @@ class LeadSyncScheduleController extends Controller
 
         $leadSyncSchedule->delete();
 
-        return back()->with('status', 'Расписание синхронизации сделок удалено.');
+        $label = self::ENTITY_LABELS[$leadSyncSchedule->entity_type] ?? $leadSyncSchedule->entity_type;
+
+        return back()->with('status', "Расписание синхронизации ({$label}) удалено.");
+    }
+
+    private function dispatchNonLeadsSync(AmoAccount $amoAccount, int $lookbackDays): TaskStatisticsSyncRun
+    {
+        $to = now()->endOfDay();
+        $from = $to->copy()->subDays($lookbackDays - 1)->startOfDay();
+
+        $run = TaskStatisticsSyncRun::query()->create([
+            'amo_account_id' => $amoAccount->id,
+            'status' => TaskStatisticsSyncRun::STATUS_PENDING,
+            'period_from' => $from,
+            'period_to' => $to,
+        ]);
+
+        SyncAmoTaskStatisticsJob::dispatch($run->id);
+
+        return $run;
     }
 
     private function pipeline(AmoAccount $amoAccount, int $pipelineId): CrmPipelineSnapshot

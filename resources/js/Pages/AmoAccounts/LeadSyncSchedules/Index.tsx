@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Clock3, DatabaseZap, PlayCircle, Trash2 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
 type Account = {
@@ -13,6 +13,11 @@ type IntervalOption = {
     label: string;
 };
 
+type EntityTypeOption = {
+    type: string;
+    label: string;
+};
+
 type Pipeline = {
     amo_pipeline_id: number;
     name: string;
@@ -21,7 +26,9 @@ type Pipeline = {
 
 type Schedule = {
     id: number;
-    amo_pipeline_id: number;
+    entity_type: string;
+    entity_label: string;
+    amo_pipeline_id: number | null;
     pipeline_name: string | null;
     interval_minutes: number;
     interval_label: string;
@@ -41,6 +48,7 @@ type Props = {
         manage: boolean;
     };
     intervals: IntervalOption[];
+    entityTypes: EntityTypeOption[];
     pipelines: Pipeline[];
     schedules: Schedule[];
     defaults: {
@@ -69,9 +77,10 @@ type Props = {
     };
 };
 
-export default function LeadSyncSchedulesIndex({ account, can, intervals, pipelines, schedules, defaults, links }: Props) {
+export default function LeadSyncSchedulesIndex({ account, can, intervals, entityTypes, pipelines, schedules, defaults, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const enabledCount = schedules.filter((schedule) => schedule.is_enabled).length;
+    const [selectedEntityType, setSelectedEntityType] = useState('leads');
 
     return (
         <AuthenticatedLayout
@@ -80,7 +89,7 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
                 { label: 'Dashboard', href: links.dashboard },
                 { label: 'Клиенты', href: links.amo_accounts },
                 { label: account.name, href: links.current_account.show },
-                { label: 'Sync сделок' },
+                { label: 'Расписания синхронизаций' },
             ]}
             links={links}
         >
@@ -90,7 +99,7 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
                         <DatabaseZap size={14} />
                         Управляемые расписания
                     </div>
-                    <h1 className="mt-3 text-2xl font-semibold text-gray-900">Синхронизация сделок: {account.name}</h1>
+                    <h1 className="mt-3 text-2xl font-semibold text-gray-900">Расписания синхронизаций: {account.name}</h1>
                     <div className="mt-1 text-theme-sm text-gray-500">{account.base_domain}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -99,7 +108,7 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
                 </div>
             </div>
 
-            {pipelines.length === 0 ? (
+            {selectedEntityType === 'leads' && pipelines.length === 0 ? (
                 <section className="rounded-2xl border border-warning-200 bg-warning-50 p-5 text-warning-800">
                     <div className="flex gap-3">
                         <AlertTriangle className="mt-0.5 shrink-0" size={20} />
@@ -116,24 +125,42 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
 
             {can.manage ? (
                 <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-theme-sm">
-                    <div className="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <h2 className="text-lg font-semibold text-gray-900">Добавить расписание</h2>
-                            <p className="text-theme-sm text-gray-500">Правило будет синхронизировать только выбранную воронку конкретного аккаунта.</p>
-                        </div>
+                    <div className="mb-4">
+                        <h2 className="text-lg font-semibold text-gray-900">Добавить расписание</h2>
+                        <p className="text-theme-sm text-gray-500">Выберите тип сущности и настройте периодичность синхронизации.</p>
                     </div>
-                    <form action={links.store} className="grid gap-4 lg:grid-cols-[minmax(260px,1fr)_180px_160px_120px_auto]" method="post">
+                    <form
+                        action={links.store}
+                        className="grid gap-4 lg:grid-cols-[180px_minmax(240px,1fr)_180px_160px_120px_auto]"
+                        method="post"
+                    >
                         <input name="_token" type="hidden" value={csrf} />
-                        <Field label="Воронка">
-                            <select className={inputClass} name="amo_pipeline_id" required>
-                                <option value="">Выберите воронку</option>
-                                {pipelines.map((pipeline) => (
-                                    <option key={pipeline.amo_pipeline_id} value={pipeline.amo_pipeline_id}>
-                                        {pipeline.name}{pipeline.is_archive ? ' (архив)' : ''}
-                                    </option>
+                        <input name="entity_type" type="hidden" value={selectedEntityType} />
+                        <Field label="Сущность">
+                            <select
+                                className={inputClass}
+                                value={selectedEntityType}
+                                onChange={(e) => setSelectedEntityType(e.target.value)}
+                            >
+                                {entityTypes.map((et) => (
+                                    <option key={et.type} value={et.type}>{et.label}</option>
                                 ))}
                             </select>
                         </Field>
+                        {selectedEntityType === 'leads' ? (
+                            <Field label="Воронка">
+                                <select className={inputClass} name="amo_pipeline_id" required>
+                                    <option value="">Выберите воронку</option>
+                                    {pipelines.map((pipeline) => (
+                                        <option key={pipeline.amo_pipeline_id} value={pipeline.amo_pipeline_id}>
+                                            {pipeline.name}{pipeline.is_archive ? ' (архив)' : ''}
+                                        </option>
+                                    ))}
+                                </select>
+                            </Field>
+                        ) : (
+                            <div />
+                        )}
                         <Field label="Периодичность">
                             <select className={inputClass} defaultValue={defaults.interval_minutes} name="interval_minutes" required>
                                 {intervals.map((interval) => (
@@ -164,13 +191,14 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
                     <table className="w-full min-w-[1100px] text-left text-theme-sm">
                         <thead className="border-b border-gray-100 bg-gray-50 text-theme-xs uppercase text-gray-500">
                             <tr>
-                                <th className="px-5 py-3">Воронка</th>
+                                <th className="px-5 py-3">Сущность</th>
+                                <th className="px-5 py-3">Воронка / Цель</th>
                                 <th className="px-5 py-3">Периодичность</th>
                                 <th className="px-5 py-3">Окно</th>
                                 <th className="px-5 py-3">Статус</th>
                                 <th className="px-5 py-3">Последний запуск</th>
                                 <th className="px-5 py-3">Следующий запуск</th>
-                                <th className="px-5 py-3">Сделок</th>
+                                <th className="px-5 py-3">Результат</th>
                                 {can.manage ? <th className="px-5 py-3 text-right">Действия</th> : null}
                             </tr>
                         </thead>
@@ -188,7 +216,7 @@ export default function LeadSyncSchedulesIndex({ account, can, intervals, pipeli
                                 />
                             )) : (
                                 <tr>
-                                    <td className="px-5 py-6 text-gray-500" colSpan={can.manage ? 8 : 7}>Настроенных синхронизаций пока нет.</td>
+                                    <td className="px-5 py-6 text-gray-500" colSpan={can.manage ? 9 : 8}>Настроенных синхронизаций пока нет.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -208,28 +236,41 @@ function ScheduleRow({ canManage, csrf, intervals, pipelines, runUrl, schedule, 
     schedule: Schedule;
     updateUrl: string;
 }) {
+    const isLeads = schedule.entity_type === 'leads';
+
     return (
         <tr className="border-b border-gray-100 align-top last:border-b-0">
             <td className="px-5 py-4">
+                <EntityBadge entityType={schedule.entity_type} label={schedule.entity_label} />
+            </td>
+            <td className="px-5 py-4">
                 {canManage ? (
-                    <form action={updateUrl} className="contents" id={`schedule-${schedule.id}`} method="post">
-                        <input name="_token" type="hidden" value={csrf} />
-                        <input name="_method" type="hidden" value="put" />
-                    </form>
-                ) : null}
-                {canManage ? (
-                    <select className={inputClass} defaultValue={schedule.amo_pipeline_id} form={`schedule-${schedule.id}`} name="amo_pipeline_id" required>
-                        {pipelines.map((pipeline) => (
-                            <option key={pipeline.amo_pipeline_id} value={pipeline.amo_pipeline_id}>
-                                {pipeline.name}{pipeline.is_archive ? ' (архив)' : ''}
-                            </option>
-                        ))}
-                    </select>
+                    <>
+                        <form action={updateUrl} className="contents" id={`schedule-${schedule.id}`} method="post">
+                            <input name="_token" type="hidden" value={csrf} />
+                            <input name="_method" type="hidden" value="put" />
+                        </form>
+                        {isLeads ? (
+                            <select className={inputClass} defaultValue={schedule.amo_pipeline_id ?? ''} form={`schedule-${schedule.id}`} name="amo_pipeline_id" required>
+                                {pipelines.map((pipeline) => (
+                                    <option key={pipeline.amo_pipeline_id} value={pipeline.amo_pipeline_id}>
+                                        {pipeline.name}{pipeline.is_archive ? ' (архив)' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        ) : (
+                            <span className="text-theme-sm text-gray-400">Все {schedule.entity_label.toLowerCase()}</span>
+                        )}
+                    </>
                 ) : (
-                    <div>
-                        <div className="font-medium text-gray-900">{schedule.pipeline_name || schedule.amo_pipeline_id}</div>
-                        <div className="text-theme-xs text-gray-500">ID {schedule.amo_pipeline_id}</div>
-                    </div>
+                    isLeads ? (
+                        <div>
+                            <div className="font-medium text-gray-900">{schedule.pipeline_name || schedule.amo_pipeline_id}</div>
+                            {schedule.amo_pipeline_id ? <div className="text-theme-xs text-gray-500">ID {schedule.amo_pipeline_id}</div> : null}
+                        </div>
+                    ) : (
+                        <span className="text-theme-sm text-gray-400">Все {schedule.entity_label.toLowerCase()}</span>
+                    )
                 )}
                 {schedule.last_error ? <div className="mt-2 max-w-md text-theme-xs text-error-600">{schedule.last_error}</div> : null}
             </td>
@@ -300,6 +341,20 @@ function ScheduleRow({ canManage, csrf, intervals, pipelines, runUrl, schedule, 
                 </td>
             ) : null}
         </tr>
+    );
+}
+
+function EntityBadge({ entityType, label }: { entityType: string; label: string }) {
+    const colors: Record<string, string> = {
+        leads: 'bg-brand-50 text-brand-700',
+        tasks: 'bg-warning-50 text-warning-700',
+        events: 'bg-success-50 text-success-700',
+    };
+
+    return (
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-theme-xs font-medium ${colors[entityType] ?? 'bg-gray-100 text-gray-600'}`}>
+            {label}
+        </span>
     );
 }
 
