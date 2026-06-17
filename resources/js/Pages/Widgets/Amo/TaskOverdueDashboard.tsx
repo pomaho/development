@@ -1,34 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-    AlertTriangle,
     ArrowRightLeft,
     CalendarDays,
-    CheckCircle2,
     Database,
     Inbox,
-    Percent,
-    Users,
 } from 'lucide-react';
 
 type Account = {
     name: string;
     base_domain: string;
-};
-
-type UserRow = {
-    id: number;
-    name: string;
-    completed_count: number;
-    completed_overdue_count: number;
-    overdue_rate: number;
-};
-
-type GroupRow = {
-    group_id: number | null;
-    group_name: string;
-    completed_count: number;
-    completed_overdue_count: number;
-    users: UserRow[];
 };
 
 type RecruiterLeadRow = {
@@ -88,7 +68,6 @@ type Props = {
         preset: string | null;
         label: string;
     };
-    groups: GroupRow[];
     recruiterLeads: RecruiterLeads;
     recruiterTeamCityBreakdown: RecruiterTeamCityBreakdown;
     links: {
@@ -217,7 +196,7 @@ const sortedBreakdownRows = (rows: Map<string, number>): BreakdownRow[] => (
         .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name))
 );
 
-export default function TaskOverdueDashboard({ account, period, groups, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
+export default function TaskOverdueDashboard({ account, period, recruiterLeads, recruiterTeamCityBreakdown, links }: Props) {
     const debugIframe = useMemo(() => {
         if (typeof window === 'undefined') {
             return false;
@@ -236,10 +215,6 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
         return keys.flatMap((key) => params.getAll(key).map((value) => [key, value] as [string, string]));
     }, []);
     const [iframeMessages, setIframeMessages] = useState<MessageLog[]>([]);
-    const totalCompleted = groups.reduce((sum, group) => sum + group.completed_count, 0);
-    const totalOverdue = groups.reduce((sum, group) => sum + group.completed_overdue_count, 0);
-    const totalRate = totalCompleted > 0 ? Math.round((totalOverdue / totalCompleted) * 1000) / 10 : 0;
-    const totalUsers = groups.reduce((sum, group) => sum + group.users.length, 0);
     const periodLabel = `${period.label}: ${period.from} - ${period.to}`;
     const periodSourceLabel = period.source === 'amo_period' || period.source === 'amo_dates'
         ? 'Период с рабочего стола amoCRM'
@@ -523,64 +498,6 @@ export default function TaskOverdueDashboard({ account, period, groups, recruite
                     </div>
                 </ReportSection>
 
-                <ReportSection
-                    eyebrow="Отчет по задачам"
-                    title="Выполненные просроченные задачи"
-                    description="Показывает задачи, которые были завершены после наступления крайнего срока выполнения."
-                >
-                    <div className="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-4">
-                        <MetricCard label="Выполнено за период" value={totalCompleted} icon={<CheckCircle2 className="size-5" />} tone="success" progress={100} />
-                        <MetricCard label="Выполнено с просрочкой" value={totalOverdue} icon={<AlertTriangle className="size-5" />} tone="warning" progress={totalRate} />
-                        <MetricCard label="Процент просрочки" value={`${totalRate}%`} icon={<Percent className="size-5" />} tone={totalRate > 20 ? 'danger' : 'neutral'} progress={totalRate} />
-                        <MetricCard label="Пользователей в отчете" value={totalUsers} icon={<Users className="size-5" />} tone="brand" note={`групп: ${groups.length}`} />
-                    </div>
-
-                    <div className="space-y-4 p-5 pt-0">
-                        {groups.length > 0 ? groups.map((group) => (
-                            <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white" key={group.group_id || group.group_name}>
-                                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-gray-50 px-5 py-4">
-                                    <h3 className="flex items-center gap-2 text-base font-semibold text-gray-900">
-                                        <span className="size-2.5 rounded-full bg-brand-500" />
-                                        {group.group_name}
-                                    </h3>
-                                    <div className="text-theme-sm text-gray-500">
-                                        выполнено {group.completed_count} · просрочено {group.completed_overdue_count}
-                                    </div>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left text-theme-sm">
-                                        <thead className="bg-white text-theme-xs font-semibold uppercase text-gray-500">
-                                            <tr>
-                                                <th className="px-5 py-3">Пользователь</th>
-                                                <th className="px-4 py-3">Выполнено</th>
-                                                <th className="px-4 py-3">Просрочено</th>
-                                                <th className="px-4 py-3">Доля</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100">
-                                            {group.users.map((user) => (
-                                                <tr className="text-gray-700 hover:bg-brand-50/40" key={user.id}>
-                                                    <td className="px-5 py-3 font-medium text-gray-900">{user.name}</td>
-                                                    <td className="px-4 py-3 tabular-nums">{user.completed_count}</td>
-                                                    <td className="px-4 py-3 tabular-nums">
-                                                        <span className={user.completed_overdue_count > 0 ? 'font-semibold text-amber-700' : ''}>
-                                                            {user.completed_overdue_count}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <Progress value={user.overdue_rate} tone={user.overdue_rate > 20 ? 'danger' : 'warning'} />
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </section>
-                        )) : (
-                            <EmptyState>Нет данных за выбранный период. Запустите синхронизацию статистики задач в сервисе.</EmptyState>
-                        )}
-                    </div>
-                </ReportSection>
             </div>
         </div>
     );

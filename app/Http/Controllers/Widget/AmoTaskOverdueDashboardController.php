@@ -32,7 +32,6 @@ class AmoTaskOverdueDashboardController extends Controller
                 'to' => $to->toDateString(),
                 ...$periodMeta,
             ],
-            'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
             'links' => [
@@ -57,7 +56,6 @@ class AmoTaskOverdueDashboardController extends Controller
                 'to' => $to->toDateString(),
                 ...$periodMeta,
             ],
-            'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
             'links' => [
@@ -86,7 +84,6 @@ class AmoTaskOverdueDashboardController extends Controller
                 'to' => $to->toDateString(),
                 ...$periodMeta,
             ],
-            'groups' => $statisticsService->completedOverdueDashboard($installation->account, $from, $to),
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
         ]);
