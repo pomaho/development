@@ -58,6 +58,7 @@ class AmoTaskOverdueDashboardController extends Controller
             ],
             'recruiterLeads' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
             'recruiterTeamCityBreakdown' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
+            'taskStatistics' => $statisticsService->statistics($installation->account, $from, $to),
             'links' => [
                 'self' => route('widgets.amo.task-overdue-dashboard-v2.show', $publicKey),
                 'api' => route('api.widgets.amo.task-overdue-dashboard.show', $publicKey),

@@ -24,33 +24,24 @@ class AmoTaskStatisticsService
             ->get()
             ->keyBy('amo_user_id');
         $rows = [];
-        $seenTaskIdsByUser = [];
+        $now = now();
 
         CrmEntitySnapshot::query()
             ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'events')
-            ->where('name', 'task_completed')
-            ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to))
+            ->where('entity_type', 'tasks')
             ->orderBy('id')
-            ->chunkById(500, function ($events) use (&$rows, &$seenTaskIdsByUser, $users): void {
-                foreach ($events as $event) {
-                    $userId = (int) ($event->responsible_user_id ?? 0);
-                    $taskId = (string) data_get($event->embedded, 'entity_id', '');
+            ->chunkById(500, function ($tasks) use (&$rows, $users, $from, $to, $now): void {
+                foreach ($tasks as $task) {
+                    $raw = $task->raw ?? [];
+                    $responsibleId = (int) ($task->responsible_user_id ?? 0);
 
-                    if ($userId <= 0 || $taskId === '') {
+                    if ($responsibleId <= 0) {
                         continue;
                     }
 
-                    if (isset($seenTaskIdsByUser[$userId][$taskId])) {
-                        continue;
-                    }
-
-                    $seenTaskIdsByUser[$userId][$taskId] = true;
-
-                    $rows[$userId] ??= [
-                        'responsible_user_id' => $userId,
-                        'responsible_name' => $users->get($userId)?->name,
+                    $rows[$responsibleId] ??= [
+                        'responsible_user_id' => $responsibleId,
+                        'responsible_name' => $users->get($responsibleId)?->name,
                         'completed_count' => 0,
                         'completed_overdue_count' => 0,
                         'open_count' => 0,
@@ -59,8 +50,29 @@ class AmoTaskStatisticsService
                         'total_count' => 0,
                     ];
 
-                    $rows[$userId]['completed_count']++;
-                    $rows[$userId]['total_count']++;
+                    $isCompleted = (bool) ($raw['is_completed'] ?? false);
+                    $completeTill = $this->timestamp($raw['complete_till'] ?? null);
+                    $completedAt = $this->completionTime($raw) ?? $task->entity_updated_at;
+
+                    if ($isCompleted && $this->inPeriod($completedAt, $from, $to)) {
+                        $rows[$responsibleId]['completed_count']++;
+                        $rows[$responsibleId]['total_count']++;
+
+                        if ($completeTill !== null && $completedAt !== null && $completedAt->greaterThan($completeTill)) {
+                            $rows[$responsibleId]['completed_overdue_count']++;
+                            $rows[$responsibleId]['overdue_count']++;
+                        }
+                    }
+
+                    if (! $isCompleted) {
+                        $rows[$responsibleId]['open_count']++;
+                        $rows[$responsibleId]['total_count']++;
+
+                        if ($completeTill !== null && $completeTill->lessThan($now)) {
+                            $rows[$responsibleId]['open_overdue_count']++;
+                            $rows[$responsibleId]['overdue_count']++;
+                        }
+                    }
                 }
             });
 
