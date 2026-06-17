@@ -71,6 +71,7 @@ const jsonValue = (value: unknown) => JSON.stringify(value ?? null);
 export default function AmoAccountUsers({ account, users, roles, groups, filters, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const inputClass = 'h-10 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10';
+    const selectClass = `${inputClass} pr-8`;
     const actionLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
 
     return (
@@ -102,16 +103,16 @@ export default function AmoAccountUsers({ account, users, roles, groups, filters
 
             <form className="mb-4 flex flex-wrap gap-3 rounded-2xl border border-gray-200 bg-white p-4 shadow-theme-sm" method="get">
                 <input className={inputClass} defaultValue={filters.search} name="search" placeholder="Имя или email" />
-                <select className={inputClass} defaultValue={filters.active} name="active">
+                <select className={selectClass} defaultValue={filters.active} name="active">
                     <option value="">Любая активность</option>
                     <option value="1">Только активные</option>
                     <option value="0">Только неактивные</option>
                 </select>
-                <select className={inputClass} defaultValue={filters.role_id} name="role_id">
+                <select className={selectClass} defaultValue={filters.role_id} name="role_id">
                     <option value="">Все роли</option>
                     {roles.map((role) => <option key={role} value={role}>{role}</option>)}
                 </select>
-                <select className={inputClass} defaultValue={filters.group_id} name="group_id">
+                <select className={selectClass} defaultValue={filters.group_id} name="group_id">
                     <option value="">Все группы</option>
                     {groups.map((group) => <option key={group} value={group}>{group}</option>)}
                 </select>
