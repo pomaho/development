@@ -897,12 +897,12 @@ class AmoServicesTest extends TestCase
         $this->assertSame('event-100', $task->raw['_task_statistics']['completed_event_id']);
         $this->assertSame('Manager', $rows[0]['responsible_name']);
         $this->assertSame(1, $rows[0]['completed_count']);
-        $this->assertSame(0, $rows[0]['completed_overdue_count']);
-        $this->assertSame(0, $rows[0]['open_count']);
-        $this->assertSame(0, $rows[0]['open_overdue_count']);
-        $this->assertSame(0, $rows[0]['overdue_count']);
-        $this->assertSame(1, $rows[0]['total_count']);
-        $this->assertSame(0.0, $rows[0]['overdue_rate']);
+        $this->assertSame(1, $rows[0]['completed_overdue_count']); // completed after deadline
+        $this->assertSame(2, $rows[0]['open_count']);               // tasks 101, 102
+        $this->assertSame(1, $rows[0]['open_overdue_count']);       // task 101 deadline passed
+        $this->assertSame(2, $rows[0]['overdue_count']);            // completed + open overdue
+        $this->assertSame(3, $rows[0]['total_count']);              // 1 completed + 2 open
+        $this->assertSame(round(2 / 3 * 100, 1), $rows[0]['overdue_rate']);
 
         $groups = $statisticsService->completedOverdueDashboard($account, $from, $to);
 
