@@ -101,7 +101,7 @@ class AmoUsersService
                 ?? $user['group']['id']
                 ?? null,
             'is_admin' => (bool) ($rights['is_admin'] ?? $user['is_admin'] ?? false),
-            'is_active' => (bool) ($user['is_active'] ?? true),
+            'is_active' => (bool) ($rights['is_active'] ?? $user['is_active'] ?? true),
             'raw' => $user,
             'synced_at' => $syncedAt,
         ];
