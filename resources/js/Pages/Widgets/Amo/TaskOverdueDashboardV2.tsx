@@ -408,19 +408,13 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
 function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsRow[]; period: { from: string; to: string } }) {
     const totalCompleted = rows.reduce((sum, r) => sum + r.completed_count, 0);
     const totalCompletedOverdue = rows.reduce((sum, r) => sum + r.completed_overdue_count, 0);
-    const totalOpenOverdue = rows.reduce((sum, r) => sum + r.open_overdue_count, 0);
 
     return (
         <ReportSection
             eyebrow="Отчет по задачам"
             title={`Задачи сотрудников: ${period.from} — ${period.to}`}
-            description="Выполненные задачи за выбранный период. Просрочено завершённых — закрыты позже дедлайна. Просрочено открытых — текущее состояние."
-            aside={
-                <div className="flex gap-3">
-                    <AccentSummary label="Выполнено" value={totalCompleted} note={`просрочено: ${totalCompletedOverdue}`} tone="brand" />
-                    <AccentSummary label="Открытых просрочено" value={totalOpenOverdue} note="текущее состояние" tone="warning" />
-                </div>
-            }
+            description="Выполненные задачи за выбранный период. Просрочено — закрыты позже дедлайна. Доля просрочки считается от числа выполненных."
+            aside={<AccentSummary label="Выполнено" value={totalCompleted} note={`просрочено: ${totalCompletedOverdue}`} tone="brand" />}
         >
             <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
@@ -428,8 +422,7 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsRow[]; pe
                         <tr>
                             <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Сотрудник</th>
                             <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Выполнено</th>
-                            <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просроч. завершённых</th>
-                            <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просроч. открытых</th>
+                            <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просрочено</th>
                             <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">% просрочки</th>
                         </tr>
                     </thead>
@@ -451,22 +444,13 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsRow[]; pe
                                         <span className="text-slate-300 tabular-nums">0</span>
                                     )}
                                 </td>
-                                <td className="px-4 py-3.5 text-right">
-                                    {row.open_overdue_count > 0 ? (
-                                        <span className="inline-flex items-center justify-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-amber-700 ring-1 ring-amber-200">
-                                            {row.open_overdue_count}
-                                        </span>
-                                    ) : (
-                                        <span className="text-slate-300 tabular-nums">0</span>
-                                    )}
-                                </td>
                                 <td className="px-4 py-3.5">
                                     <Progress value={row.overdue_rate} tone={row.overdue_rate >= 50 ? 'danger' : row.overdue_rate >= 20 ? 'warning' : 'brand'} />
                                 </td>
                             </tr>
                         )) : (
                             <tr>
-                                <td className="px-5 py-8" colSpan={5}>
+                                <td className="px-5 py-8" colSpan={4}>
                                     <EmptyState>
                                         Нет данных по задачам за выбранный период. Запустите синхронизацию задач.
                                     </EmptyState>

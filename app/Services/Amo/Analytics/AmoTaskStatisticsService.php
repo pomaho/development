@@ -79,8 +79,8 @@ class AmoTaskStatisticsService
 
         return collect($rows)
             ->map(function (array $row): array {
-                $row['overdue_rate'] = $row['total_count'] > 0
-                    ? round($row['overdue_count'] / $row['total_count'] * 100, 1)
+                $row['overdue_rate'] = $row['completed_count'] > 0
+                    ? round($row['completed_overdue_count'] / $row['completed_count'] * 100, 1)
                     : 0.0;
 
                 return $row;
