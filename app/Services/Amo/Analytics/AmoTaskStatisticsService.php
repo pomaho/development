@@ -21,6 +21,7 @@ class AmoTaskStatisticsService
     {
         $users = AmoUsersSnapshot::query()
             ->where('amo_account_id', $account->id)
+            ->where('is_active', true)
             ->get()
             ->keyBy('amo_user_id');
         $rows = [];
@@ -35,7 +36,7 @@ class AmoTaskStatisticsService
                     $raw = $task->raw ?? [];
                     $responsibleId = (int) ($task->responsible_user_id ?? 0);
 
-                    if ($responsibleId <= 0) {
+                    if ($responsibleId <= 0 || ! $users->has($responsibleId)) {
                         continue;
                     }
 
