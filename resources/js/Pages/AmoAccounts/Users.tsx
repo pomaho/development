@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout';
 import JsonDetails from '../../Components/JsonDetails';
 import Pagination from '../../Components/Pagination';
@@ -49,6 +50,7 @@ type Props = {
         oauth: string;
         api_logs: string;
         logout: string;
+        sync: string;
         export: string;
         current_account: {
             dashboard: string;
@@ -67,6 +69,7 @@ type Props = {
 const jsonValue = (value: unknown) => JSON.stringify(value ?? null);
 
 export default function AmoAccountUsers({ account, users, roles, groups, filters, links }: Props) {
+    const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const inputClass = 'h-10 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10';
     const actionLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
 
@@ -87,6 +90,13 @@ export default function AmoAccountUsers({ account, users, roles, groups, filters
                 <div className="mt-4 flex flex-wrap gap-3">
                     <a className={actionLinkClass} href={links.current_account.show}>Назад к аккаунту</a>
                     <a className={actionLinkClass} href={links.export}>Экспорт в Excel</a>
+                    <form action={links.sync} method="post">
+                        <input name="_token" type="hidden" value={csrf} />
+                        <button className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-500 px-4 text-theme-sm font-medium text-white shadow-theme-xs hover:bg-brand-600" type="submit">
+                            <RefreshCw size={15} />
+                            Синхронизировать
+                        </button>
+                    </form>
                 </div>
             </div>
 

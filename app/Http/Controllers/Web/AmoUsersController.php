@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SyncAmoUsersAndRolesJob;
 use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
 use App\Services\Exports\TableExportService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -54,6 +56,7 @@ class AmoUsersController extends Controller
                 'oauth' => route('amo-oauth.external.index'),
                 'api_logs' => route('logs.api'),
                 'logout' => route('logout'),
+                'sync' => route('amo-accounts.users.sync', $amoAccount),
                 'export' => route('amo-accounts.users.export', array_merge(['amo_account' => $amoAccount], $request->query())),
                 'current_account' => [
                     'dashboard' => route('amo-accounts.dashboard', $amoAccount),
@@ -68,6 +71,17 @@ class AmoUsersController extends Controller
                 ],
             ],
         ]);
+    }
+
+    public function sync(AmoAccount $amoAccount): RedirectResponse
+    {
+        $this->authorize('sync', $amoAccount);
+
+        SyncAmoUsersAndRolesJob::dispatch($amoAccount->id);
+
+        return redirect()
+            ->route('amo-accounts.users', $amoAccount)
+            ->with('status', 'Синхронизация пользователей поставлена в очередь.');
     }
 
     public function export(Request $request, AmoAccount $amoAccount, TableExportService $export): StreamedResponse
