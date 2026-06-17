@@ -71,6 +71,14 @@ type TaskStatisticsRow = {
     overdue_rate: number;
 };
 
+type TaskStatisticsGroup = {
+    group_id: number | null;
+    group_name: string;
+    completed_count: number;
+    completed_overdue_count: number;
+    users: TaskStatisticsRow[];
+};
+
 type Props = {
     account: Account;
     period: {
@@ -82,7 +90,7 @@ type Props = {
     };
     recruiterLeads: RecruiterLeads;
     recruiterTeamCityBreakdown: RecruiterTeamCityBreakdown;
-    taskStatistics: TaskStatisticsRow[];
+    taskStatistics: TaskStatisticsGroup[];
     links: {
         self: string;
         api: string;
@@ -405,15 +413,16 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
     );
 }
 
-function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsRow[]; period: { from: string; to: string } }) {
-    const totalCompleted = rows.reduce((sum, r) => sum + r.completed_count, 0);
-    const totalCompletedOverdue = rows.reduce((sum, r) => sum + r.completed_overdue_count, 0);
+function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; period: { from: string; to: string } }) {
+    const totalCompleted = rows.reduce((sum, g) => sum + g.completed_count, 0);
+    const totalCompletedOverdue = rows.reduce((sum, g) => sum + g.completed_overdue_count, 0);
+    const hasAny = rows.some((g) => g.users.length > 0);
 
     return (
         <ReportSection
             eyebrow="Отчет по задачам"
             title={`Задачи сотрудников: ${period.from} — ${period.to}`}
-            description="Выполненные задачи за выбранный период. Просрочено — закрыты позже дедлайна. Доля просрочки считается от числа выполненных."
+            description="Выполненные задачи за выбранный период, сгруппированные по группам. Просрочено — закрыты позже дедлайна. Доля просрочки считается от числа выполненных."
             aside={<AccentSummary label="Выполнено" value={totalCompleted} note={`просрочено: ${totalCompletedOverdue}`} tone="brand" />}
         >
             <div className="overflow-x-auto">
@@ -427,27 +436,50 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsRow[]; pe
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                        {rows.length > 0 ? rows.map((row) => (
-                            <tr className="transition-colors hover:bg-violet-50/50" key={row.responsible_user_id}>
-                                <td className="px-5 py-3.5 font-semibold text-gray-900">
-                                    {row.responsible_name ?? `ID ${row.responsible_user_id}`}
-                                </td>
-                                <td className="px-4 py-3.5 text-right font-mono font-semibold tabular-nums text-gray-900">
-                                    {row.completed_count}
-                                </td>
-                                <td className="px-4 py-3.5 text-right">
-                                    {row.completed_overdue_count > 0 ? (
-                                        <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
-                                            {row.completed_overdue_count}
-                                        </span>
-                                    ) : (
-                                        <span className="text-slate-300 tabular-nums">0</span>
-                                    )}
-                                </td>
-                                <td className="px-4 py-3.5">
-                                    <Progress value={row.overdue_rate} tone={row.overdue_rate >= 50 ? 'danger' : row.overdue_rate >= 20 ? 'warning' : 'brand'} />
-                                </td>
-                            </tr>
+                        {hasAny ? rows.map((group) => (
+                            group.users.length === 0 ? null : (
+                                <>
+                                    <tr className="bg-slate-50" key={`group-${group.group_id ?? 'none'}`}>
+                                        <td className="px-5 py-2.5" colSpan={2}>
+                                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                                                {group.group_name}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right">
+                                            {group.completed_overdue_count > 0 ? (
+                                                <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-600 ring-1 ring-red-200">
+                                                    {group.completed_overdue_count}
+                                                </span>
+                                            ) : null}
+                                        </td>
+                                        <td className="px-4 py-2.5 text-xs tabular-nums text-slate-400">
+                                            итого: {group.completed_count}
+                                        </td>
+                                    </tr>
+                                    {group.users.map((row) => (
+                                        <tr className="transition-colors hover:bg-violet-50/50" key={row.responsible_user_id}>
+                                            <td className="px-5 py-3.5 pl-8 font-semibold text-gray-900">
+                                                {row.responsible_name ?? `ID ${row.responsible_user_id}`}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right font-mono font-semibold tabular-nums text-gray-900">
+                                                {row.completed_count}
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                {row.completed_overdue_count > 0 ? (
+                                                    <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
+                                                        {row.completed_overdue_count}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-300 tabular-nums">0</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <Progress value={row.overdue_rate} tone={row.overdue_rate >= 50 ? 'danger' : row.overdue_rate >= 20 ? 'warning' : 'brand'} />
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </>
+                            )
                         )) : (
                             <tr>
                                 <td className="px-5 py-8" colSpan={4}>

@@ -77,7 +77,7 @@ class AmoTaskStatisticsService
                 }
             });
 
-        return collect($rows)
+        $userRows = collect($rows)
             ->map(function (array $row): array {
                 $row['overdue_rate'] = $row['completed_count'] > 0
                     ? round($row['completed_overdue_count'] / $row['completed_count'] * 100, 1)
@@ -85,7 +85,33 @@ class AmoTaskStatisticsService
 
                 return $row;
             })
-            ->sortByDesc('total_count')
+            ->all();
+
+        $groups = [];
+
+        foreach ($userRows as $responsibleId => $row) {
+            $user = $users->get($responsibleId);
+            $groupId = $user?->group_id ? (int) $user->group_id : 0;
+            $groups[$groupId] ??= [
+                'group_id' => $groupId ?: null,
+                'group_name' => $user ? $this->groupName($user) : 'Без группы',
+                'users' => [],
+            ];
+            $groups[$groupId]['users'][] = $row;
+        }
+
+        return collect($groups)
+            ->map(function (array $group): array {
+                $group['users'] = collect($group['users'])
+                    ->sortByDesc('completed_count')
+                    ->values()
+                    ->all();
+                $group['completed_count'] = collect($group['users'])->sum('completed_count');
+                $group['completed_overdue_count'] = collect($group['users'])->sum('completed_overdue_count');
+
+                return $group;
+            })
+            ->sortBy('group_name')
             ->values()
             ->all();
     }
@@ -763,7 +789,8 @@ class AmoTaskStatisticsService
 
     private function groupName(AmoUsersSnapshot $user): string
     {
-        return data_get($user->raw, '_embedded.group.name')
+        return data_get($user->raw, '_embedded.groups.0.name')
+            ?: data_get($user->raw, '_embedded.group.name')
             ?: data_get($user->raw, 'group.name')
             ?: ($user->group_id ? "Группа {$user->group_id}" : 'Без группы');
     }
