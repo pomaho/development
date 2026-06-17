@@ -793,7 +793,7 @@ class AmoTaskStatisticsService
         return data_get($user->raw, '_embedded.groups.0.name')
             ?: data_get($user->raw, '_embedded.group.name')
             ?: data_get($user->raw, 'group.name')
-            ?: ($user->group_id ? "Группа {$user->group_id}" : 'Без группы');
+            ?: ($user->group_id ? "Группа {$user->group_id}" : 'Отдел продаж');
     }
 
 }
