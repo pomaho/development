@@ -1,4 +1,4 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout';
 import JsonDetails from '../../Components/JsonDetails';
 import Pagination from '../../Components/Pagination';
@@ -34,6 +34,7 @@ type Props = {
     users: {
         data: AmoUser[];
         links: PaginationLink[];
+        from: number;
     };
     roles: Array<number | string>;
     groups: Array<number | string>;
@@ -43,6 +44,8 @@ type Props = {
         role_id: string;
         group_id: string;
         admins: boolean;
+        sort: string;
+        direction: string;
     };
     links: {
         dashboard: string;
@@ -68,11 +71,41 @@ type Props = {
 
 const jsonValue = (value: unknown) => JSON.stringify(value ?? null);
 
+function SortIcon({ column, sort, direction }: { column: string; sort: string; direction: string }) {
+    if (sort !== column) return <ChevronsUpDown size={12} className="opacity-40" />;
+    return direction === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />;
+}
+
 export default function AmoAccountUsers({ account, users, roles, groups, filters, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const inputClass = 'h-10 rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10';
     const selectClass = `${inputClass} pr-8`;
     const actionLinkClass = 'inline-flex h-10 items-center rounded-lg border border-gray-200 bg-white px-4 text-theme-sm font-medium text-gray-700 shadow-theme-xs hover:border-brand-300 hover:text-brand-500';
+
+    const buildSortUrl = (column: string) => {
+        const params = new URLSearchParams(window.location.search);
+        const isActive = filters.sort === column;
+        params.set('sort', column);
+        params.set('direction', isActive && filters.direction === 'desc' ? 'asc' : 'desc');
+        params.delete('page');
+        return `?${params.toString()}`;
+    };
+
+    const sortableColumns: { key: string; label: string }[] = [
+        { key: 'amo_user_id', label: 'ID' },
+        { key: 'name', label: 'Имя' },
+        { key: 'email', label: 'Email' },
+        { key: 'is_active', label: 'Активен' },
+        { key: 'is_admin', label: 'Админ' },
+        { key: 'role_id', label: 'Role' },
+        { key: 'group_id', label: 'Group' },
+    ];
+
+    const staticColumns = ['Сделки', 'Контакты', 'Компании', 'Задачи', 'Почта', 'Каталоги'];
+    const syncColumn = { key: 'synced_at', label: 'Sync' };
+
+    const thClass = 'px-5 py-3';
+    const thSortClass = `${thClass} cursor-pointer select-none hover:text-gray-700`;
 
     return (
         <AuthenticatedLayout
@@ -128,14 +161,31 @@ export default function AmoAccountUsers({ account, users, roles, groups, filters
                     <table className="w-full text-left text-theme-xs">
                         <thead className="bg-gray-50 font-semibold uppercase text-gray-500">
                             <tr>
-                                {['ID', 'Имя', 'Email', 'Активен', 'Админ', 'Role', 'Group', 'Сделки', 'Контакты', 'Компании', 'Задачи', 'Почта', 'Каталоги', 'Sync', 'Raw'].map((heading) => (
-                                    <th className="px-5 py-3" key={heading}>{heading}</th>
+                                <th className={thClass}>#</th>
+                                {sortableColumns.map(({ key, label }) => (
+                                    <th className={thSortClass} key={key}>
+                                        <a className="inline-flex items-center gap-1" href={buildSortUrl(key)}>
+                                            {label}
+                                            <SortIcon column={key} direction={filters.direction} sort={filters.sort} />
+                                        </a>
+                                    </th>
                                 ))}
+                                {staticColumns.map((heading) => (
+                                    <th className={thClass} key={heading}>{heading}</th>
+                                ))}
+                                <th className={thSortClass}>
+                                    <a className="inline-flex items-center gap-1" href={buildSortUrl(syncColumn.key)}>
+                                        {syncColumn.label}
+                                        <SortIcon column={syncColumn.key} direction={filters.direction} sort={filters.sort} />
+                                    </a>
+                                </th>
+                                <th className={thClass}>Raw</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {users.data.length > 0 ? users.data.map((user) => (
+                            {users.data.length > 0 ? users.data.map((user, index) => (
                                 <tr className="align-top" key={user.id}>
+                                    <td className="px-5 py-3 text-gray-400">{(users.from ?? 1) + index}</td>
                                     <td className="px-5 py-3 text-gray-700">{user.amo_user_id}</td>
                                     <td className="px-5 py-3 font-medium text-gray-900">{user.name}</td>
                                     <td className="px-5 py-3 text-gray-600">{user.email || '-'}</td>
@@ -154,7 +204,7 @@ export default function AmoAccountUsers({ account, users, roles, groups, filters
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="px-5 py-6 text-gray-500" colSpan={15}>Пользователи не найдены.</td>
+                                    <td className="px-5 py-6 text-gray-500" colSpan={16}>Пользователи не найдены.</td>
                                 </tr>
                             )}
                         </tbody>

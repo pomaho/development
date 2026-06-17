@@ -17,7 +17,7 @@ class AmoUsersController extends Controller
 {
     public function __invoke(Request $request, AmoAccount $amoAccount): Response
     {
-        $query = $this->filteredQuery($request, $amoAccount)->latest('synced_at');
+        $query = $this->filteredQuery($request, $amoAccount);
 
         return Inertia::render('AmoAccounts/Users', [
             'account' => [
@@ -49,6 +49,8 @@ class AmoUsersController extends Controller
                 'role_id' => $request->filled('role_id') ? (string) $request->input('role_id') : '',
                 'group_id' => $request->filled('group_id') ? (string) $request->input('group_id') : '',
                 'admins' => $request->boolean('admins'),
+                'sort' => $request->filled('sort') ? $request->input('sort') : 'synced_at',
+                'direction' => $request->input('direction') === 'asc' ? 'asc' : 'desc',
             ],
             'links' => [
                 'dashboard' => route('dashboard'),
@@ -149,6 +151,13 @@ class AmoUsersController extends Controller
         if ($request->filled('group_id')) {
             $query->where('group_id', $request->input('group_id'));
         }
+
+        $sortable = ['amo_user_id', 'name', 'email', 'is_active', 'is_admin', 'role_id', 'group_id', 'synced_at'];
+        $sortColumn = $request->filled('sort') && in_array($request->input('sort'), $sortable, true)
+            ? $request->input('sort')
+            : 'synced_at';
+        $sortDirection = $request->input('direction') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortColumn, $sortDirection);
 
         return $query;
     }
