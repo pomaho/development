@@ -45,6 +45,11 @@ class AmoUsersService
                 );
             }
 
+            AmoUsersSnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('synced_at', '<', $syncedAt)
+                ->update(['is_active' => false]);
+
             foreach ($roles as $role) {
                 AmoRolesSnapshot::query()->updateOrCreate(
                     ['amo_account_id' => $account->id, 'amo_role_id' => $role['id']],
