@@ -37,7 +37,9 @@ class AmoUsersService
         $users = $this->fetchUsers($account);
         $roles = $this->fetchRoles($account);
 
-        DB::transaction(function () use ($account, $users, $roles, $syncedAt): void {
+        $activeUserIds = array_column($users, 'id');
+
+        DB::transaction(function () use ($account, $users, $roles, $activeUserIds, $syncedAt): void {
             foreach ($users as $user) {
                 AmoUsersSnapshot::query()->updateOrCreate(
                     ['amo_account_id' => $account->id, 'amo_user_id' => $user['id']],
@@ -47,7 +49,7 @@ class AmoUsersService
 
             AmoUsersSnapshot::query()
                 ->where('amo_account_id', $account->id)
-                ->where('synced_at', '<', $syncedAt)
+                ->whereNotIn('amo_user_id', $activeUserIds)
                 ->update(['is_active' => false]);
 
             foreach ($roles as $role) {
