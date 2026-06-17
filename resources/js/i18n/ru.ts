@@ -28,7 +28,7 @@ const ru = {
         roles: 'Роли и права',
 
         syncCenter: 'Центр синхронизации',
-        leadSyncSchedules: 'Расписания сделок',
+        leadSyncSchedules: 'Расписание синхронизаций',
         crmAudit: 'CRM-аудит',
         events: 'События',
 

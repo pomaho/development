@@ -118,6 +118,8 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
     const crmDataLinks: NavLink[] = currentLinks ? [
         ...(dataCenterHref ? [{ label: n.dataCenter, href: dataCenterHref, icon: <Database />, active: url === `${base}/data` }] : []),
         { label: n.leads, href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
+        ...(taskStatisticsHref ? [{ label: n.tasks, href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
+        ...(eventsSyncHref ? [{ label: n.events, href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
     ] : [];
 
     const crmStructureLinks: NavLink[] = currentLinks ? [
@@ -133,7 +135,6 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
         ...(syncCenterHref ? [{ label: n.syncCenter, href: syncCenterHref, icon: <Activity />, active: url === `${base}/sync` }] : []),
         ...(leadSyncSchedulesHref ? [{ label: n.leadSyncSchedules, href: leadSyncSchedulesHref, icon: <RefreshCcw />, active: url.includes('/lead-sync-schedules') }] : []),
         { label: n.crmAudit, href: currentLinks.crm_audit, icon: <ShieldCheck />, active: url.includes('/crm-audit') && !url.includes('/crm-audit/fields') },
-        ...(eventsSyncHref ? [{ label: n.events, href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
     ] : [];
 
     const automationLinks: NavLink[] = currentLinks ? [
@@ -143,7 +144,6 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
 
     const analyticsLinks: NavLink[] = currentLinks ? [
         ...(analyticsCenterHref ? [{ label: n.analyticsCenter, href: analyticsCenterHref, icon: <BarChart3 />, active: url === `${base}/analytics` }] : []),
-        ...(taskStatisticsHref ? [{ label: n.tasks, href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
     ] : [];
 
     const webhooksHref = currentLinks?.webhooks ?? (base ? `${base}/webhooks` : null);
