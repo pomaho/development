@@ -92,13 +92,13 @@ class AmoTaskStatisticsService
 
         foreach ($userRows as $responsibleId => $row) {
             $user = $users->get($responsibleId);
-            $groupId = $user?->group_id ? (int) $user->group_id : 0;
-            $groups[$groupId] ??= [
-                'group_id' => $groupId ?: null,
+            $groupKey = $user?->role_id ? (string) $user->role_id : '0';
+            $groups[$groupKey] ??= [
+                'group_id' => $user?->role_id ?? null,
                 'group_name' => $user ? $this->groupName($user) : 'Без группы',
                 'users' => [],
             ];
-            $groups[$groupId]['users'][] = $row;
+            $groups[$groupKey]['users'][] = $row;
         }
 
         return collect($groups)
@@ -790,10 +790,9 @@ class AmoTaskStatisticsService
 
     private function groupName(AmoUsersSnapshot $user): string
     {
-        return data_get($user->raw, '_embedded.groups.0.name')
-            ?: data_get($user->raw, '_embedded.group.name')
-            ?: data_get($user->raw, 'group.name')
-            ?: ($user->group_id ? "Группа {$user->group_id}" : 'Без группы');
+        return data_get($user->raw, '_embedded.roles.0.name')
+            ?: data_get($user->raw, '_embedded.groups.0.name')
+            ?: ($user->role_id ? "Роль {$user->role_id}" : 'Без группы');
     }
 
 }
