@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
     ArrowRightLeft,
     CalendarDays,
+    ChevronDown,
     Database,
     Inbox,
 } from 'lucide-react';
@@ -349,57 +350,7 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
                 >
                     <div className="grid gap-4 p-5">
                         {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
-                            <article className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm" key={recruiter.enum_id}>
-                                <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
-                                    <h3 className="font-bold text-gray-900">{recruiter.name}</h3>
-                                    <span className="rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 px-3 py-1 text-xs font-bold tabular-nums text-white shadow-sm">
-                                        {recruiter.total_leads_count}
-                                    </span>
-                                </div>
-                                <div className="grid gap-4 border-b border-slate-100 p-4 xl:grid-cols-2">
-                                    <BreakdownCard title="Передано менеджерам по командам" description={`Поле "${recruiterTeamCityBreakdown.team_field_name}"`} rows={recruiterTeamRows(recruiter)} />
-                                    <BreakdownCard compactLegend title="Всего по городам" description={`Поле "${recruiterTeamCityBreakdown.city_field_name}"`} rows={recruiterCityRows(recruiter)} />
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                        Детализация по городам и источникам
-                                    </div>
-                                    <table className="w-full min-w-[760px] text-left text-sm">
-                                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
-                                            <tr>
-                                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Команда</th>
-                                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Город</th>
-                                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
-                                                {recruiterTeamCityBreakdown.source_columns.map((source) => (
-                                                    <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500" key={source}>{source}</th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100 bg-white">
-                                            {recruiter.teams.flatMap((team) => team.cities.map((city, index) => (
-                                                <tr className="transition-colors hover:bg-violet-50/40" key={`${team.name}-${city.name}`}>
-                                                    {index === 0 ? (
-                                                        <td className="px-5 py-3.5 align-top font-bold text-gray-900" rowSpan={team.cities.length}>
-                                                            {team.name}
-                                                            <div className="mt-0.5 text-xs font-normal tabular-nums text-slate-400">{team.total_leads_count}</div>
-                                                        </td>
-                                                    ) : null}
-                                                    <td className="px-4 py-3.5 font-medium text-gray-700">{city.name}</td>
-                                                    <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{city.leads_count}</td>
-                                                    {recruiterTeamCityBreakdown.source_columns.map((source) => {
-                                                        const count = city.sources[source] || 0;
-                                                        return (
-                                                            <td className={count > 0 ? 'px-4 py-3.5 text-right font-semibold tabular-nums text-violet-600' : 'px-4 py-3.5 text-right tabular-nums text-slate-300'} key={source}>
-                                                                {count}
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            )))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </article>
+                            <RecruiterCard key={recruiter.enum_id} recruiter={recruiter} breakdown={recruiterTeamCityBreakdown} />
                         )) : (
                             <EmptyState>
                                 Нет данных для отчета. Проверьте, что выбраны поля «Команда» и «Город», а в сделках заполнены рекрутер и менеджер.
@@ -493,6 +444,75 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
                 </table>
             </div>
         </ReportSection>
+    );
+}
+
+function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityBreakdown['recruiters'][number]; breakdown: RecruiterTeamCityBreakdown }) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    return (
+        <article className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm">
+            <button
+                type="button"
+                className="flex w-full items-center justify-between gap-3 bg-gradient-to-r from-slate-50 to-white px-5 py-4 text-left transition-colors hover:from-violet-50/60 hover:to-white"
+                onClick={() => setIsOpen((v) => !v)}
+            >
+                <h3 className="font-bold text-gray-900">{recruiter.name}</h3>
+                <div className="flex items-center gap-3">
+                    <span className="rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 px-3 py-1 text-xs font-bold tabular-nums text-white shadow-sm">
+                        {recruiter.total_leads_count}
+                    </span>
+                    <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+                </div>
+            </button>
+            {isOpen && (
+                <>
+                    <div className="grid gap-4 border-t border-b border-slate-100 p-4 xl:grid-cols-2">
+                        <BreakdownCard title="Передано менеджерам по командам" description={`Поле "${breakdown.team_field_name}"`} rows={recruiterTeamRows(recruiter)} />
+                        <BreakdownCard compactLegend title="Всего по городам" description={`Поле "${breakdown.city_field_name}"`} rows={recruiterCityRows(recruiter)} />
+                    </div>
+                    <div className="overflow-x-auto">
+                        <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                            Детализация по городам и источникам
+                        </div>
+                        <table className="w-full min-w-[760px] text-left text-sm">
+                            <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                                <tr>
+                                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Команда</th>
+                                    <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Город</th>
+                                    <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
+                                    {breakdown.source_columns.map((source) => (
+                                        <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500" key={source}>{source}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                                {recruiter.teams.flatMap((team) => team.cities.map((city, index) => (
+                                    <tr className="transition-colors hover:bg-violet-50/40" key={`${team.name}-${city.name}`}>
+                                        {index === 0 ? (
+                                            <td className="px-5 py-3.5 align-top font-bold text-gray-900" rowSpan={team.cities.length}>
+                                                {team.name}
+                                                <div className="mt-0.5 text-xs font-normal tabular-nums text-slate-400">{team.total_leads_count}</div>
+                                            </td>
+                                        ) : null}
+                                        <td className="px-4 py-3.5 font-medium text-gray-700">{city.name}</td>
+                                        <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{city.leads_count}</td>
+                                        {breakdown.source_columns.map((source) => {
+                                            const count = city.sources[source] || 0;
+                                            return (
+                                                <td className={count > 0 ? 'px-4 py-3.5 text-right font-semibold tabular-nums text-violet-600' : 'px-4 py-3.5 text-right tabular-nums text-slate-300'} key={source}>
+                                                    {count}
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+                                )))}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
+            )}
+        </article>
     );
 }
 
