@@ -465,8 +465,8 @@ function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityB
                     <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
             </button>
-            {isOpen && (
-                <>
+            <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div className="overflow-hidden">
                     <div className="grid gap-4 border-t border-b border-slate-100 p-4 xl:grid-cols-2">
                         <BreakdownCard title="Передано менеджерам по командам" description={`Поле "${breakdown.team_field_name}"`} rows={recruiterTeamRows(recruiter)} />
                         <BreakdownCard compactLegend title="Всего по городам" description={`Поле "${breakdown.city_field_name}"`} rows={recruiterCityRows(recruiter)} />
@@ -510,8 +510,8 @@ function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityB
                             </tbody>
                         </table>
                     </div>
-                </>
-            )}
+                </div>
+            </div>
         </article>
     );
 }
