@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
     ArrowRightLeft,
@@ -5,6 +6,7 @@ import {
     ChevronDown,
     Database,
     Inbox,
+    X,
 } from 'lucide-react';
 
 type Account = {
@@ -60,6 +62,13 @@ type RecruiterTeamCityBreakdown = {
     }>;
 };
 
+type OverdueTask = {
+    text: string | null;
+    complete_till: string;
+    completed_at: string;
+    days_overdue: number;
+};
+
 type TaskStatisticsRow = {
     responsible_user_id: number;
     responsible_name: string | null;
@@ -70,6 +79,7 @@ type TaskStatisticsRow = {
     overdue_count: number;
     total_count: number;
     overdue_rate: number;
+    overdue_tasks: OverdueTask[];
 };
 
 type TaskStatisticsGroup = {
@@ -364,7 +374,65 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
     );
 }
 
+function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tasks: OverdueTask[]; onClose: () => void }) {
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="overdue-modal-title">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-red-500">Просроченные задачи</p>
+                        <h2 id="overdue-modal-title" className="mt-0.5 font-bold text-gray-900">{userName}</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Закрыть">
+                        <X className="size-5" />
+                    </button>
+                </div>
+                <div className="overflow-y-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="sticky top-0 bg-slate-50">
+                            <tr>
+                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Задача</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Дедлайн</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Закрыта</th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просрочка</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {tasks.map((task, i) => (
+                                <tr className="hover:bg-red-50/40" key={i}>
+                                    <td className="max-w-xs px-5 py-3.5 text-gray-800">
+                                        <span className="line-clamp-2">{task.text ?? '—'}</span>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{task.complete_till}</td>
+                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{task.completed_at}</td>
+                                    <td className="px-4 py-3.5 text-right">
+                                        <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
+                                            +{task.days_overdue} дн.
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-400">
+                    {tasks.length} задач · отсортировано по убыванию просрочки
+                </div>
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
 function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; period: { from: string; to: string } }) {
+    const [overdueModal, setOverdueModal] = useState<{ userName: string; tasks: OverdueTask[] } | null>(null);
     const totalCompleted = rows.reduce((sum, g) => sum + g.completed_count, 0);
     const totalCompletedOverdue = rows.reduce((sum, g) => sum + g.completed_overdue_count, 0);
     const hasAny = rows.some((g) => g.users.length > 0);
@@ -417,9 +485,14 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
                                             </td>
                                             <td className="px-4 py-3.5 text-right">
                                                 {row.completed_overdue_count > 0 ? (
-                                                    <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
+                                                    <button
+                                                        type="button"
+                                                        className="inline-flex items-center justify-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200 transition-colors hover:bg-red-100 hover:ring-red-300"
+                                                        title="Показать просроченные задачи"
+                                                        onClick={() => setOverdueModal({ userName: row.responsible_name ?? `ID ${row.responsible_user_id}`, tasks: row.overdue_tasks })}
+                                                    >
                                                         {row.completed_overdue_count}
-                                                    </span>
+                                                    </button>
                                                 ) : (
                                                     <span className="text-slate-300 tabular-nums">0</span>
                                                 )}
@@ -444,6 +517,13 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
                 </table>
             </div>
         </ReportSection>
+        {overdueModal && (
+            <OverdueTasksModal
+                userName={overdueModal.userName}
+                tasks={overdueModal.tasks}
+                onClose={() => setOverdueModal(null)}
+            />
+        )}
     );
 }
 

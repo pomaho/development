@@ -36,6 +36,7 @@ class AmoTaskStatisticsService
                 'open_overdue_count' => 0,
                 'overdue_count' => 0,
                 'total_count' => 0,
+                'overdue_tasks' => [],
             ],
         ])->all();
 
@@ -63,6 +64,12 @@ class AmoTaskStatisticsService
                         if ($completeTill !== null && $completedAt !== null && $completedAt->greaterThan($completeTill)) {
                             $rows[$responsibleId]['completed_overdue_count']++;
                             $rows[$responsibleId]['overdue_count']++;
+                            $rows[$responsibleId]['overdue_tasks'][] = [
+                                'text' => $raw['text'] ?? $task->name,
+                                'complete_till' => $completeTill->format('d.m.Y'),
+                                'completed_at' => $completedAt->format('d.m.Y'),
+                                'days_overdue' => (int) $completedAt->diffInDays($completeTill),
+                            ];
                         }
                     }
 
@@ -83,6 +90,8 @@ class AmoTaskStatisticsService
                 $row['overdue_rate'] = $row['completed_count'] > 0
                     ? round($row['completed_overdue_count'] / $row['completed_count'] * 100, 1)
                     : 0.0;
+
+                usort($row['overdue_tasks'], fn (array $a, array $b): int => $b['days_overdue'] - $a['days_overdue']);
 
                 return $row;
             })
