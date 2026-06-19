@@ -198,10 +198,17 @@ class AmoTaskSyncService
             ->where('entity_type', 'tasks')
             ->where('external_id', (string) $task['id'])
             ->first();
-        $existingStats = $existing?->raw['_task_statistics'] ?? null;
 
-        if ($existingStats !== null) {
-            $task['_task_statistics'] = $existingStats;
+        $taskStats = $task['_task_statistics'] ?? $existing?->raw['_task_statistics'] ?? null;
+
+        $taskRaw = [
+            'is_completed' => (bool) ($task['is_completed'] ?? false),
+            'complete_till' => $task['complete_till'] ?? null,
+            'text' => $task['text'] ?? null,
+        ];
+
+        if ($taskStats !== null) {
+            $taskRaw['_task_statistics'] = $taskStats;
         }
 
         CrmEntitySnapshot::query()->updateOrCreate(
@@ -215,7 +222,7 @@ class AmoTaskSyncService
                     'entity_id' => $task['entity_id'] ?? null,
                     'entity_type' => $task['entity_type'] ?? null,
                 ],
-                'raw' => $task,
+                'raw' => $taskRaw,
                 'synced_at' => $syncedAt,
             ]
         );
@@ -234,7 +241,7 @@ class AmoTaskSyncService
                     'entity_id' => $event['entity_id'] ?? null,
                     'entity_type' => $event['entity_type'] ?? $event['entity'] ?? null,
                 ],
-                'raw' => $event,
+                'raw' => null,
                 'synced_at' => $syncedAt,
             ]
         );
@@ -259,7 +266,6 @@ class AmoTaskSyncService
             'completed_at' => (int) ($event['created_at'] ?? 0),
             'completed_by' => $event['created_by'] ?? null,
             'completed_event_id' => $event['id'] ?? null,
-            'completed_event' => $event,
         ];
     }
 
