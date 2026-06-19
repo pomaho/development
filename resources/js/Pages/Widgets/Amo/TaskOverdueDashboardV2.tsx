@@ -438,6 +438,7 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
     const hasAny = rows.some((g) => g.users.length > 0);
 
     return (
+        <>
         <ReportSection
             eyebrow="Отчет по задачам"
             title={`Задачи сотрудников: ${period.from} — ${period.to}`}
@@ -524,6 +525,7 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
                 onClose={() => setOverdueModal(null)}
             />
         )}
+        </>
     );
 }
 
