@@ -56,7 +56,7 @@ class AmoTaskStatisticsService
                     $completeTill = $this->timestamp($raw['complete_till'] ?? null);
                     $completedAt = $this->completionTime($raw) ?? $completeTill;
 
-                    if ($isCompleted && $this->inPeriod($completedAt, $from, $to)) {
+                    if ($isCompleted && $this->inPeriod($task->entity_created_at, $from, $to)) {
                         $rows[$responsibleId]['completed_count']++;
                         $rows[$responsibleId]['total_count']++;
 
@@ -693,7 +693,7 @@ class AmoTaskStatisticsService
                     $completeTill = $this->timestamp($raw['complete_till'] ?? null);
                     $completedAt = $this->completionTime($raw) ?? $completeTill;
 
-                    if (! $this->inPeriod($completedAt, $from, $to)) {
+                    if (! $this->inPeriod($task->entity_created_at, $from, $to)) {
                         continue;
                     }
 
