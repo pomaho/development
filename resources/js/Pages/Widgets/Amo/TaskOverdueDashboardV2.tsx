@@ -63,6 +63,23 @@ type RecruiterTeamCityBreakdown = {
     }>;
 };
 
+type RecruiterScheduleRow = {
+    enum_id: number;
+    name: string;
+    schedule_count: number;
+};
+
+type RecruiterScheduleBreakdown = {
+    field_name: string;
+    field_found: boolean;
+    success_status_id: number | null;
+    success_status_name: string;
+    pipeline_id: number | null;
+    pipeline_name: string | null;
+    total_count: number;
+    recruiters: RecruiterScheduleRow[];
+};
+
 type OverdueTask = {
     text: string | null;
     complete_till: string;
@@ -145,6 +162,7 @@ type Props = {
         userOverdueTasks: string;
         projectCityVacancy: string;
         projectCityVacancyLeads: string;
+        recruiterSchedule: string;
     };
 };
 
@@ -266,6 +284,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
     const breakdownState = useApiData<RecruiterTeamCityBreakdown>(links.recruiterTeamCityBreakdown, periodParams);
     const taskStatsState = useApiData<TaskStatisticsGroup[]>(links.taskStatistics, periodParams);
     const projectCityVacancyState = useApiData<ProjectCityVacancyBreakdown>(links.projectCityVacancy, periodParams);
+    const scheduleState = useApiData<RecruiterScheduleBreakdown>(links.recruiterSchedule, periodParams);
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') return;
@@ -329,6 +348,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 <RecruiterLeadsSection state={recruiterLeadsState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
+                <RecruiterScheduleSection state={scheduleState} />
+
                 <RecruiterBreakdownSections
                     state={breakdownState}
                     leadsUrl={links.projectCityVacancyLeads}
@@ -349,6 +370,68 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
             </div>
         </div>
+    );
+}
+
+function RecruiterScheduleSection({ state }: { state: LoadState<RecruiterScheduleBreakdown> }) {
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    if (!data.success_status_id) {
+        return null;
+    }
+
+    const maxCount = Math.max(...data.recruiters.map((r) => r.schedule_count), 1);
+
+    return (
+        <ReportSection
+            eyebrow="Результаты рекрутинга"
+            title={`Встал в график — этап "${data.success_status_name}"`}
+            description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", достигшие этапа "${data.success_status_name}". Воронка: ${data.pipeline_name || 'все воронки'}.`}
+            aside={
+                <AccentSummary
+                    label="Встали в график"
+                    value={data.total_count}
+                    note="всего за период"
+                    tone="success"
+                />
+            }
+        >
+            {data.recruiters.length > 0 ? (
+                <div className="divide-y divide-slate-100">
+                    {data.recruiters.map((recruiter, index) => {
+                        const barWidth = maxCount > 0 ? Math.round((recruiter.schedule_count / maxCount) * 100) : 0;
+                        return (
+                            <div className="flex items-center gap-4 px-5 py-3.5" key={recruiter.enum_id}>
+                                <div className="w-6 shrink-0 text-right text-xs font-bold text-slate-400 tabular-nums">
+                                    {index + 1}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="mb-1.5 flex items-center justify-between gap-3">
+                                        <span className="truncate font-semibold text-gray-900">{recruiter.name}</span>
+                                        <span className="shrink-0 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-bold tabular-nums text-white">
+                                            {recruiter.schedule_count}
+                                        </span>
+                                    </div>
+                                    <div className="h-2 overflow-hidden rounded-full bg-emerald-50">
+                                        <div
+                                            className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all duration-500"
+                                            style={{ width: `${barWidth}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
+                    <Inbox className="size-8" />
+                    <p className="text-sm">Нет сделок на этапе "{data.success_status_name}" за выбранный период</p>
+                </div>
+            )}
+        </ReportSection>
     );
 }
 
@@ -1299,9 +1382,11 @@ function ReportSection({ eyebrow, title, description, aside, children }: { eyebr
     );
 }
 
-function AccentSummary({ label, value, note, tone }: { label: string; value: number; note: string; tone: 'brand' | 'warning' }) {
+function AccentSummary({ label, value, note, tone }: { label: string; value: number; note: string; tone: 'brand' | 'warning' | 'success' }) {
     const cls = tone === 'warning'
         ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-amber-200/60'
+        : tone === 'success'
+        ? 'bg-gradient-to-br from-emerald-400 to-green-600 shadow-emerald-200/60'
         : 'bg-gradient-to-br from-violet-500 to-indigo-600 shadow-violet-200/60';
     return (
         <div className={`rounded-2xl px-5 py-4 text-right text-white shadow-lg ${cls}`}>

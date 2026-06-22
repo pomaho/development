@@ -8,6 +8,7 @@ use App\Models\AmoAccount;
 use App\Models\AmoAccountDashboardWidget;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmPipelineSnapshot;
+use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\DashboardWidget;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use Illuminate\Http\RedirectResponse;
@@ -99,6 +100,8 @@ class AmoAccountWidgetsController extends Controller
             'city_field_name' => data_get($installation->config, 'city_field_name'),
             'source_field_id' => data_get($installation->config, 'source_field_id'),
             'source_field_name' => data_get($installation->config, 'source_field_name'),
+            'success_status_id' => data_get($installation->config, 'success_status_id'),
+            'success_status_name' => data_get($installation->config, 'success_status_name'),
         ];
 
         return Inertia::render('AmoAccounts/Widgets/Settings', [
@@ -119,8 +122,19 @@ class AmoAccountWidgetsController extends Controller
                 'team_field_id' => $config['team_field_id'],
                 'city_field_id' => $config['city_field_id'],
                 'source_field_id' => $config['source_field_id'],
+                'success_status_id' => $config['success_status_id'],
             ],
             'diagnostics' => $statisticsService->recruiterLeadDistributionDiagnostics($amoAccount, null, null, $config),
+            'pipelineStatuses' => CrmPipelineStatusSnapshot::query()
+                ->where('amo_account_id', $amoAccount->id)
+                ->when($config['pipeline_id'], fn ($q) => $q->where('amo_pipeline_id', (int) $config['pipeline_id']))
+                ->orderBy('sort')
+                ->get()
+                ->map(fn (CrmPipelineStatusSnapshot $status): array => [
+                    'id' => $status->amo_status_id,
+                    'name' => $status->name,
+                    'pipeline_id' => $status->amo_pipeline_id,
+                ]),
             'pipelines' => CrmPipelineSnapshot::query()
                 ->where('amo_account_id', $amoAccount->id)
                 ->orderBy('sort')
@@ -194,6 +208,12 @@ class AmoAccountWidgetsController extends Controller
                 ->where('amo_field_id', (int) $data['source_field_id'])
                 ->first()
             : null;
+        $successStatus = isset($data['success_status_id'])
+            ? CrmPipelineStatusSnapshot::query()
+                ->where('amo_account_id', $amoAccount->id)
+                ->where('amo_status_id', (int) $data['success_status_id'])
+                ->first()
+            : null;
 
         if (isset($data['pipeline_id']) && $pipeline === null) {
             throw ValidationException::withMessages(['pipeline_id' => 'Выберите воронку из списка синхронизированных воронок.']);
@@ -234,6 +254,8 @@ class AmoAccountWidgetsController extends Controller
                 'city_field_name' => $cityField?->name,
                 'source_field_id' => $sourceField?->amo_field_id,
                 'source_field_name' => $sourceField?->name,
+                'success_status_id' => $successStatus?->amo_status_id,
+                'success_status_name' => $successStatus?->name,
             ],
         ])->save();
 

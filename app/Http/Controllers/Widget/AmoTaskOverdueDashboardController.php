@@ -64,6 +64,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'userOverdueTasks' => route('api.widgets.amo.task-overdue-dashboard-v2.user-overdue-tasks', $publicKey),
                 'projectCityVacancy' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy', $publicKey),
                 'projectCityVacancyLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy-leads', $publicKey),
+                'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule', $publicKey),
             ],
         ]);
     }
@@ -127,6 +128,16 @@ class AmoTaskOverdueDashboardController extends Controller
                 (int) $request->query('recruiter_enum_id', 0),
                 $request->query('manager_required', '1') !== '0',
             ),
+        ]);
+    }
+
+    public function recruiterScheduleBreakdown(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $installation->config ?? []),
         ]);
     }
 

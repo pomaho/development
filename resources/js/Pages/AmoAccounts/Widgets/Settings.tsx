@@ -18,6 +18,12 @@ type Pipeline = {
     is_archive: boolean;
 };
 
+type PipelineStatus = {
+    id: number;
+    name: string;
+    pipeline_id: number;
+};
+
 type LeadField = {
     id: number;
     name: string;
@@ -69,9 +75,11 @@ type Props = {
         team_field_id: number | string | null;
         city_field_id: number | string | null;
         source_field_id: number | string | null;
+        success_status_id: number | string | null;
     };
     diagnostics: Diagnostics;
     pipelines: Pipeline[];
+    pipelineStatuses: PipelineStatus[];
     leadFields: LeadField[];
     links: {
         dashboard: string;
@@ -96,7 +104,7 @@ type Props = {
     };
 };
 
-export default function WidgetSettings({ account, widget, config, diagnostics, pipelines, leadFields, links }: Props) {
+export default function WidgetSettings({ account, widget, config, diagnostics, pipelines, pipelineStatuses, leadFields, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const diagnosticMetrics = [
         ['Поле найдено', diagnostics.field_found ? 'да' : 'нет'],
@@ -219,6 +227,21 @@ export default function WidgetSettings({ account, widget, config, diagnostics, p
                         </select>
                         <span className="mt-1 block text-theme-xs text-gray-500">
                             Значения этого поля будут показаны отдельными колонками в отчете по командам и городам.
+                        </span>
+                    </label>
+
+                    <label className="block">
+                        <span className="text-theme-sm font-medium text-gray-700">Этап «Встал в график» (успешная реализация)</span>
+                        <select className="mt-1.5 h-11 w-full rounded-lg border-gray-200 bg-white px-3 text-theme-sm text-gray-700 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10" defaultValue={config.success_status_id || ''} name="success_status_id">
+                            <option value="">Не выбрано (отчет отключен)</option>
+                            {pipelineStatuses.map((status) => (
+                                <option key={status.id} value={status.id}>
+                                    {status.name} · ID {status.id}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="mt-1 block text-theme-xs text-gray-500">
+                            Выберите этап воронки, соответствующий "Встал в график". Отчет покажет сделки с рекрутером и менеджером, достигшие этого этапа.
                         </span>
                     </label>
 

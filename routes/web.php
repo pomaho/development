@@ -74,6 +74,9 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/project-city-
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/project-city-vacancy-leads', [AmoTaskOverdueDashboardController::class, 'projectCityVacancyLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/recruiter-schedule', [AmoTaskOverdueDashboardController::class, 'recruiterScheduleBreakdown'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule');
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:webhook')

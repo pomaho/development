@@ -24,6 +24,7 @@ class UpdateWidgetSettingsRequest extends FormRequest
             'team_field_id' => ['nullable', 'integer', 'min:1'],
             'city_field_id' => ['nullable', 'integer', 'min:1'],
             'source_field_id' => ['nullable', 'integer', 'min:1'],
+            'success_status_id' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }
