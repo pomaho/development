@@ -92,6 +92,7 @@ type TaskStatisticsGroup = {
 type ProjectVacancy = {
     name: string;
     leads_count: number;
+    sources: Record<string, number>;
 };
 
 type ProjectCity = {
@@ -115,6 +116,9 @@ type ProjectCityVacancyBreakdown = {
     city_field_name: string;
     vacancy_field_found: boolean;
     vacancy_field_name: string;
+    source_field_found: boolean;
+    source_field_name: string;
+    source_columns: string[];
     total_leads_count: number;
     projects: ProjectCityVacancyProject[];
 };
@@ -487,6 +491,7 @@ type ProjectTableRow = {
     cityRowSpan: number;
     vacancyName: string;
     vacancyCount: number;
+    vacancySources: Record<string, number>;
 };
 
 function flattenProjectRows(projects: ProjectCityVacancyProject[]): ProjectTableRow[] {
@@ -496,7 +501,7 @@ function flattenProjectRows(projects: ProjectCityVacancyProject[]): ProjectTable
         const projectRowSpan = cities.reduce((sum, city) => sum + Math.max(city.vacancies.length, 1), 0);
         let firstInProject = true;
         for (const city of cities) {
-            const vacancies = city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0 }];
+            const vacancies = city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }];
             let firstInCity = true;
             for (const vacancy of vacancies) {
                 rows.push({
@@ -508,6 +513,7 @@ function flattenProjectRows(projects: ProjectCityVacancyProject[]): ProjectTable
                     cityRowSpan: firstInCity ? vacancies.length : 0,
                     vacancyName: vacancy.name,
                     vacancyCount: vacancy.leads_count,
+                    vacancySources: vacancy.sources ?? {},
                 });
                 firstInProject = false;
                 firstInCity = false;
@@ -548,7 +554,10 @@ function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVaca
                                 <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
                                 <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
                                 <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
-                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
+                                {data.source_columns.map((src) => (
+                                    <th key={src} className="w-24 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{src}</th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -586,8 +595,13 @@ function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVaca
                                             {row.cityCount}
                                         </td>
                                     )}
-                                    <td className="px-5 py-3 text-gray-600">{row.vacancyName}</td>
-                                    <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-600">{row.vacancyCount}</td>
+                                    <td className="border-r border-slate-100 px-5 py-3 text-gray-600">{row.vacancyName}</td>
+                                    <td className="border-r border-slate-100 px-4 py-3 text-right font-mono font-semibold tabular-nums text-slate-700">{row.vacancyCount}</td>
+                                    {data.source_columns.map((src) => (
+                                        <td key={src} className="px-4 py-3 text-right font-mono tabular-nums text-slate-500">
+                                            {row.vacancySources[src] ?? 0}
+                                        </td>
+                                    ))}
                                 </tr>
                             ))}
                         </tbody>

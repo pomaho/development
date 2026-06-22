@@ -611,12 +611,15 @@ class AmoTaskStatisticsService
         $projectField = $this->leadField($fieldQuery, (int) data_get($config, 'project_field_id', 0), (string) (data_get($config, 'project_field_name') ?: self::PROJECT_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
         $vacancyField = $this->leadField($fieldQuery, (int) data_get($config, 'vacancy_field_id', 0), (string) (data_get($config, 'vacancy_field_name') ?: self::VACANCY_FIELD_NAME));
+        $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
         $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
         $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
         $vacancyEnumIdsByValue = $vacancyField ? $this->enumIdsByValue($vacancyField) : [];
+        $sourceEnumIdsByValue = $sourceField ? $this->enumIdsByValue($sourceField) : [];
 
         $projects = [];
+        $allSourceNames = [];
         $totalLeads = 0;
 
         CrmEntitySnapshot::query()
@@ -627,7 +630,7 @@ class AmoTaskStatisticsService
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$projects, &$totalLeads, $projectField, $cityField, $vacancyField, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, $projectField, $cityField, $vacancyField, $sourceField, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue): void {
                 foreach ($leads as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
 
@@ -645,9 +648,17 @@ class AmoTaskStatisticsService
                     $vacancyValues = $vacancyField
                         ? $this->fieldValueLabels($customFields, (int) $vacancyField->amo_field_id, $vacancyField->name, $vacancyEnumIdsByValue)
                         : [];
+                    $sourceValues = $sourceField
+                        ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue)
+                        : [];
 
                     $projectKeys = $projectValues ?: ['Без проекта'];
                     $vacancyKeys = $vacancyValues ?: ['—'];
+                    $sourceKeys = $sourceValues ?: ['—'];
+
+                    foreach ($sourceKeys as $sourceName) {
+                        $allSourceNames[$sourceName] = true;
+                    }
 
                     $totalLeads++;
 
@@ -660,20 +671,27 @@ class AmoTaskStatisticsService
                             $projects[$projectName]['cities'][$cityName]['leads_count']++;
 
                             foreach ($vacancyKeys as $vacancyName) {
-                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= 0;
-                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]++;
+                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= ['leads_count' => 0, 'sources' => []];
+                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['leads_count']++;
+
+                                foreach ($sourceKeys as $sourceName) {
+                                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['sources'][$sourceName] ??= 0;
+                                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['sources'][$sourceName]++;
+                                }
                             }
                         }
                     }
                 }
             });
 
+        $sourceColumns = array_keys($allSourceNames);
+
         $projectsList = collect($projects)
             ->map(function (array $project): array {
                 $project['cities'] = collect($project['cities'])
                     ->map(function (array $city): array {
                         $city['vacancies'] = collect($city['vacancies'])
-                            ->map(fn ($count, $name) => ['name' => $name, 'leads_count' => $count])
+                            ->map(fn ($data, $name) => ['name' => $name, 'leads_count' => $data['leads_count'], 'sources' => $data['sources']])
                             ->sortByDesc('leads_count')
                             ->values()
                             ->all();
@@ -699,6 +717,9 @@ class AmoTaskStatisticsService
             'city_field_name' => $cityField?->name ?? self::CITY_FIELD_NAME,
             'vacancy_field_found' => $vacancyField !== null,
             'vacancy_field_name' => $vacancyField?->name ?? self::VACANCY_FIELD_NAME,
+            'source_field_found' => $sourceField !== null,
+            'source_field_name' => $sourceField?->name ?? self::SOURCE_FIELD_NAME,
+            'source_columns' => $sourceColumns,
             'total_leads_count' => $totalLeads,
             'projects' => $projectsList,
         ];
@@ -718,6 +739,7 @@ class AmoTaskStatisticsService
             data_get($config, 'project_field_id') ?: data_get($config, 'project_field_name', self::PROJECT_FIELD_NAME),
             data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
             data_get($config, 'vacancy_field_id') ?: data_get($config, 'vacancy_field_name', self::VACANCY_FIELD_NAME),
+            data_get($config, 'source_field_id') ?: data_get($config, 'source_field_name', self::SOURCE_FIELD_NAME),
         ]);
     }
 
