@@ -390,8 +390,8 @@ function RecruiterScheduleSection({ state, leadsUrl, periodParams, baseDomain }:
         <>
         <ReportSection
             eyebrow="Результаты рекрутинга"
-            title={`Встал в график — этап "${data.success_status_name}"`}
-            description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", достигшие этапа "${data.success_status_name}". Воронка: ${data.pipeline_name || 'все воронки'}.`}
+            title="Встал в график"
+            description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", достигшие этапа "Встал в график". Воронка: ${data.pipeline_name || 'все воронки'}.`}
             aside={
                 <button type="button" onClick={() => setLeadsFilter({ project: '', city: '', vacancy: '', source: '', status_id: sid, label: `Встал в график — все рекрутеры` })}>
                     <AccentSummary
@@ -404,7 +404,7 @@ function RecruiterScheduleSection({ state, leadsUrl, periodParams, baseDomain }:
             }
         >
             {data.recruiters.length > 0 ? (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 pb-5">
                     {data.recruiters.map((recruiter, index) => {
                         const barWidth = maxCount > 0 ? Math.round((recruiter.schedule_count / maxCount) * 100) : 0;
                         return (
