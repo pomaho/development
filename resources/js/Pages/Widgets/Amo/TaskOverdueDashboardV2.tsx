@@ -110,6 +110,10 @@ type ProjectCityVacancyProject = {
 type ProjectCityVacancyBreakdown = {
     pipeline_id: number | null;
     pipeline_name: string | null;
+    manager_field_found: boolean;
+    manager_field_name: string;
+    recruiter_field_found: boolean;
+    recruiter_field_name: string;
     project_field_found: boolean;
     project_field_name: string;
     city_field_found: boolean;
@@ -645,7 +649,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
             <ReportSection
                 eyebrow="Весь отдел рекрутинга"
                 title="Разрез по проекту, городу и вакансии"
-                description={`Сделки с заполненным полем "${data.city_field_name}", сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Сделки без города не включаются. Нажмите на число — откроется список сделок.`}
+                description={`Только сделки переданные менеджерам (заполнены поля "${data.recruiter_field_name}" и "${data.manager_field_name}"), сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Нажмите на число — откроется список сделок.`}
                 aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="с заполненным городом" tone="warning" />}
             >
                 {data.projects.length === 0 ? (

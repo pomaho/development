@@ -219,10 +219,14 @@ class AmoTaskStatisticsService
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads');
 
+        $recruiterField = $this->leadField($fieldQuery, (int) data_get($config, 'recruiter_field_id', 0), (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME));
+        $managerField = $this->leadField($fieldQuery, (int) data_get($config, 'manager_field_id', 0), (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME));
         $projectField = $this->leadField($fieldQuery, (int) data_get($config, 'project_field_id', 0), (string) (data_get($config, 'project_field_name') ?: self::PROJECT_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
         $vacancyField = $this->leadField($fieldQuery, (int) data_get($config, 'vacancy_field_id', 0), (string) (data_get($config, 'vacancy_field_name') ?: self::VACANCY_FIELD_NAME));
 
+        $recruiterEnumIdsByValue = $recruiterField ? $this->enumIdsByValue($recruiterField) : [];
+        $managerEnumIdsByValue = $managerField ? $this->enumIdsByValue($managerField) : [];
         $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
         $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
         $vacancyEnumIdsByValue = $vacancyField ? $this->enumIdsByValue($vacancyField) : [];
@@ -238,9 +242,17 @@ class AmoTaskStatisticsService
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $projectField, $cityField, $vacancyField, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $projectField, $cityField, $vacancyField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
+
+                    if ($managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                        continue;
+                    }
+
+                    if ($recruiterField !== null && ! $this->fieldHasAnyValue($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue)) {
+                        continue;
+                    }
 
                     $cityValues = $cityField
                         ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
@@ -703,11 +715,15 @@ class AmoTaskStatisticsService
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads');
 
+        $recruiterField = $this->leadField($fieldQuery, (int) data_get($config, 'recruiter_field_id', 0), (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME));
+        $managerField = $this->leadField($fieldQuery, (int) data_get($config, 'manager_field_id', 0), (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME));
         $projectField = $this->leadField($fieldQuery, (int) data_get($config, 'project_field_id', 0), (string) (data_get($config, 'project_field_name') ?: self::PROJECT_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
         $vacancyField = $this->leadField($fieldQuery, (int) data_get($config, 'vacancy_field_id', 0), (string) (data_get($config, 'vacancy_field_name') ?: self::VACANCY_FIELD_NAME));
         $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
+        $recruiterEnumIdsByValue = $recruiterField ? $this->enumIdsByValue($recruiterField) : [];
+        $managerEnumIdsByValue = $managerField ? $this->enumIdsByValue($managerField) : [];
         $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
         $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
         $vacancyEnumIdsByValue = $vacancyField ? $this->enumIdsByValue($vacancyField) : [];
@@ -725,9 +741,17 @@ class AmoTaskStatisticsService
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, $projectField, $cityField, $vacancyField, $sourceField, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, $recruiterField, $managerField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue): void {
                 foreach ($leads as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
+
+                    if ($managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                        continue;
+                    }
+
+                    if ($recruiterField !== null && ! $this->fieldHasAnyValue($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue)) {
+                        continue;
+                    }
 
                     $cityValues = $cityField
                         ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
@@ -806,6 +830,10 @@ class AmoTaskStatisticsService
         return [
             'pipeline_id' => $pipelineId ?: null,
             'pipeline_name' => $pipelineName,
+            'manager_field_found' => $managerField !== null,
+            'manager_field_name' => $managerField?->name ?? self::MANAGER_FIELD_NAME,
+            'recruiter_field_found' => $recruiterField !== null,
+            'recruiter_field_name' => $recruiterField?->name ?? self::RECRUITER_FIELD_NAME,
             'project_field_found' => $projectField !== null,
             'project_field_name' => $projectField?->name ?? self::PROJECT_FIELD_NAME,
             'city_field_found' => $cityField !== null,
