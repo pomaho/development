@@ -204,6 +204,101 @@ class AmoTaskStatisticsService
         );
     }
 
+    public function projectCityVacancyLeads(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        array $config,
+        string $projectFilter,
+        string $cityFilter,
+        string $vacancyFilter,
+        int $limit = 200
+    ): array {
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+
+        $projectField = $this->leadField($fieldQuery, (int) data_get($config, 'project_field_id', 0), (string) (data_get($config, 'project_field_name') ?: self::PROJECT_FIELD_NAME));
+        $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
+        $vacancyField = $this->leadField($fieldQuery, (int) data_get($config, 'vacancy_field_id', 0), (string) (data_get($config, 'vacancy_field_name') ?: self::VACANCY_FIELD_NAME));
+
+        $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
+        $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
+        $vacancyEnumIdsByValue = $vacancyField ? $this->enumIdsByValue($vacancyField) : [];
+
+        $leads = [];
+        $total = 0;
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $projectField, $cityField, $vacancyField, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter): void {
+                foreach ($chunk as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
+
+                    $cityValues = $cityField
+                        ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
+                        : [];
+
+                    if ($cityValues === []) {
+                        continue;
+                    }
+
+                    if ($cityFilter !== '' && !in_array($cityFilter, $cityValues, true)) {
+                        continue;
+                    }
+
+                    $projectValues = $projectField
+                        ? $this->fieldValueLabels($customFields, (int) $projectField->amo_field_id, $projectField->name, $projectEnumIdsByValue)
+                        : [];
+
+                    $matchesProject = $projectFilter === 'Без проекта'
+                        ? $projectValues === []
+                        : ($projectFilter === '' || in_array($projectFilter, $projectValues, true));
+
+                    if (!$matchesProject) {
+                        continue;
+                    }
+
+                    if ($vacancyFilter !== '') {
+                        $vacancyValues = $vacancyField
+                            ? $this->fieldValueLabels($customFields, (int) $vacancyField->amo_field_id, $vacancyField->name, $vacancyEnumIdsByValue)
+                            : [];
+
+                        $matchesVacancy = $vacancyFilter === '—'
+                            ? $vacancyValues === []
+                            : in_array($vacancyFilter, $vacancyValues, true);
+
+                        if (!$matchesVacancy) {
+                            continue;
+                        }
+                    }
+
+                    $total++;
+                    if (count($leads) < $limit) {
+                        $leads[] = [
+                            'id' => $lead->external_id,
+                            'name' => $lead->name ?: 'Без названия',
+                            'created_at' => $lead->entity_created_at?->toDateString(),
+                        ];
+                    }
+                }
+            });
+
+        return [
+            'leads' => $leads,
+            'total' => $total,
+            'limited' => $total > $limit,
+            'limit' => $limit,
+        ];
+    }
+
     public function recruiterLeadDistributionDiagnostics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
         $fieldId = (int) data_get($config, 'recruiter_field_id', 0);

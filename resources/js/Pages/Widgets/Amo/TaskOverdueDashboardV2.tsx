@@ -139,6 +139,7 @@ type Props = {
         taskStatistics: string;
         userOverdueTasks: string;
         projectCityVacancy: string;
+        projectCityVacancyLeads: string;
     };
 };
 
@@ -334,7 +335,12 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
-                <ProjectCityVacancySection state={projectCityVacancyState} />
+                <ProjectCityVacancySection
+                    state={projectCityVacancyState}
+                    leadsUrl={links.projectCityVacancyLeads}
+                    periodParams={periodParams}
+                    baseDomain={account.base_domain}
+                />
 
                 <RecruiterDetailSection state={breakdownState} />
 
@@ -482,84 +488,258 @@ function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityB
     );
 }
 
-function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVacancyBreakdown> }) {
+type LeadItem = {
+    id: number;
+    name: string;
+    created_at: string | null;
+};
+
+type LeadsResult = {
+    leads: LeadItem[];
+    total: number;
+    limited: boolean;
+    limit: number;
+};
+
+type LeadsFilter = {
+    project: string;
+    city: string;
+    vacancy: string;
+    label: string;
+};
+
+function aggregateProjectSources(project: ProjectCityVacancyProject, columns: string[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const city of project.cities) {
+        for (const vacancy of city.vacancies) {
+            for (const col of columns) {
+                result[col] = (result[col] ?? 0) + ((vacancy.sources ?? {})[col] ?? 0);
+            }
+        }
+    }
+    return result;
+}
+
+function LeadsModal({
+    filter,
+    leadsUrl,
+    periodParams,
+    baseDomain,
+    onClose,
+}: {
+    filter: LeadsFilter;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+    onClose: () => void;
+}) {
+    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy };
+    const leadsState = useApiData<LeadsResult>(leadsUrl, params);
+
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Сделки</p>
+                        <h2 className="mt-0.5 font-bold text-gray-900">{filter.label}</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Закрыть">
+                        <X className="size-5" />
+                    </button>
+                </div>
+                {leadsState.status === 'loading' && (
+                    <div className="flex items-center justify-center py-16 text-slate-400">
+                        <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                        Загрузка...
+                    </div>
+                )}
+                {leadsState.status === 'error' && (
+                    <div className="px-6 py-8 text-center text-sm text-red-500">Ошибка загрузки: {leadsState.message}</div>
+                )}
+                {leadsState.status === 'ok' && (
+                    <>
+                        {leadsState.data.limited && (
+                            <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs text-amber-700">
+                                Показаны первые {leadsState.data.limit} из {leadsState.data.total} сделок
+                            </div>
+                        )}
+                        <div className="overflow-y-auto">
+                            {leadsState.data.leads.length === 0 ? (
+                                <div className="px-6 py-8 text-center text-sm text-slate-400">Нет сделок</div>
+                            ) : (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-slate-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата создания</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {leadsState.data.leads.map((lead) => (
+                                            <tr key={lead.id} className="transition-colors hover:bg-violet-50/50">
+                                                <td className="px-6 py-3">
+                                                    <a
+                                                        href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-medium text-violet-700 hover:underline"
+                                                    >
+                                                        {lead.name}
+                                                    </a>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">{lead.created_at ?? '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="border-t border-slate-100 px-6 py-3 text-right text-xs text-slate-400">
+                            Итого: {leadsState.data.total} сделок
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+function CountButton({ value, onClick }: { value: number; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
+        >
+            {value}
+        </button>
+    );
+}
+
+function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }: {
+    state: LoadState<ProjectCityVacancyBreakdown>;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+}) {
+    const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
+
     if (state.status === 'loading') return <SectionSkeleton rows={5} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
-    const totalCols = 3 + data.source_columns.length;
+
+    const openLeads = (filter: LeadsFilter) => setLeadsFilter(filter);
+    const closeLeads = () => setLeadsFilter(null);
 
     return (
-        <ReportSection
-            eyebrow="Весь отдел рекрутинга"
-            title="Разрез по проекту, городу и вакансии"
-            description={`Сделки с заполненным полем "${data.city_field_name}", сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Сделки без города не включаются.`}
-            aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="с заполненным городом" tone="warning" />}
-        >
-            {data.projects.length === 0 ? (
-                <div className="px-5 py-8">
-                    <EmptyState>
-                        {!data.city_field_found
-                            ? `Поле "${data.city_field_name}" не найдено. Запустите синхронизацию структуры CRM.`
-                            : 'Нет сделок с заполненным городом за выбранный период.'}
-                    </EmptyState>
-                </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
-                            <tr>
-                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
-                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
-                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
-                                {data.source_columns.map((src) => (
-                                    <th key={src} className="w-24 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{src}</th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.projects.map((project) => (
-                                <>
-                                    <tr key={`project-${project.name}`} className="bg-slate-800">
-                                        <td
-                                            className="px-5 py-2.5 font-bold text-white"
-                                            colSpan={totalCols - 1}
-                                        >
-                                            {project.name}
-                                        </td>
-                                        <td className="px-4 py-2.5 text-right font-mono font-bold tabular-nums text-slate-200">
-                                            {project.total_leads_count}
-                                        </td>
-                                    </tr>
-                                    {project.cities.map((city) =>
-                                        (city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }]).map((vacancy, vi) => (
-                                            <tr
-                                                key={`${project.name}-${city.name}-${vacancy.name}`}
-                                                className="border-t border-slate-100 transition-colors hover:bg-violet-50/40"
-                                            >
-                                                <td className="px-5 py-2.5 text-gray-800">
-                                                    {vi === 0 ? city.name : ''}
+        <>
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Разрез по проекту, городу и вакансии"
+                description={`Сделки с заполненным полем "${data.city_field_name}", сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Сделки без города не включаются. Нажмите на число — откроется список сделок.`}
+                aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="с заполненным городом" tone="warning" />}
+            >
+                {data.projects.length === 0 ? (
+                    <div className="px-5 py-8">
+                        <EmptyState>
+                            {!data.city_field_found
+                                ? `Поле "${data.city_field_name}" не найдено. Запустите синхронизацию структуры CRM.`
+                                : 'Нет сделок с заполненным городом за выбранный период.'}
+                        </EmptyState>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                                <tr>
+                                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
+                                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
+                                    <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
+                                    {data.source_columns.map((src) => (
+                                        <th key={src} className="w-24 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{src}</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.projects.map((project) => {
+                                    const projectSources = aggregateProjectSources(project, data.source_columns);
+                                    return (
+                                        <>
+                                            <tr key={`project-${project.name}`} className="bg-slate-800">
+                                                <td className="px-5 py-2.5 font-bold text-white" colSpan={2}>
+                                                    {project.name}
                                                 </td>
-                                                <td className="px-5 py-2.5 text-gray-500">
-                                                    {vacancy.name !== '—' ? vacancy.name : ''}
-                                                </td>
-                                                <td className="px-4 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-700">
-                                                    {vacancy.leads_count}
+                                                <td className="px-4 py-2.5 text-right">
+                                                    <CountButton
+                                                        value={project.total_leads_count}
+                                                        onClick={() => openLeads({ project: project.name, city: '', vacancy: '', label: project.name })}
+                                                    />
                                                 </td>
                                                 {data.source_columns.map((src) => (
-                                                    <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
-                                                        {(vacancy.sources ?? {})[src] ?? 0}
+                                                    <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-300">
+                                                        {projectSources[src] ?? 0}
                                                     </td>
                                                 ))}
                                             </tr>
-                                        ))
-                                    )}
-                                </>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                                            {project.cities.map((city) =>
+                                                (city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }]).map((vacancy, vi) => (
+                                                    <tr
+                                                        key={`${project.name}-${city.name}-${vacancy.name}`}
+                                                        className="border-t border-slate-100 transition-colors hover:bg-violet-50/40"
+                                                    >
+                                                        <td className="px-5 py-2.5 text-gray-800">
+                                                            {vi === 0 ? city.name : ''}
+                                                        </td>
+                                                        <td className="px-5 py-2.5 text-gray-500">
+                                                            {vacancy.name !== '—' ? vacancy.name : ''}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right">
+                                                            <CountButton
+                                                                value={vacancy.leads_count}
+                                                                onClick={() => openLeads({
+                                                                    project: project.name,
+                                                                    city: city.name,
+                                                                    vacancy: vacancy.name,
+                                                                    label: `${project.name} / ${city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''}`,
+                                                                })}
+                                                            />
+                                                        </td>
+                                                        {data.source_columns.map((src) => (
+                                                            <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
+                                                                {(vacancy.sources ?? {})[src] ?? 0}
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))
+                                            )}
+                                        </>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </ReportSection>
+
+            {leadsFilter !== null && (
+                <LeadsModal
+                    filter={leadsFilter}
+                    leadsUrl={leadsUrl}
+                    periodParams={periodParams}
+                    baseDomain={baseDomain}
+                    onClose={closeLeads}
+                />
             )}
-        </ReportSection>
+        </>
     );
 }
 

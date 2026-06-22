@@ -63,6 +63,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'taskStatistics' => route('api.widgets.amo.task-overdue-dashboard-v2.task-statistics', $publicKey),
                 'userOverdueTasks' => route('api.widgets.amo.task-overdue-dashboard-v2.user-overdue-tasks', $publicKey),
                 'projectCityVacancy' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy', $publicKey),
+                'projectCityVacancyLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy-leads', $publicKey),
             ],
         ]);
     }
@@ -105,6 +106,24 @@ class AmoTaskOverdueDashboardController extends Controller
         return response()->json([
             'data' => $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $installation->config ?? []),
         ]);
+    }
+
+    public function projectCityVacancyLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json(
+            $statisticsService->projectCityVacancyLeads(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                (string) $request->query('project', ''),
+                (string) $request->query('city', ''),
+                (string) $request->query('vacancy', ''),
+            )
+        );
     }
 
     public function userOverdueTasks(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
