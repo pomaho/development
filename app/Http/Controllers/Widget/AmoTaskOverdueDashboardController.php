@@ -41,25 +41,10 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
-    public function showV2(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): Response
+    public function showV2(Request $request, string $publicKey): Response
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to, $periodMeta] = $this->period($request);
-
-        $t0 = microtime(true);
-        $recruiterLeads = $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []);
-        $t1 = microtime(true);
-        $recruiterTeamCityBreakdown = $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []);
-        $t2 = microtime(true);
-        $taskStatistics = $statisticsService->statistics($installation->account, $from, $to);
-        $t3 = microtime(true);
-
-        logger()->info('showV2 timing', [
-            'recruiterLeads_ms'           => round(($t1 - $t0) * 1000),
-            'recruiterTeamCityBreakdown_ms' => round(($t2 - $t1) * 1000),
-            'taskStatistics_ms'           => round(($t3 - $t2) * 1000),
-            'total_ms'                    => round(($t3 - $t0) * 1000),
-        ]);
 
         return Inertia::render('Widgets/Amo/TaskOverdueDashboardV2', [
             'account' => [
@@ -71,14 +56,43 @@ class AmoTaskOverdueDashboardController extends Controller
                 'to' => $to->toDateString(),
                 ...$periodMeta,
             ],
-            'recruiterLeads' => $recruiterLeads,
-            'recruiterTeamCityBreakdown' => $recruiterTeamCityBreakdown,
-            'taskStatistics' => $taskStatistics,
             'links' => [
                 'self' => route('widgets.amo.task-overdue-dashboard-v2.show', $publicKey),
-                'api' => route('api.widgets.amo.task-overdue-dashboard.show', $publicKey),
+                'recruiterLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.recruiter-leads', $publicKey),
+                'recruiterTeamCityBreakdown' => route('api.widgets.amo.task-overdue-dashboard-v2.recruiter-team-city-breakdown', $publicKey),
+                'taskStatistics' => route('api.widgets.amo.task-overdue-dashboard-v2.task-statistics', $publicKey),
                 'userOverdueTasks' => route('api.widgets.amo.task-overdue-dashboard-v2.user-overdue-tasks', $publicKey),
             ],
+        ]);
+    }
+
+    public function recruiterLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
+        ]);
+    }
+
+    public function recruiterTeamCityBreakdown(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
+        ]);
+    }
+
+    public function taskStatistics(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->statistics($installation->account, $from, $to),
         ]);
     }
 
