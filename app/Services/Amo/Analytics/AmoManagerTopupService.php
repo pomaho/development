@@ -15,7 +15,6 @@ class AmoManagerTopupService
     private const DEFAULT_PREPAYMENT_FIELD_ID = 845975;
     private const DEFAULT_MANAGER_FIELD_ID = 845835;
     private const DEFAULT_TOPUP_DATE_FIELD_ID = 845843;
-    private const LEAD_LIMIT = 500;
 
     public function breakdown(
         AmoAccount $account,
@@ -51,7 +50,7 @@ class AmoManagerTopupService
         CrmEntitySnapshot::query()
             ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values', 'raw'])
             ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'lead')
+            ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($excludedStatusIds !== [], fn ($q) => $q->whereNotIn('status_id', $excludedStatusIds))
             ->orderBy('id')
@@ -134,7 +133,7 @@ class AmoManagerTopupService
         CrmEntitySnapshot::query()
             ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values', 'raw'])
             ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'lead')
+            ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($excludedStatusIds !== [], fn ($q) => $q->whereNotIn('status_id', $excludedStatusIds))
             ->orderBy('id')
@@ -229,8 +228,8 @@ class AmoManagerTopupService
             ->when($pipelineId > 0, fn ($q) => $q->where('amo_pipeline_id', $pipelineId))
             ->where(function ($q): void {
                 $q->whereIn('type', [142, 143])
-                    ->orWhereRaw('LOWER(name) LIKE ?', ['%отлож%'])
-                    ->orWhereRaw('LOWER(name) LIKE ?', ['%заморожен%']);
+                    ->orWhere('name', 'like', '%тлож%')
+                    ->orWhere('name', 'like', '%аморожен%');
             })
             ->pluck('amo_status_id')
             ->toArray();
