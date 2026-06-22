@@ -29,6 +29,11 @@ trait HasAccountSettings
         $this->forceFill(['settings' => $settings])->save();
     }
 
+    public function timezone(): string
+    {
+        return data_get($this->settings, 'timezone') ?: 'UTC';
+    }
+
     public function getSetting(string $key, mixed $default = null): mixed
     {
         return data_get($this->settings, $key, $default);

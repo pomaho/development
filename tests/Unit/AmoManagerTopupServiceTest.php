@@ -342,6 +342,54 @@ class AmoManagerTopupServiceTest extends TestCase
         $this->assertSame(3, $result['limit']);
     }
 
+    // ─── Timezone tests ───────────────────────────────────────────────────────
+
+    public function test_breakdown_includes_deal_at_midnight_in_account_timezone(): void
+    {
+        // May 31, 21:00 UTC = June 1, 00:00 Moscow (UTC+3)
+        $ts = Carbon::create(2026, 5, 31, 21, 0, 0, 'UTC')->timestamp;
+        $this->createLeadRaw('1', customFields: [
+            ['field_id' => self::MANAGER_FIELD_ID, 'values' => [['value' => 'Иванов']]],
+            ['field_id' => self::PREPAYMENT_FIELD_ID, 'values' => [['value' => '20000']]],
+            ['field_id' => self::TOPUP_DATE_FIELD_ID, 'values' => [['value' => (string) $ts]]],
+        ], price: 100_000);
+
+        $tz = 'Europe/Moscow';
+        $from = Carbon::create(2026, 6, 1, 0, 0, 0, $tz);
+        $to   = Carbon::create(2026, 6, 30, 23, 59, 59, $tz);
+
+        // UTC parse: May 31, 21:00 UTC → date 2026-05-31 → before June → excluded
+        $resultUtc = $this->service->breakdown($this->account, $from, $to, $this->config, [], 'UTC');
+        $this->assertSame(0, $resultUtc['summary']['dealCount'], 'UTC: 21:00 UTC May 31 is outside June');
+
+        // Moscow parse: May 31, 21:00 UTC → June 1, 00:00 MSK → date 2026-06-01 → included
+        $resultMsk = $this->service->breakdown($this->account, $from, $to, $this->config, [], $tz);
+        $this->assertSame(1, $resultMsk['summary']['dealCount'], 'Moscow: same ts is June 1 → inside June');
+    }
+
+    public function test_breakdown_excludes_deal_that_crosses_month_boundary_in_account_timezone(): void
+    {
+        // June 30, 21:00 UTC = July 1, 00:00 Moscow (UTC+3)
+        $ts = Carbon::create(2026, 6, 30, 21, 0, 0, 'UTC')->timestamp;
+        $this->createLeadRaw('1', customFields: [
+            ['field_id' => self::MANAGER_FIELD_ID, 'values' => [['value' => 'Иванов']]],
+            ['field_id' => self::PREPAYMENT_FIELD_ID, 'values' => [['value' => '20000']]],
+            ['field_id' => self::TOPUP_DATE_FIELD_ID, 'values' => [['value' => (string) $ts]]],
+        ], price: 100_000);
+
+        $tz = 'Europe/Moscow';
+        $from = Carbon::create(2026, 6, 1, 0, 0, 0, $tz);
+        $to   = Carbon::create(2026, 6, 30, 23, 59, 59, $tz);
+
+        // UTC parse: June 30, 21:00 UTC → date 2026-06-30 → inside June → included
+        $resultUtc = $this->service->breakdown($this->account, $from, $to, $this->config, [], 'UTC');
+        $this->assertSame(1, $resultUtc['summary']['dealCount'], 'UTC: 21:00 UTC June 30 is inside June');
+
+        // Moscow parse: June 30, 21:00 UTC → July 1, 00:00 MSK → date 2026-07-01 → outside June → excluded
+        $resultMsk = $this->service->breakdown($this->account, $from, $to, $this->config, [], $tz);
+        $this->assertSame(0, $resultMsk['summary']['dealCount'], 'Moscow: same ts is July 1 → outside June');
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private function createLead(

@@ -18,12 +18,14 @@ class AmoManagerTopupController extends Controller
     public function show(Request $request, string $publicKey): Response
     {
         $installation = $this->installation($publicKey);
-        [$from, $to, $periodMeta] = $this->period($request);
+        $tz = $installation->account->timezone();
+        [$from, $to, $periodMeta] = $this->period($request, $tz);
 
         return Inertia::render('Widgets/Amo/ManagerTopupDashboard', [
             'account' => [
                 'name' => $installation->account->name,
                 'base_domain' => $installation->account->base_domain,
+                'timezone' => $tz,
             ],
             'period' => [
                 'from' => $from->toDateString(),
@@ -41,7 +43,8 @@ class AmoManagerTopupController extends Controller
     public function data(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
     {
         $installation = $this->installation($publicKey);
-        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+        [$from, $to] = $this->period($request, $tz);
 
         $selectedManagers = array_filter(
             explode(',', (string) $request->query('managers', '')),
@@ -55,6 +58,7 @@ class AmoManagerTopupController extends Controller
                 $to,
                 $installation->config ?? [],
                 array_values($selectedManagers),
+                $tz,
             ),
         ]);
     }
@@ -62,7 +66,8 @@ class AmoManagerTopupController extends Controller
     public function leads(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
     {
         $installation = $this->installation($publicKey);
-        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+        [$from, $to] = $this->period($request, $tz);
 
         return response()->json([
             'data' => $service->leads(
@@ -71,6 +76,8 @@ class AmoManagerTopupController extends Controller
                 $to,
                 $installation->config ?? [],
                 (string) $request->query('manager', ''),
+                300,
+                $tz,
             ),
         ]);
     }
@@ -87,34 +94,34 @@ class AmoManagerTopupController extends Controller
             ->firstOrFail();
     }
 
-    private function period(Request $request): array
+    private function period(Request $request, string $timezone): array
     {
-        $from = $this->parseDate($request->query('from'));
-        $to = $this->parseDate($request->query('to'));
+        $from = $this->parseDate($request->query('from'), $timezone);
+        $to = $this->parseDate($request->query('to'), $timezone);
 
         if ($from !== null || $to !== null) {
             return [
-                ($from ?? now()->startOfMonth())->startOfDay(),
-                ($to ?? now())->endOfDay(),
+                ($from ?? now($timezone)->startOfMonth())->startOfDay(),
+                ($to ?? now($timezone))->endOfDay(),
                 ['source' => 'manual', 'preset' => null, 'label' => 'Выбранный период'],
             ];
         }
 
         return [
-            now()->startOfMonth()->startOfDay(),
-            now()->endOfDay(),
+            now($timezone)->startOfMonth()->startOfDay(),
+            now($timezone)->endOfDay(),
             ['source' => 'default', 'preset' => null, 'label' => 'Текущий месяц'],
         ];
     }
 
-    private function parseDate(mixed $value): ?Carbon
+    private function parseDate(mixed $value, string $timezone): ?Carbon
     {
         if ($value === null || $value === '' || $value === 'null' || $value === 'false') {
             return null;
         }
 
         return is_numeric($value)
-            ? Carbon::createFromTimestamp((int) $value)
-            : Carbon::parse((string) $value);
+            ? Carbon::createFromTimestamp((int) $value, $timezone)
+            : Carbon::parse((string) $value, $timezone);
     }
 }

@@ -21,12 +21,13 @@ class AmoManagerTopupService
         ?Carbon $from,
         ?Carbon $to,
         array $config,
-        array $selectedManagers = []
+        array $selectedManagers = [],
+        string $timezone = 'UTC'
     ): array {
         return Cache::remember(
-            $this->cacheKey($account, $from, $to, $config, $selectedManagers),
+            $this->cacheKey($account, $from, $to, $config, $selectedManagers, $timezone),
             now()->addMinutes(10),
-            fn (): array => $this->buildBreakdown($account, $from, $to, $config, $selectedManagers),
+            fn (): array => $this->buildBreakdown($account, $from, $to, $config, $selectedManagers, $timezone),
         );
     }
 
@@ -36,13 +37,17 @@ class AmoManagerTopupService
         ?Carbon $to,
         array $config,
         string $managerFilter = '',
-        int $limit = 300
+        int $limit = 300,
+        string $timezone = 'UTC'
     ): array {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $prepaymentFieldId = (int) data_get($config, 'prepayment_field_id', self::DEFAULT_PREPAYMENT_FIELD_ID);
         $managerFieldId = (int) data_get($config, 'manager_field_id', self::DEFAULT_MANAGER_FIELD_ID);
         $topupDateFieldId = (int) data_get($config, 'topup_date_field_id', self::DEFAULT_TOPUP_DATE_FIELD_ID);
         $excludedStatusIds = $this->excludedStatusIds($account, $pipelineId);
+
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
 
         $leads = [];
         $total = 0;
@@ -54,13 +59,13 @@ class AmoManagerTopupService
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($excludedStatusIds !== [], fn ($q) => $q->whereNotIn('status_id', $excludedStatusIds))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $from, $to, $prepaymentFieldId, $managerFieldId, $topupDateFieldId, $managerFilter): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $fromDate, $toDate, $timezone, $prepaymentFieldId, $managerFieldId, $topupDateFieldId, $managerFilter): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
                     $raw = $lead->raw ?? [];
 
-                    $topupDate = $this->dateFieldValue($customFields, $topupDateFieldId);
-                    if (!$this->dateInRange($topupDate, $from, $to)) {
+                    $topupDate = $this->dateFieldValue($customFields, $topupDateFieldId, $timezone);
+                    if (!$this->dateInRange($topupDate, $fromDate, $toDate)) {
                         continue;
                     }
 
@@ -118,13 +123,17 @@ class AmoManagerTopupService
         ?Carbon $from,
         ?Carbon $to,
         array $config,
-        array $selectedManagers
+        array $selectedManagers,
+        string $timezone
     ): array {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $prepaymentFieldId = (int) data_get($config, 'prepayment_field_id', self::DEFAULT_PREPAYMENT_FIELD_ID);
         $managerFieldId = (int) data_get($config, 'manager_field_id', self::DEFAULT_MANAGER_FIELD_ID);
         $topupDateFieldId = (int) data_get($config, 'topup_date_field_id', self::DEFAULT_TOPUP_DATE_FIELD_ID);
         $excludedStatusIds = $this->excludedStatusIds($account, $pipelineId);
+
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
 
         $managers = [];
         $allManagerNames = [];
@@ -137,13 +146,13 @@ class AmoManagerTopupService
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($excludedStatusIds !== [], fn ($q) => $q->whereNotIn('status_id', $excludedStatusIds))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$managers, &$allManagerNames, &$monthlyTotals, $from, $to, $prepaymentFieldId, $managerFieldId, $topupDateFieldId, $selectedManagers): void {
+            ->chunkById(500, function ($chunk) use (&$managers, &$allManagerNames, &$monthlyTotals, $fromDate, $toDate, $timezone, $prepaymentFieldId, $managerFieldId, $topupDateFieldId, $selectedManagers): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
                     $raw = $lead->raw ?? [];
 
-                    $topupDate = $this->dateFieldValue($customFields, $topupDateFieldId);
-                    if (!$this->dateInRange($topupDate, $from, $to)) {
+                    $topupDate = $this->dateFieldValue($customFields, $topupDateFieldId, $timezone);
+                    if (!$this->dateInRange($topupDate, $fromDate, $toDate)) {
                         continue;
                     }
 
@@ -261,7 +270,9 @@ class AmoManagerTopupService
         return null;
     }
 
-    private function dateFieldValue(array $customFields, int $fieldId): ?Carbon
+    // Parses a date custom field value and returns a Carbon in the given timezone.
+    // amoCRM stores date fields as Unix timestamps representing midnight in the account timezone.
+    private function dateFieldValue(array $customFields, int $fieldId, string $timezone): ?Carbon
     {
         foreach ($customFields as $field) {
             $fId = (int) ($field['field_id'] ?? $field['id'] ?? 0);
@@ -272,40 +283,45 @@ class AmoManagerTopupService
                 }
 
                 return is_numeric($value)
-                    ? Carbon::createFromTimestamp((int) $value)
-                    : Carbon::parse((string) $value);
+                    ? Carbon::createFromTimestamp((int) $value, $timezone)
+                    : Carbon::parse((string) $value, $timezone);
             }
         }
 
         return null;
     }
 
-    private function dateInRange(?Carbon $date, ?Carbon $from, ?Carbon $to): bool
+    // Compares dates as Y-m-d strings to avoid time-of-day edge cases across timezones.
+    // $fromDate and $toDate are already in account timezone (from the controller's period()).
+    private function dateInRange(?Carbon $date, ?string $fromDate, ?string $toDate): bool
     {
         if ($date === null) {
             return false;
         }
 
-        if ($from !== null && $date->lt($from->startOfDay())) {
+        $d = $date->toDateString();
+
+        if ($fromDate !== null && $d < $fromDate) {
             return false;
         }
 
-        if ($to !== null && $date->gt($to->endOfDay())) {
+        if ($toDate !== null && $d > $toDate) {
             return false;
         }
 
         return true;
     }
 
-    private function cacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, array $selectedManagers): string
+    private function cacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, array $selectedManagers, string $timezone): string
     {
         return implode(':', [
             'amo_manager_topup_breakdown',
             $account->id,
-            $from?->timestamp ?? 'null',
-            $to?->timestamp ?? 'null',
+            $from?->toDateString() ?? 'null',
+            $to?->toDateString() ?? 'null',
             data_get($config, 'pipeline_id') ?: 'all',
             implode(',', $selectedManagers),
+            $timezone,
         ]);
     }
 }
