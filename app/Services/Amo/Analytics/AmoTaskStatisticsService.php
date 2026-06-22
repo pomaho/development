@@ -783,7 +783,7 @@ class AmoTaskStatisticsService
 
                     $projectKeys = $projectValues ?: ['Без проекта'];
                     $vacancyKeys = $vacancyValues ?: ['—'];
-                    $sourceKeys = $sourceValues ?: ['—'];
+                    $sourceKeys = $sourceValues; // пустой массив = нет источника, в колонки не попадает
 
                     foreach ($sourceKeys as $sourceName) {
                         $allSourceNames[$sourceName] = true;
