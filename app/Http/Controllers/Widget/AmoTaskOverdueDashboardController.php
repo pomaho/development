@@ -113,8 +113,8 @@ class AmoTaskOverdueDashboardController extends Controller
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
 
-        return response()->json(
-            $statisticsService->projectCityVacancyLeads(
+        return response()->json([
+            'data' => $statisticsService->projectCityVacancyLeads(
                 $installation->account,
                 $from,
                 $to,
@@ -122,8 +122,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 (string) $request->query('project', ''),
                 (string) $request->query('city', ''),
                 (string) $request->query('vacancy', ''),
-            )
-        );
+            ),
+        ]);
     }
 
     public function userOverdueTasks(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
