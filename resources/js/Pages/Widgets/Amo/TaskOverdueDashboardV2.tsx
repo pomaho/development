@@ -327,7 +327,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 {debugIframe ? <DebugPanel iframeMessages={iframeMessages} /> : null}
 
-                <RecruiterLeadsSection state={recruiterLeadsState} />
+                <RecruiterLeadsSection state={recruiterLeadsState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
                 <RecruiterBreakdownSections
                     state={breakdownState}
@@ -345,19 +345,21 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
                     baseDomain={account.base_domain}
                 />
 
-                <RecruiterDetailSection state={breakdownState} />
+                <RecruiterDetailSection state={breakdownState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
             </div>
         </div>
     );
 }
 
-function RecruiterLeadsSection({ state }: { state: LoadState<RecruiterLeads> }) {
+function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { state: LoadState<RecruiterLeads>; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
+    const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const recruiterLeads = state.data;
 
     return (
+        <>
         <ReportSection
             eyebrow="Отчет по сделкам"
             title={`Поле "${recruiterLeads.field_name}"`}
@@ -383,12 +385,14 @@ function RecruiterLeadsSection({ state }: { state: LoadState<RecruiterLeads> }) 
                             return (
                                 <tr className="transition-colors hover:bg-violet-50/50" key={recruiter.enum_id}>
                                     <td className="px-5 py-3.5 font-semibold text-gray-900">{recruiter.name}</td>
-                                    <td className="px-4 py-3.5 font-mono font-semibold tabular-nums text-gray-900">{recruiter.leads_count}</td>
                                     <td className="px-4 py-3.5">
-                                        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                                        <CountButton value={recruiter.leads_count} onClick={() => setLeadsFilter({ project: '', city: '', vacancy: '', source: '', recruiter_enum_id: recruiter.enum_id, manager_required: false, label: `${recruiter.name} — все сделки` })} />
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                        <button type="button" className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 transition-colors" onClick={() => setLeadsFilter({ project: '', city: '', vacancy: '', source: '', recruiter_enum_id: recruiter.enum_id, manager_required: true, label: `${recruiter.name} — передано менеджеру` })}>
                                             <ArrowRightLeft className="size-3" />
                                             {recruiter.transferred_to_manager_count} · {transferRate}%
-                                        </div>
+                                        </button>
                                     </td>
                                     <td className="px-4 py-3.5">
                                         <Progress value={rate} tone="brand" />
@@ -410,6 +414,10 @@ function RecruiterLeadsSection({ state }: { state: LoadState<RecruiterLeads> }) 
                 </table>
             </div>
         </ReportSection>
+        {leadsFilter !== null && (
+            <LeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
+        )}
+        </>
     );
 }
 
@@ -432,14 +440,7 @@ function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain 
     if (state.status === 'error') return <SectionError message={state.message} />;
     const breakdown = state.data;
 
-    const openTeamLeads = (teamName: string) => setLeadsFilter({
-        project: '',
-        city: '',
-        vacancy: '',
-        source: '',
-        team: teamName,
-        label: teamName === '—' ? 'Без команды' : teamName,
-    });
+    const openLeads = (filter: Omit<LeadsFilter, 'label'> & { label: string }) => setLeadsFilter(filter);
 
     return (
         <>
@@ -449,7 +450,7 @@ function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain 
                 description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.team_field_name}".`}
                 aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
             >
-                <BreakdownReportContent rows={departmentTeamRows(breakdown)} onRowClick={openTeamLeads} />
+                <BreakdownReportContent rows={departmentTeamRows(breakdown)} onRowClick={(name) => openLeads({ project: '', city: '', vacancy: '', source: '', team: name, label: name === '—' ? 'Без команды' : name })} />
             </ReportSection>
 
             <ReportSection
@@ -458,7 +459,7 @@ function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain 
                 description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.city_field_name}".`}
                 aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
             >
-                <BreakdownReportContent compactLegend rows={departmentCityRows(breakdown)} />
+                <BreakdownReportContent compactLegend rows={departmentCityRows(breakdown)} onRowClick={(name) => openLeads({ project: '', city: name, vacancy: '', source: '', label: name })} />
             </ReportSection>
 
             <ReportSection
@@ -467,7 +468,7 @@ function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain 
                 description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.source_field_name}".`}
                 aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
             >
-                <BreakdownReportContent compactLegend rows={departmentSourceChartRows(breakdown)} />
+                <BreakdownReportContent compactLegend rows={departmentSourceChartRows(breakdown)} onRowClick={(name) => openLeads({ project: '', city: '', vacancy: '', source: name, label: name })} />
             </ReportSection>
 
             {leadsFilter !== null && (
@@ -483,7 +484,7 @@ function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain 
     );
 }
 
-function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityBreakdown> }) {
+function RecruiterDetailSection({ state, leadsUrl, periodParams, baseDomain }: { state: LoadState<RecruiterTeamCityBreakdown>; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
     if (state.status === 'loading') return <SectionSkeleton rows={5} />;
     if (state.status === 'error') return null;
     const breakdown = state.data;
@@ -497,7 +498,7 @@ function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityB
         >
             <div className="grid gap-4 p-5">
                 {breakdown.recruiters.length > 0 ? breakdown.recruiters.map((recruiter) => (
-                    <RecruiterCard key={recruiter.enum_id} recruiter={recruiter} breakdown={breakdown} />
+                    <RecruiterCard key={recruiter.enum_id} recruiter={recruiter} breakdown={breakdown} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} />
                 )) : (
                     <EmptyState>
                         Нет данных для отчета. Проверьте, что выбраны поля «Команда» и «Город», а в сделках заполнены рекрутер и менеджер.
@@ -527,6 +528,8 @@ type LeadsFilter = {
     vacancy: string;
     source: string;
     team?: string;
+    recruiter_enum_id?: number;
+    manager_required?: boolean;
     label: string;
 };
 
@@ -555,7 +558,7 @@ function LeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source, team: filter.team ?? '' };
+    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source, team: filter.team ?? '', recruiter_enum_id: filter.recruiter_enum_id ?? 0, manager_required: filter.manager_required === false ? '0' : '1' };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {
@@ -992,10 +995,16 @@ function TaskStatisticsSection({ state, period, userOverdueTasksUrl }: { state: 
     );
 }
 
-function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityBreakdown['recruiters'][number]; breakdown: RecruiterTeamCityBreakdown }) {
+function RecruiterCard({ recruiter, breakdown, leadsUrl, periodParams, baseDomain }: { recruiter: RecruiterTeamCityBreakdown['recruiters'][number]; breakdown: RecruiterTeamCityBreakdown; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
     const [isOpen, setIsOpen] = useState(false);
+    const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
+    const rid = recruiter.enum_id;
+
+    const openLeads = (extra: Partial<LeadsFilter> & { label: string }) =>
+        setLeadsFilter({ project: '', city: '', vacancy: '', source: '', recruiter_enum_id: rid, ...extra });
 
     return (
+        <>
         <article className="overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm">
             <button
                 type="button"
@@ -1004,17 +1013,17 @@ function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityB
             >
                 <h3 className="font-bold text-gray-900">{recruiter.name}</h3>
                 <div className="flex items-center gap-3">
-                    <span className="rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 px-3 py-1 text-xs font-bold tabular-nums text-white shadow-sm">
+                    <button type="button" className="rounded-full bg-gradient-to-r from-violet-500 to-indigo-600 px-3 py-1 text-xs font-bold tabular-nums text-white shadow-sm hover:opacity-80 transition-opacity" onClick={(e) => { e.stopPropagation(); openLeads({ label: recruiter.name }); }}>
                         {recruiter.total_leads_count}
-                    </span>
+                    </button>
                     <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
             </button>
             <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                 <div className="overflow-hidden">
                     <div className="grid gap-4 border-t border-b border-slate-100 p-4 xl:grid-cols-2">
-                        <BreakdownCard title="Передано менеджерам по командам" description={`Поле "${breakdown.team_field_name}"`} rows={recruiterTeamRows(recruiter)} />
-                        <BreakdownCard compactLegend title="Всего по городам" description={`Поле "${breakdown.city_field_name}"`} rows={recruiterCityRows(recruiter)} />
+                        <BreakdownCard title="Передано менеджерам по командам" description={`Поле "${breakdown.team_field_name}"`} rows={recruiterTeamRows(recruiter)} onRowClick={(name) => openLeads({ team: name, label: `${recruiter.name} / ${name}` })} />
+                        <BreakdownCard compactLegend title="Всего по городам" description={`Поле "${breakdown.city_field_name}"`} rows={recruiterCityRows(recruiter)} onRowClick={(name) => openLeads({ city: name, label: `${recruiter.name} / ${name}` })} />
                     </div>
                     <div className="overflow-x-auto">
                         <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -1037,19 +1046,20 @@ function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityB
                                         {index === 0 ? (
                                             <td className="px-5 py-3.5 align-top font-bold text-gray-900" rowSpan={team.cities.length}>
                                                 {team.name}
-                                                <div className="mt-0.5 text-xs font-normal tabular-nums text-slate-400">{team.total_leads_count}</div>
+                                                <div className="mt-0.5">
+                                                    <CountButton value={team.total_leads_count} onClick={() => openLeads({ team: team.name, label: `${recruiter.name} / ${team.name}` })} />
+                                                </div>
                                             </td>
                                         ) : null}
                                         <td className="px-4 py-3.5 font-medium text-gray-700">{city.name}</td>
-                                        <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{city.leads_count}</td>
-                                        {breakdown.source_columns.map((source) => {
-                                            const count = city.sources[source] || 0;
-                                            return (
-                                                <td className={count > 0 ? 'px-4 py-3.5 text-right font-semibold tabular-nums text-violet-600' : 'px-4 py-3.5 text-right tabular-nums text-slate-300'} key={source}>
-                                                    {count}
-                                                </td>
-                                            );
-                                        })}
+                                        <td className="px-4 py-3.5 text-right">
+                                            <CountButton value={city.leads_count} onClick={() => openLeads({ team: team.name, city: city.name, label: `${recruiter.name} / ${team.name} / ${city.name}` })} />
+                                        </td>
+                                        {breakdown.source_columns.map((source) => (
+                                            <td className="px-4 py-3.5 text-right" key={source}>
+                                                <CountButton value={city.sources[source] || 0} onClick={() => openLeads({ team: team.name, city: city.name, source, label: `${recruiter.name} / ${team.name} / ${city.name} / ${source}` })} />
+                                            </td>
+                                        ))}
                                     </tr>
                                 )))}
                             </tbody>
@@ -1058,6 +1068,10 @@ function RecruiterCard({ recruiter, breakdown }: { recruiter: RecruiterTeamCityB
                 </div>
             </div>
         </article>
+        {leadsFilter !== null && (
+            <LeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
+        )}
+        </>
     );
 }
 
@@ -1106,7 +1120,7 @@ function BreakdownReportContent({ rows, compactLegend = false, onRowClick }: { r
     );
 }
 
-function BreakdownCard({ title, description, rows, compactLegend = false }: { title: string; description: string; rows: BreakdownRow[]; compactLegend?: boolean }) {
+function BreakdownCard({ title, description, rows, compactLegend = false, onRowClick }: { title: string; description: string; rows: BreakdownRow[]; compactLegend?: boolean; onRowClick?: (name: string) => void }) {
     const total = rows.reduce((sum, r) => sum + r.count, 0);
     return (
         <div className="rounded-2xl bg-white p-4 ring-1 ring-slate-200/80 shadow-sm">
@@ -1121,7 +1135,7 @@ function BreakdownCard({ title, description, rows, compactLegend = false }: { ti
             </div>
             {rows.length > 0 ? (
                 <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px] xl:items-start">
-                    <BreakdownTable rows={rows} />
+                    <BreakdownTable rows={rows} onRowClick={onRowClick} />
                     <PieChart compactLegend={compactLegend} rows={rows} total={total} />
                 </div>
             ) : (
