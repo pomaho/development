@@ -482,61 +482,20 @@ function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityB
     );
 }
 
-type ProjectTableRow = {
-    projectName: string;
-    projectTotal: number;
-    projectRowSpan: number;
-    cityName: string;
-    cityCount: number;
-    cityRowSpan: number;
-    vacancyName: string;
-    vacancyCount: number;
-    vacancySources: Record<string, number>;
-};
-
-function flattenProjectRows(projects: ProjectCityVacancyProject[]): ProjectTableRow[] {
-    const rows: ProjectTableRow[] = [];
-    for (const project of projects) {
-        const cities = project.cities.length > 0 ? project.cities : [{ name: '—', leads_count: 0, vacancies: [] }];
-        const projectRowSpan = cities.reduce((sum, city) => sum + Math.max(city.vacancies.length, 1), 0);
-        let firstInProject = true;
-        for (const city of cities) {
-            const vacancies = city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }];
-            let firstInCity = true;
-            for (const vacancy of vacancies) {
-                rows.push({
-                    projectName: project.name,
-                    projectTotal: project.total_leads_count,
-                    projectRowSpan: firstInProject ? projectRowSpan : 0,
-                    cityName: city.name,
-                    cityCount: city.leads_count,
-                    cityRowSpan: firstInCity ? vacancies.length : 0,
-                    vacancyName: vacancy.name,
-                    vacancyCount: vacancy.leads_count,
-                    vacancySources: vacancy.sources ?? {},
-                });
-                firstInProject = false;
-                firstInCity = false;
-            }
-        }
-    }
-    return rows;
-}
-
 function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVacancyBreakdown> }) {
     if (state.status === 'loading') return <SectionSkeleton rows={5} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
-    const rows = flattenProjectRows(data.projects);
+    const totalCols = 3 + data.source_columns.length;
 
     return (
         <ReportSection
             eyebrow="Весь отдел рекрутинга"
-            title={`Разрез по проекту, городу и вакансии`}
+            title="Разрез по проекту, городу и вакансии"
             description={`Сделки с заполненным полем "${data.city_field_name}", сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Сделки без города не включаются.`}
             aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="с заполненным городом" tone="warning" />}
         >
-            {rows.length === 0 ? (
+            {data.projects.length === 0 ? (
                 <div className="px-5 py-8">
                     <EmptyState>
                         {!data.city_field_found
@@ -549,10 +508,7 @@ function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVaca
                     <table className="w-full text-left text-sm">
                         <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
                             <tr>
-                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.project_field_name}</th>
-                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
                                 <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
-                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
                                 <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
                                 <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
                                 {data.source_columns.map((src) => (
@@ -560,49 +516,44 @@ function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVaca
                                 ))}
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {rows.map((row, i) => (
-                                <tr className="transition-colors hover:bg-violet-50/30" key={i}>
-                                    {row.projectRowSpan > 0 && (
+                        <tbody>
+                            {data.projects.map((project) => (
+                                <>
+                                    <tr key={`project-${project.name}`} className="bg-slate-800">
                                         <td
-                                            className="border-r border-slate-100 px-5 py-3 align-top font-semibold text-gray-900"
-                                            rowSpan={row.projectRowSpan}
+                                            className="px-5 py-2.5 font-bold text-white"
+                                            colSpan={totalCols - 1}
                                         >
-                                            {row.projectName}
+                                            {project.name}
                                         </td>
+                                        <td className="px-4 py-2.5 text-right font-mono font-bold tabular-nums text-slate-200">
+                                            {project.total_leads_count}
+                                        </td>
+                                    </tr>
+                                    {project.cities.map((city) =>
+                                        (city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }]).map((vacancy, vi) => (
+                                            <tr
+                                                key={`${project.name}-${city.name}-${vacancy.name}`}
+                                                className="border-t border-slate-100 transition-colors hover:bg-violet-50/40"
+                                            >
+                                                <td className="px-5 py-2.5 text-gray-800">
+                                                    {vi === 0 ? city.name : ''}
+                                                </td>
+                                                <td className="px-5 py-2.5 text-gray-500">
+                                                    {vacancy.name !== '—' ? vacancy.name : ''}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-right font-mono font-semibold tabular-nums text-slate-700">
+                                                    {vacancy.leads_count}
+                                                </td>
+                                                {data.source_columns.map((src) => (
+                                                    <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
+                                                        {(vacancy.sources ?? {})[src] ?? 0}
+                                                    </td>
+                                                ))}
+                                            </tr>
+                                        ))
                                     )}
-                                    {row.projectRowSpan > 0 && (
-                                        <td
-                                            className="border-r border-slate-100 px-4 py-3 text-right align-top font-mono font-bold tabular-nums text-indigo-700"
-                                            rowSpan={row.projectRowSpan}
-                                        >
-                                            {row.projectTotal}
-                                        </td>
-                                    )}
-                                    {row.cityRowSpan > 0 && (
-                                        <td
-                                            className="border-r border-slate-100 px-5 py-3 align-top text-gray-700"
-                                            rowSpan={row.cityRowSpan}
-                                        >
-                                            {row.cityName}
-                                        </td>
-                                    )}
-                                    {row.cityRowSpan > 0 && (
-                                        <td
-                                            className="border-r border-slate-100 px-4 py-3 text-right align-top font-mono font-semibold tabular-nums text-slate-700"
-                                            rowSpan={row.cityRowSpan}
-                                        >
-                                            {row.cityCount}
-                                        </td>
-                                    )}
-                                    <td className="border-r border-slate-100 px-5 py-3 text-gray-600">{row.vacancyName}</td>
-                                    <td className="border-r border-slate-100 px-4 py-3 text-right font-mono font-semibold tabular-nums text-slate-700">{row.vacancyCount}</td>
-                                    {data.source_columns.map((src) => (
-                                        <td key={src} className="px-4 py-3 text-right font-mono tabular-nums text-slate-500">
-                                            {row.vacancySources[src] ?? 0}
-                                        </td>
-                                    ))}
-                                </tr>
+                                </>
                             ))}
                         </tbody>
                     </table>
