@@ -169,6 +169,7 @@ class AmoAccountController extends Controller
                 'base_domain' => $amoAccount->base_domain,
                 'is_active' => $amoAccount->is_active,
                 'notes' => $amoAccount->notes,
+                'timezone' => $amoAccount->timezone(),
             ],
             'credential' => [
                 'auth_type' => $amoAccount->credentials?->auth_type,
@@ -209,6 +210,10 @@ class AmoAccountController extends Controller
             'is_active' => $request->boolean('is_active'),
             'notes' => $request->input('notes'),
         ]);
+
+        if ($tz = $request->string('timezone')->toString()) {
+            $amoAccount->setSetting('timezone', $tz ?: null);
+        }
 
         $this->saveCredentials($amoAccount, $request, true);
 

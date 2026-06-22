@@ -1,12 +1,34 @@
 import { usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '../../Layouts/AuthenticatedLayout';
 
+const TIMEZONES = [
+    { value: 'UTC', label: 'UTC (±00:00)' },
+    { value: 'Europe/Kaliningrad', label: 'Europe/Kaliningrad (UTC+02:00) — Калининград' },
+    { value: 'Europe/Moscow', label: 'Europe/Moscow (UTC+03:00) — Москва, Санкт-Петербург' },
+    { value: 'Europe/Samara', label: 'Europe/Samara (UTC+04:00) — Самара, Ижевск' },
+    { value: 'Asia/Yekaterinburg', label: 'Asia/Yekaterinburg (UTC+05:00) — Екатеринбург' },
+    { value: 'Asia/Omsk', label: 'Asia/Omsk (UTC+06:00) — Омск' },
+    { value: 'Asia/Krasnoyarsk', label: 'Asia/Krasnoyarsk (UTC+07:00) — Красноярск, Барнаул' },
+    { value: 'Asia/Irkutsk', label: 'Asia/Irkutsk (UTC+08:00) — Иркутск' },
+    { value: 'Asia/Yakutsk', label: 'Asia/Yakutsk (UTC+09:00) — Якутск' },
+    { value: 'Asia/Vladivostok', label: 'Asia/Vladivostok (UTC+10:00) — Владивосток' },
+    { value: 'Asia/Magadan', label: 'Asia/Magadan (UTC+11:00) — Магадан' },
+    { value: 'Asia/Kamchatka', label: 'Asia/Kamchatka (UTC+12:00) — Камчатка' },
+    { value: 'Europe/Minsk', label: 'Europe/Minsk (UTC+03:00) — Минск' },
+    { value: 'Asia/Almaty', label: 'Asia/Almaty (UTC+05:00) — Алматы' },
+    { value: 'Asia/Tashkent', label: 'Asia/Tashkent (UTC+05:00) — Ташкент' },
+    { value: 'Asia/Baku', label: 'Asia/Baku (UTC+04:00) — Баку' },
+    { value: 'Asia/Tbilisi', label: 'Asia/Tbilisi (UTC+04:00) — Тбилиси' },
+    { value: 'Asia/Yerevan', label: 'Asia/Yerevan (UTC+04:00) — Ереван' },
+];
+
 type Account = {
     id: number;
     name: string;
     base_domain: string;
     is_active: boolean;
     notes: string | null;
+    timezone: string;
 };
 
 type Credential = {
@@ -103,6 +125,17 @@ export default function AmoAccountEdit({ account, credential, links }: Props) {
                     <label className="flex items-end gap-2 text-theme-sm font-medium text-gray-700">
                         <input className="rounded border-gray-300 text-brand-500 focus:ring-brand-500/20" defaultChecked={account.is_active} name="is_active" type="checkbox" value="1" />
                         <span>Активен</span>
+                    </label>
+
+                    <label className={labelClass}>
+                        <span>Часовой пояс аккаунта</span>
+                        <select className={inputClass} defaultValue={account.timezone} name="timezone">
+                            {TIMEZONES.map((tz) => (
+                                <option key={tz.value} value={tz.value}>{tz.label}</option>
+                            ))}
+                        </select>
+                        <FieldError name="timezone" />
+                        <span className="mt-1 block text-xs text-gray-400">amoCRM API не отдаёт timezone — задайте вручную для корректного отображения дат</span>
                     </label>
 
                     <label className={`${labelClass} md:col-span-2`}>

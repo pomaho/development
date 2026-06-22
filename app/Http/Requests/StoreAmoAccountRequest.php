@@ -29,6 +29,7 @@ class StoreAmoAccountRequest extends FormRequest
             'token_expires_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
             'is_active' => ['nullable', 'boolean'],
+            'timezone' => ['nullable', 'timezone:all'],
         ];
     }
 
