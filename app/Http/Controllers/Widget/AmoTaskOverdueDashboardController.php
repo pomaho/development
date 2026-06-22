@@ -127,6 +127,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 (string) $request->query('team', ''),
                 (int) $request->query('recruiter_enum_id', 0),
                 $request->query('manager_required', '1') !== '0',
+                (int) $request->query('status_id', 0),
             ),
         ]);
     }

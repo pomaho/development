@@ -225,6 +225,7 @@ class AmoTaskStatisticsService
         string $teamFilter = '',
         int $recruiterEnumId = 0,
         bool $managerRequired = true,
+        int $statusId = 0,
         int $limit = 200
     ): array {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
@@ -256,6 +257,7 @@ class AmoTaskStatisticsService
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+            ->when($statusId > 0, fn ($q) => $q->where('status_id', $statusId))
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')

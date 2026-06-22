@@ -348,7 +348,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 <RecruiterLeadsSection state={recruiterLeadsState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
-                <RecruiterScheduleSection state={scheduleState} />
+                <RecruiterScheduleSection state={scheduleState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
                 <RecruiterBreakdownSections
                     state={breakdownState}
@@ -373,7 +373,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
     );
 }
 
-function RecruiterScheduleSection({ state }: { state: LoadState<RecruiterScheduleBreakdown> }) {
+function RecruiterScheduleSection({ state, leadsUrl, periodParams, baseDomain }: { state: LoadState<RecruiterScheduleBreakdown>; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
+    const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
@@ -383,19 +384,23 @@ function RecruiterScheduleSection({ state }: { state: LoadState<RecruiterSchedul
     }
 
     const maxCount = Math.max(...data.recruiters.map((r) => r.schedule_count), 1);
+    const sid = data.success_status_id;
 
     return (
+        <>
         <ReportSection
             eyebrow="Результаты рекрутинга"
             title={`Встал в график — этап "${data.success_status_name}"`}
             description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", достигшие этапа "${data.success_status_name}". Воронка: ${data.pipeline_name || 'все воронки'}.`}
             aside={
-                <AccentSummary
-                    label="Встали в график"
-                    value={data.total_count}
-                    note="всего за период"
-                    tone="success"
-                />
+                <button type="button" onClick={() => setLeadsFilter({ project: '', city: '', vacancy: '', source: '', status_id: sid, label: `Встал в график — все рекрутеры` })}>
+                    <AccentSummary
+                        label="Встали в график"
+                        value={data.total_count}
+                        note="нажмите чтобы открыть список"
+                        tone="success"
+                    />
+                </button>
             }
         >
             {data.recruiters.length > 0 ? (
@@ -410,9 +415,13 @@ function RecruiterScheduleSection({ state }: { state: LoadState<RecruiterSchedul
                                 <div className="min-w-0 flex-1">
                                     <div className="mb-1.5 flex items-center justify-between gap-3">
                                         <span className="truncate font-semibold text-gray-900">{recruiter.name}</span>
-                                        <span className="shrink-0 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-bold tabular-nums text-white">
+                                        <button
+                                            type="button"
+                                            className="shrink-0 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-bold tabular-nums text-white hover:bg-emerald-600 transition-colors"
+                                            onClick={() => setLeadsFilter({ project: '', city: '', vacancy: '', source: '', recruiter_enum_id: recruiter.enum_id, status_id: sid, label: `${recruiter.name} — Встал в график` })}
+                                        >
                                             {recruiter.schedule_count}
-                                        </span>
+                                        </button>
                                     </div>
                                     <div className="h-2 overflow-hidden rounded-full bg-emerald-50">
                                         <div
@@ -432,6 +441,10 @@ function RecruiterScheduleSection({ state }: { state: LoadState<RecruiterSchedul
                 </div>
             )}
         </ReportSection>
+        {leadsFilter !== null && (
+            <LeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
+        )}
+        </>
     );
 }
 
@@ -613,6 +626,7 @@ type LeadsFilter = {
     team?: string;
     recruiter_enum_id?: number;
     manager_required?: boolean;
+    status_id?: number;
     label: string;
 };
 
@@ -641,7 +655,7 @@ function LeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source, team: filter.team ?? '', recruiter_enum_id: filter.recruiter_enum_id ?? 0, manager_required: filter.manager_required === false ? '0' : '1' };
+    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source, team: filter.team ?? '', recruiter_enum_id: filter.recruiter_enum_id ?? 0, manager_required: filter.manager_required === false ? '0' : '1', status_id: filter.status_id ?? 0 };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {
