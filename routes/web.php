@@ -59,6 +59,15 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdu
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/user-overdue-tasks', [AmoTaskOverdueDashboardController::class, 'userOverdueTasks'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.user-overdue-tasks');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/recruiter-leads', [AmoTaskOverdueDashboardController::class, 'recruiterLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.recruiter-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/recruiter-team-city-breakdown', [AmoTaskOverdueDashboardController::class, 'recruiterTeamCityBreakdown'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.recruiter-team-city-breakdown');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/task-statistics', [AmoTaskOverdueDashboardController::class, 'taskStatistics'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.task-statistics');
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:webhook')
