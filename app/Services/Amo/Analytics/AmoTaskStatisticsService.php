@@ -259,19 +259,17 @@ class AmoTaskStatisticsService
                         continue;
                     }
 
-                    $teamValues = $teamField
-                        ? $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue)
-                        : [];
                     $cityValues = $cityField
                         ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
                         : [];
 
-                    if (($teamField !== null && $teamValues === []) || $cityValues === []) {
-                        continue;
-                    }
-
-                    if ($cityFilter !== '' && !in_array($cityFilter, $cityValues, true)) {
-                        continue;
+                    if ($cityFilter !== '') {
+                        $matchesCity = $cityFilter === '—'
+                            ? $cityValues === []
+                            : in_array($cityFilter, $cityValues, true);
+                        if (!$matchesCity) {
+                            continue;
+                        }
                     }
 
                     $projectValues = $projectField
@@ -634,11 +632,11 @@ class AmoTaskStatisticsService
                         ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue)
                         : [];
 
+                    $totalLeads++;
+
                     if ($teamValues === [] || $cityValues === []) {
                         continue;
                     }
-
-                    $totalLeads++;
 
                     foreach ($recruiterIds as $recruiterId) {
                         $rows[$recruiterId] ??= [
@@ -777,17 +775,9 @@ class AmoTaskStatisticsService
                         continue;
                     }
 
-                    $teamValues = $teamField
-                        ? $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue)
-                        : [];
                     $cityValues = $cityField
                         ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
                         : [];
-
-                    if (($teamField !== null && $teamValues === []) || $cityValues === []) {
-                        continue;
-                    }
-
                     $projectValues = $projectField
                         ? $this->fieldValueLabels($customFields, (int) $projectField->amo_field_id, $projectField->name, $projectEnumIdsByValue)
                         : [];
@@ -799,6 +789,7 @@ class AmoTaskStatisticsService
                         : [];
 
                     $projectKeys = $projectValues ?: ['Без проекта'];
+                    $cityKeys = $cityValues ?: ['—'];
                     $vacancyKeys = $vacancyValues ?: ['—'];
                     $sourceKeys = $sourceValues ?: ['—'];
 
@@ -812,7 +803,7 @@ class AmoTaskStatisticsService
                         $projects[$projectName] ??= ['name' => $projectName, 'total_leads_count' => 0, 'cities' => []];
                         $projects[$projectName]['total_leads_count']++;
 
-                        foreach ($cityValues as $cityName) {
+                        foreach ($cityKeys as $cityName) {
                             $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName, 'leads_count' => 0, 'vacancies' => []];
                             $projects[$projectName]['cities'][$cityName]['leads_count']++;
 

@@ -688,7 +688,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                                         className="border-t border-slate-100 transition-colors hover:bg-violet-50/40"
                                                     >
                                                         <td className="px-5 py-2.5 text-gray-800">
-                                                            {vi === 0 ? city.name : ''}
+                                                            {vi === 0 ? (city.name === '—' ? <span className="italic text-slate-400">Без города</span> : city.name) : ''}
                                                         </td>
                                                         <td className="px-5 py-2.5 text-gray-500">
                                                             {vacancy.name !== '—' ? vacancy.name : ''}
@@ -701,7 +701,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                                                     city: city.name,
                                                                     vacancy: vacancy.name,
                                                                     source: '',
-                                                                    label: `${project.name} / ${city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''}`,
+                                                                    label: `${project.name} / ${city.name === '—' ? 'Без города' : city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''}`,
                                                                 })}
                                                             />
                                                         </td>
@@ -714,7 +714,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                                                         city: city.name,
                                                                         vacancy: vacancy.name,
                                                                         source: src,
-                                                                        label: `${project.name} / ${city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''} / ${src}`,
+                                                                        label: `${project.name} / ${city.name === '—' ? 'Без города' : city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''} / ${src}`,
                                                                     })}
                                                                 />
                                                             </td>
