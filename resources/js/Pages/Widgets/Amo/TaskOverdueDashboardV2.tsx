@@ -190,6 +190,26 @@ const recruiterCityRows = (recruiter: RecruiterTeamCityBreakdown['recruiters'][n
 };
 
 
+const departmentTeamRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+    breakdown.recruiters.forEach((r) => r.teams.forEach((t) => rows.set(t.name, (rows.get(t.name) || 0) + t.total_leads_count)));
+    return sortedBreakdownRows(rows);
+};
+
+const departmentCityRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+    breakdown.recruiters.forEach((r) => r.teams.forEach((t) => t.cities.forEach((c) => rows.set(c.name, (rows.get(c.name) || 0) + c.leads_count))));
+    return sortedBreakdownRows(rows);
+};
+
+const departmentSourceChartRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
+    const rows = new Map<string, number>();
+    breakdown.recruiters.forEach((r) => r.teams.forEach((t) => t.cities.forEach((c) => {
+        breakdown.source_columns.forEach((s) => rows.set(s, (rows.get(s) || 0) + (c.sources[s] || 0)));
+    })));
+    return sortedBreakdownRows(rows);
+};
+
 const sortedBreakdownRows = (rows: Map<string, number>): BreakdownRow[] => (
     Array.from(rows.entries()).map(([name, count]) => ({ name, count })).sort((l, r) => r.count - l.count || l.name.localeCompare(r.name))
 );
@@ -304,6 +324,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 <RecruiterLeadsSection state={recruiterLeadsState} />
 
+                <RecruiterBreakdownSections state={breakdownState} />
 
                 <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
@@ -382,6 +403,49 @@ function RecruiterLeadsSection({ state }: { state: LoadState<RecruiterLeads> }) 
     );
 }
 
+
+function RecruiterBreakdownSections({ state }: { state: LoadState<RecruiterTeamCityBreakdown> }) {
+    if (state.status === 'loading') return (
+        <>
+            <SectionSkeleton rows={3} />
+            <SectionSkeleton rows={3} />
+            <SectionSkeleton rows={3} />
+        </>
+    );
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const breakdown = state.data;
+
+    return (
+        <>
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Всего передано менеджерам по командам"
+                description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.team_field_name}".`}
+                aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <BreakdownReportContent rows={departmentTeamRows(breakdown)} />
+            </ReportSection>
+
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Всего передано менеджерам по городам"
+                description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.city_field_name}".`}
+                aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <BreakdownReportContent compactLegend rows={departmentCityRows(breakdown)} />
+            </ReportSection>
+
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Всего передано менеджерам по источникам"
+                description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.source_field_name}".`}
+                aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <BreakdownReportContent compactLegend rows={departmentSourceChartRows(breakdown)} />
+            </ReportSection>
+        </>
+    );
+}
 
 function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityBreakdown> }) {
     if (state.status === 'loading') return <SectionSkeleton rows={5} />;
