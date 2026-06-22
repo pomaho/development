@@ -122,6 +122,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 (string) $request->query('project', ''),
                 (string) $request->query('city', ''),
                 (string) $request->query('vacancy', ''),
+                (string) $request->query('source', ''),
             ),
         ]);
     }

@@ -212,6 +212,7 @@ class AmoTaskStatisticsService
         string $projectFilter,
         string $cityFilter,
         string $vacancyFilter,
+        string $sourceFilter = '',
         int $limit = 200
     ): array {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
@@ -225,6 +226,7 @@ class AmoTaskStatisticsService
         $projectField = $this->leadField($fieldQuery, (int) data_get($config, 'project_field_id', 0), (string) (data_get($config, 'project_field_name') ?: self::PROJECT_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
         $vacancyField = $this->leadField($fieldQuery, (int) data_get($config, 'vacancy_field_id', 0), (string) (data_get($config, 'vacancy_field_name') ?: self::VACANCY_FIELD_NAME));
+        $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
         $recruiterEnumIdsByValue = $recruiterField ? $this->enumIdsByValue($recruiterField) : [];
         $managerEnumIdsByValue = $managerField ? $this->enumIdsByValue($managerField) : [];
@@ -232,6 +234,7 @@ class AmoTaskStatisticsService
         $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
         $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
         $vacancyEnumIdsByValue = $vacancyField ? $this->enumIdsByValue($vacancyField) : [];
+        $sourceEnumIdsByValue = $sourceField ? $this->enumIdsByValue($sourceField) : [];
 
         $leads = [];
         $total = 0;
@@ -244,7 +247,7 @@ class AmoTaskStatisticsService
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
 
@@ -293,6 +296,20 @@ class AmoTaskStatisticsService
                             : in_array($vacancyFilter, $vacancyValues, true);
 
                         if (!$matchesVacancy) {
+                            continue;
+                        }
+                    }
+
+                    if ($sourceFilter !== '') {
+                        $sourceValues = $sourceField
+                            ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue)
+                            : [];
+
+                        $matchesSource = $sourceFilter === '—'
+                            ? $sourceValues === []
+                            : in_array($sourceFilter, $sourceValues, true);
+
+                        if (!$matchesSource) {
                             continue;
                         }
                     }
@@ -783,7 +800,7 @@ class AmoTaskStatisticsService
 
                     $projectKeys = $projectValues ?: ['Без проекта'];
                     $vacancyKeys = $vacancyValues ?: ['—'];
-                    $sourceKeys = $sourceValues; // пустой массив = нет источника, в колонки не попадает
+                    $sourceKeys = $sourceValues ?: ['—'];
 
                     foreach ($sourceKeys as $sourceName) {
                         $allSourceNames[$sourceName] = true;

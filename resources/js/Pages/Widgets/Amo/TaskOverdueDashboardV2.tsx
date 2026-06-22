@@ -509,6 +509,7 @@ type LeadsFilter = {
     project: string;
     city: string;
     vacancy: string;
+    source: string;
     label: string;
 };
 
@@ -537,7 +538,7 @@ function LeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy };
+    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {
@@ -685,12 +686,15 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                                 <td className="px-4 py-2.5 text-right">
                                                     <CountButton
                                                         value={project.total_leads_count}
-                                                        onClick={() => openLeads({ project: project.name, city: '', vacancy: '', label: project.name })}
+                                                        onClick={() => openLeads({ project: project.name, city: '', vacancy: '', source: '', label: project.name })}
                                                     />
                                                 </td>
                                                 {data.source_columns.map((src) => (
-                                                    <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
-                                                        {projectSources[src] ?? 0}
+                                                    <td key={src} className="px-4 py-2.5 text-right">
+                                                        <CountButton
+                                                            value={projectSources[src] ?? 0}
+                                                            onClick={() => openLeads({ project: project.name, city: '', vacancy: '', source: src, label: `${project.name} / ${src}` })}
+                                                        />
                                                     </td>
                                                 ))}
                                             </tr>
@@ -713,13 +717,23 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                                                     project: project.name,
                                                                     city: city.name,
                                                                     vacancy: vacancy.name,
+                                                                    source: '',
                                                                     label: `${project.name} / ${city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''}`,
                                                                 })}
                                                             />
                                                         </td>
                                                         {data.source_columns.map((src) => (
-                                                            <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
-                                                                {(vacancy.sources ?? {})[src] ?? 0}
+                                                            <td key={src} className="px-4 py-2.5 text-right">
+                                                                <CountButton
+                                                                    value={(vacancy.sources ?? {})[src] ?? 0}
+                                                                    onClick={() => openLeads({
+                                                                        project: project.name,
+                                                                        city: city.name,
+                                                                        vacancy: vacancy.name,
+                                                                        source: src,
+                                                                        label: `${project.name} / ${city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''} / ${src}`,
+                                                                    })}
+                                                                />
                                                             </td>
                                                         ))}
                                                     </tr>
