@@ -213,6 +213,7 @@ class AmoTaskStatisticsService
         string $cityFilter,
         string $vacancyFilter,
         string $sourceFilter = '',
+        string $teamFilter = '',
         int $limit = 200
     ): array {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
@@ -247,7 +248,7 @@ class AmoTaskStatisticsService
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter, $teamFilter): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
 
@@ -308,6 +309,20 @@ class AmoTaskStatisticsService
                             : in_array($sourceFilter, $sourceValues, true);
 
                         if (!$matchesSource) {
+                            continue;
+                        }
+                    }
+
+                    if ($teamFilter !== '') {
+                        $teamValues = $teamField
+                            ? $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue)
+                            : [];
+
+                        $matchesTeam = $teamFilter === '—'
+                            ? $teamValues === []
+                            : in_array($teamFilter, $teamValues, true);
+
+                        if (!$matchesTeam) {
                             continue;
                         }
                     }
@@ -602,6 +617,7 @@ class AmoTaskStatisticsService
             : [];
         $rows = [];
         $totalLeads = 0;
+        $withoutTeamCount = 0;
 
         CrmEntitySnapshot::query()
             ->select(['id', 'entity_created_at', 'custom_fields_values'])
@@ -611,7 +627,7 @@ class AmoTaskStatisticsService
             ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
             ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$sourceColumns, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
                 foreach ($leads as $lead) {
 
                     $customFields = $lead->custom_fields_values ?? [];
@@ -634,7 +650,12 @@ class AmoTaskStatisticsService
 
                     $totalLeads++;
 
-                    if ($teamValues === [] || $cityValues === []) {
+                    if ($teamValues === []) {
+                        $withoutTeamCount++;
+                        continue;
+                    }
+
+                    if ($cityValues === []) {
                         continue;
                     }
 
@@ -722,6 +743,7 @@ class AmoTaskStatisticsService
             'city_field_name' => $cityField->name,
             'source_field_name' => $sourceField?->name ?? self::SOURCE_FIELD_NAME,
             'total_leads_count' => $totalLeads,
+            'without_team_count' => $withoutTeamCount,
             'source_columns' => $sourceColumns,
             'recruiters' => $recruiters,
         ];

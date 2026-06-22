@@ -45,6 +45,7 @@ type RecruiterTeamCityBreakdown = {
     city_field_name: string;
     source_field_name: string;
     total_leads_count: number;
+    without_team_count: number;
     source_columns: string[];
     recruiters: Array<{
         enum_id: number;
@@ -193,7 +194,11 @@ const recruiterCityRows = (recruiter: RecruiterTeamCityBreakdown['recruiters'][n
 const departmentTeamRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
     const rows = new Map<string, number>();
     breakdown.recruiters.forEach((r) => r.teams.forEach((t) => rows.set(t.name, (rows.get(t.name) || 0) + t.total_leads_count)));
-    return sortedBreakdownRows(rows);
+    const result = sortedBreakdownRows(rows);
+    if ((breakdown.without_team_count ?? 0) > 0) {
+        result.push({ name: '—', count: breakdown.without_team_count });
+    }
+    return result;
 };
 
 const departmentCityRows = (breakdown: RecruiterTeamCityBreakdown): BreakdownRow[] => {
@@ -324,7 +329,12 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 <RecruiterLeadsSection state={recruiterLeadsState} />
 
-                <RecruiterBreakdownSections state={breakdownState} />
+                <RecruiterBreakdownSections
+                    state={breakdownState}
+                    leadsUrl={links.projectCityVacancyLeads}
+                    periodParams={periodParams}
+                    baseDomain={account.base_domain}
+                />
 
                 <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
@@ -404,7 +414,14 @@ function RecruiterLeadsSection({ state }: { state: LoadState<RecruiterLeads> }) 
 }
 
 
-function RecruiterBreakdownSections({ state }: { state: LoadState<RecruiterTeamCityBreakdown> }) {
+function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain }: {
+    state: LoadState<RecruiterTeamCityBreakdown>;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+}) {
+    const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
+
     if (state.status === 'loading') return (
         <>
             <SectionSkeleton rows={3} />
@@ -415,6 +432,15 @@ function RecruiterBreakdownSections({ state }: { state: LoadState<RecruiterTeamC
     if (state.status === 'error') return <SectionError message={state.message} />;
     const breakdown = state.data;
 
+    const openTeamLeads = (teamName: string) => setLeadsFilter({
+        project: '',
+        city: '',
+        vacancy: '',
+        source: '',
+        team: teamName,
+        label: teamName === '—' ? 'Без команды' : teamName,
+    });
+
     return (
         <>
             <ReportSection
@@ -423,7 +449,7 @@ function RecruiterBreakdownSections({ state }: { state: LoadState<RecruiterTeamC
                 description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.team_field_name}".`}
                 aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
             >
-                <BreakdownReportContent rows={departmentTeamRows(breakdown)} />
+                <BreakdownReportContent rows={departmentTeamRows(breakdown)} onRowClick={openTeamLeads} />
             </ReportSection>
 
             <ReportSection
@@ -443,6 +469,16 @@ function RecruiterBreakdownSections({ state }: { state: LoadState<RecruiterTeamC
             >
                 <BreakdownReportContent compactLegend rows={departmentSourceChartRows(breakdown)} />
             </ReportSection>
+
+            {leadsFilter !== null && (
+                <LeadsModal
+                    filter={leadsFilter}
+                    leadsUrl={leadsUrl}
+                    periodParams={periodParams}
+                    baseDomain={baseDomain}
+                    onClose={() => setLeadsFilter(null)}
+                />
+            )}
         </>
     );
 }
@@ -490,6 +526,7 @@ type LeadsFilter = {
     city: string;
     vacancy: string;
     source: string;
+    team?: string;
     label: string;
 };
 
@@ -518,7 +555,7 @@ function LeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source };
+    const params = { ...periodParams, project: filter.project, city: filter.city, vacancy: filter.vacancy, source: filter.source, team: filter.team ?? '' };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {
@@ -1060,10 +1097,10 @@ function SourceBreakdownTable({ rows, sourceColumns }: { rows: SourceBreakdownRo
     );
 }
 
-function BreakdownReportContent({ rows, compactLegend = false }: { rows: BreakdownRow[]; compactLegend?: boolean }) {
+function BreakdownReportContent({ rows, compactLegend = false, onRowClick }: { rows: BreakdownRow[]; compactLegend?: boolean; onRowClick?: (name: string) => void }) {
     return (
         <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
-            <BreakdownTable rows={rows} />
+            <BreakdownTable rows={rows} onRowClick={onRowClick} />
             <PieChart compactLegend={compactLegend} rows={rows} total={rows.reduce((sum, r) => sum + r.count, 0)} />
         </div>
     );
@@ -1094,7 +1131,7 @@ function BreakdownCard({ title, description, rows, compactLegend = false }: { ti
     );
 }
 
-function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
+function BreakdownTable({ rows, onRowClick }: { rows: BreakdownRow[]; onRowClick?: (name: string) => void }) {
     const total = rows.reduce((sum, r) => sum + r.count, 0);
     if (rows.length === 0) {
         return <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-400">Нет данных для разреза.</div>;
@@ -1115,9 +1152,17 @@ function BreakdownTable({ rows }: { rows: BreakdownRow[] }) {
                         <tr className="transition-colors hover:bg-violet-50/40" key={row.name}>
                             <td className="px-4 py-3">
                                 <span className="mr-2 inline-block size-2.5 rounded-full" style={{ backgroundColor: chartColors[index % chartColors.length] }} />
-                                <span className="font-medium text-gray-900">{row.name}</span>
+                                {row.name === '—'
+                                    ? <span className="italic text-slate-400">Без команды</span>
+                                    : <span className="font-medium text-gray-900">{row.name}</span>
+                                }
                             </td>
-                            <td className="px-4 py-3 text-right font-bold tabular-nums text-gray-900">{row.count}</td>
+                            <td className="px-4 py-3 text-right font-bold tabular-nums text-gray-900">
+                                {onRowClick
+                                    ? <CountButton value={row.count} onClick={() => onRowClick(row.name)} />
+                                    : row.count
+                                }
+                            </td>
                             <td className="px-4 py-3 text-right tabular-nums text-slate-500">{percentOf(row.count, total)}%</td>
                         </tr>
                     ))}
