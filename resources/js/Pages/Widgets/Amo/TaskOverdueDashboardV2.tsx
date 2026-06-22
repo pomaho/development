@@ -678,8 +678,8 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                     const projectSources = aggregateProjectSources(project, data.source_columns);
                                     return (
                                         <>
-                                            <tr key={`project-${project.name}`} className="bg-slate-800">
-                                                <td className="px-5 py-2.5 font-bold text-white" colSpan={2}>
+                                            <tr key={`project-${project.name}`} className="bg-slate-100">
+                                                <td className="border-l-4 border-indigo-400 px-5 py-2.5 font-bold text-slate-800" colSpan={2}>
                                                     {project.name}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-right">
@@ -689,7 +689,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                                     />
                                                 </td>
                                                 {data.source_columns.map((src) => (
-                                                    <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-300">
+                                                    <td key={src} className="px-4 py-2.5 text-right font-mono tabular-nums text-slate-500">
                                                         {projectSources[src] ?? 0}
                                                     </td>
                                                 ))}
