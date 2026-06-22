@@ -619,6 +619,9 @@ function LeadsModal({
 }
 
 function CountButton({ value, onClick }: { value: number; onClick: () => void }) {
+    if (value === 0) {
+        return <span className="font-mono tabular-nums text-slate-300">0</span>;
+    }
     return (
         <button
             type="button"
