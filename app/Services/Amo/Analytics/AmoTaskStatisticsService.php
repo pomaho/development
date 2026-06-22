@@ -811,11 +811,15 @@ class AmoTaskStatisticsService
             return false;
         }
 
-        if ($from !== null && $date->lt($from)) {
+        // amoCRM displays task dates in UTC, so compare UTC date strings
+        // to match what amoCRM shows in its filters.
+        $dateStr = $date->utc()->toDateString();
+
+        if ($from !== null && $dateStr < $from->toDateString()) {
             return false;
         }
 
-        if ($to !== null && $date->gt($to)) {
+        if ($to !== null && $dateStr > $to->toDateString()) {
             return false;
         }
 
