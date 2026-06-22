@@ -16,6 +16,8 @@ class AmoTaskStatisticsService
     private const TEAM_FIELD_NAME = 'Команда';
     private const CITY_FIELD_NAME = 'Город';
     private const SOURCE_FIELD_NAME = 'Источник';
+    private const PROJECT_FIELD_NAME = 'Проект';
+    private const VACANCY_FIELD_NAME = 'Вакансия';
 
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
@@ -190,6 +192,15 @@ class AmoTaskStatisticsService
             $this->recruiterTeamCityBreakdownCacheKey($account, $from, $to, $config),
             now()->addMinutes(10),
             fn (): array => $this->buildRecruiterTeamCityBreakdown($account, $from, $to, $config),
+        );
+    }
+
+    public function projectCityVacancyBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    {
+        return Cache::remember(
+            $this->projectCityVacancyBreakdownCacheKey($account, $from, $to, $config),
+            now()->addMinutes(10),
+            fn (): array => $this->buildProjectCityVacancyBreakdown($account, $from, $to, $config),
         );
     }
 
@@ -587,6 +598,127 @@ class AmoTaskStatisticsService
             'source_columns' => $sourceColumns,
             'recruiters' => $recruiters,
         ];
+    }
+
+    private function buildProjectCityVacancyBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    {
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $pipelineName = data_get($config, 'pipeline_name');
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+
+        $projectField = $this->leadField($fieldQuery, (int) data_get($config, 'project_field_id', 0), (string) (data_get($config, 'project_field_name') ?: self::PROJECT_FIELD_NAME));
+        $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
+        $vacancyField = $this->leadField($fieldQuery, (int) data_get($config, 'vacancy_field_id', 0), (string) (data_get($config, 'vacancy_field_name') ?: self::VACANCY_FIELD_NAME));
+
+        $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
+        $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
+        $vacancyEnumIdsByValue = $vacancyField ? $this->enumIdsByValue($vacancyField) : [];
+
+        $projects = [];
+        $totalLeads = 0;
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'entity_created_at', 'custom_fields_values'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$projects, &$totalLeads, $projectField, $cityField, $vacancyField, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue): void {
+                foreach ($leads as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
+
+                    $cityValues = $cityField
+                        ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
+                        : [];
+
+                    if ($cityValues === []) {
+                        continue;
+                    }
+
+                    $projectValues = $projectField
+                        ? $this->fieldValueLabels($customFields, (int) $projectField->amo_field_id, $projectField->name, $projectEnumIdsByValue)
+                        : [];
+                    $vacancyValues = $vacancyField
+                        ? $this->fieldValueLabels($customFields, (int) $vacancyField->amo_field_id, $vacancyField->name, $vacancyEnumIdsByValue)
+                        : [];
+
+                    $projectKeys = $projectValues ?: ['Без проекта'];
+                    $vacancyKeys = $vacancyValues ?: ['—'];
+
+                    $totalLeads++;
+
+                    foreach ($projectKeys as $projectName) {
+                        $projects[$projectName] ??= ['name' => $projectName, 'total_leads_count' => 0, 'cities' => []];
+                        $projects[$projectName]['total_leads_count']++;
+
+                        foreach ($cityValues as $cityName) {
+                            $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName, 'leads_count' => 0, 'vacancies' => []];
+                            $projects[$projectName]['cities'][$cityName]['leads_count']++;
+
+                            foreach ($vacancyKeys as $vacancyName) {
+                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= 0;
+                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]++;
+                            }
+                        }
+                    }
+                }
+            });
+
+        $projectsList = collect($projects)
+            ->map(function (array $project): array {
+                $project['cities'] = collect($project['cities'])
+                    ->map(function (array $city): array {
+                        $city['vacancies'] = collect($city['vacancies'])
+                            ->map(fn ($count, $name) => ['name' => $name, 'leads_count' => $count])
+                            ->sortByDesc('leads_count')
+                            ->values()
+                            ->all();
+
+                        return $city;
+                    })
+                    ->sortByDesc('leads_count')
+                    ->values()
+                    ->all();
+
+                return $project;
+            })
+            ->sortByDesc('total_leads_count')
+            ->values()
+            ->all();
+
+        return [
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
+            'project_field_found' => $projectField !== null,
+            'project_field_name' => $projectField?->name ?? self::PROJECT_FIELD_NAME,
+            'city_field_found' => $cityField !== null,
+            'city_field_name' => $cityField?->name ?? self::CITY_FIELD_NAME,
+            'vacancy_field_found' => $vacancyField !== null,
+            'vacancy_field_name' => $vacancyField?->name ?? self::VACANCY_FIELD_NAME,
+            'total_leads_count' => $totalLeads,
+            'projects' => $projectsList,
+        ];
+    }
+
+    private function projectCityVacancyBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_project_city_vacancy_breakdown',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+            data_get($config, 'pipeline_id') ?: 'all',
+            data_get($config, 'project_field_id') ?: data_get($config, 'project_field_name', self::PROJECT_FIELD_NAME),
+            data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
+            data_get($config, 'vacancy_field_id') ?: data_get($config, 'vacancy_field_name', self::VACANCY_FIELD_NAME),
+        ]);
     }
 
     private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string

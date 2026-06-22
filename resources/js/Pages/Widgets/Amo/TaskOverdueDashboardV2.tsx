@@ -89,6 +89,36 @@ type TaskStatisticsGroup = {
     users: TaskStatisticsRow[];
 };
 
+type ProjectVacancy = {
+    name: string;
+    leads_count: number;
+};
+
+type ProjectCity = {
+    name: string;
+    leads_count: number;
+    vacancies: ProjectVacancy[];
+};
+
+type ProjectCityVacancyProject = {
+    name: string;
+    total_leads_count: number;
+    cities: ProjectCity[];
+};
+
+type ProjectCityVacancyBreakdown = {
+    pipeline_id: number | null;
+    pipeline_name: string | null;
+    project_field_found: boolean;
+    project_field_name: string;
+    city_field_found: boolean;
+    city_field_name: string;
+    vacancy_field_found: boolean;
+    vacancy_field_name: string;
+    total_leads_count: number;
+    projects: ProjectCityVacancyProject[];
+};
+
 type Props = {
     account: Account;
     period: {
@@ -104,6 +134,7 @@ type Props = {
         recruiterTeamCityBreakdown: string;
         taskStatistics: string;
         userOverdueTasks: string;
+        projectCityVacancy: string;
     };
 };
 
@@ -231,6 +262,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
     const recruiterLeadsState = useApiData<RecruiterLeads>(links.recruiterLeads, periodParams);
     const breakdownState = useApiData<RecruiterTeamCityBreakdown>(links.recruiterTeamCityBreakdown, periodParams);
     const taskStatsState = useApiData<TaskStatisticsGroup[]>(links.taskStatistics, periodParams);
+    const projectCityVacancyState = useApiData<ProjectCityVacancyBreakdown>(links.projectCityVacancy, periodParams);
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') return;
@@ -297,6 +329,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
                 <RecruiterBreakdownSections state={breakdownState} />
 
                 <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
+
+                <ProjectCityVacancySection state={projectCityVacancyState} />
 
                 <RecruiterDetailSection state={breakdownState} />
 
@@ -440,6 +474,126 @@ function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityB
                     </EmptyState>
                 )}
             </div>
+        </ReportSection>
+    );
+}
+
+type ProjectTableRow = {
+    projectName: string;
+    projectTotal: number;
+    projectRowSpan: number;
+    cityName: string;
+    cityCount: number;
+    cityRowSpan: number;
+    vacancyName: string;
+    vacancyCount: number;
+};
+
+function flattenProjectRows(projects: ProjectCityVacancyProject[]): ProjectTableRow[] {
+    const rows: ProjectTableRow[] = [];
+    for (const project of projects) {
+        const cities = project.cities.length > 0 ? project.cities : [{ name: '—', leads_count: 0, vacancies: [] }];
+        const projectRowSpan = cities.reduce((sum, city) => sum + Math.max(city.vacancies.length, 1), 0);
+        let firstInProject = true;
+        for (const city of cities) {
+            const vacancies = city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0 }];
+            let firstInCity = true;
+            for (const vacancy of vacancies) {
+                rows.push({
+                    projectName: project.name,
+                    projectTotal: project.total_leads_count,
+                    projectRowSpan: firstInProject ? projectRowSpan : 0,
+                    cityName: city.name,
+                    cityCount: city.leads_count,
+                    cityRowSpan: firstInCity ? vacancies.length : 0,
+                    vacancyName: vacancy.name,
+                    vacancyCount: vacancy.leads_count,
+                });
+                firstInProject = false;
+                firstInCity = false;
+            }
+        }
+    }
+    return rows;
+}
+
+function ProjectCityVacancySection({ state }: { state: LoadState<ProjectCityVacancyBreakdown> }) {
+    if (state.status === 'loading') return <SectionSkeleton rows={5} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+    const rows = flattenProjectRows(data.projects);
+
+    return (
+        <ReportSection
+            eyebrow="Весь отдел рекрутинга"
+            title={`Разрез по проекту, городу и вакансии`}
+            description={`Сделки с заполненным полем "${data.city_field_name}", сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Сделки без города не включаются.`}
+            aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="с заполненным городом" tone="warning" />}
+        >
+            {rows.length === 0 ? (
+                <div className="px-5 py-8">
+                    <EmptyState>
+                        {!data.city_field_found
+                            ? `Поле "${data.city_field_name}" не найдено. Запустите синхронизацию структуры CRM.`
+                            : 'Нет сделок с заполненным городом за выбранный период.'}
+                    </EmptyState>
+                </div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                            <tr>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.project_field_name}</th>
+                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
+                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
+                                <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {rows.map((row, i) => (
+                                <tr className="transition-colors hover:bg-violet-50/30" key={i}>
+                                    {row.projectRowSpan > 0 && (
+                                        <td
+                                            className="border-r border-slate-100 px-5 py-3 align-top font-semibold text-gray-900"
+                                            rowSpan={row.projectRowSpan}
+                                        >
+                                            {row.projectName}
+                                        </td>
+                                    )}
+                                    {row.projectRowSpan > 0 && (
+                                        <td
+                                            className="border-r border-slate-100 px-4 py-3 text-right align-top font-mono font-bold tabular-nums text-indigo-700"
+                                            rowSpan={row.projectRowSpan}
+                                        >
+                                            {row.projectTotal}
+                                        </td>
+                                    )}
+                                    {row.cityRowSpan > 0 && (
+                                        <td
+                                            className="border-r border-slate-100 px-5 py-3 align-top text-gray-700"
+                                            rowSpan={row.cityRowSpan}
+                                        >
+                                            {row.cityName}
+                                        </td>
+                                    )}
+                                    {row.cityRowSpan > 0 && (
+                                        <td
+                                            className="border-r border-slate-100 px-4 py-3 text-right align-top font-mono font-semibold tabular-nums text-slate-700"
+                                            rowSpan={row.cityRowSpan}
+                                        >
+                                            {row.cityCount}
+                                        </td>
+                                    )}
+                                    <td className="px-5 py-3 text-gray-600">{row.vacancyName}</td>
+                                    <td className="px-4 py-3 text-right font-mono tabular-nums text-slate-600">{row.vacancyCount}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </ReportSection>
     );
 }
