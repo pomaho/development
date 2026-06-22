@@ -126,6 +126,9 @@ class AmoWebhookService
 
         if ($event->entity_type === 'tasks') {
             $this->syncTaskEvents($event->account, $event->entity_id);
+        }
+
+        if (in_array($event->entity_type, ['leads', 'tasks'], true)) {
             app(AmoTaskStatisticsService::class)->refreshDashboardCacheVersion($event->account);
         }
 
