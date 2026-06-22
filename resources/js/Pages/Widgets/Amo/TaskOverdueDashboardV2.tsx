@@ -98,12 +98,11 @@ type Props = {
         preset: string | null;
         label: string;
     };
-    recruiterLeads: RecruiterLeads;
-    recruiterTeamCityBreakdown: RecruiterTeamCityBreakdown;
-    taskStatistics: TaskStatisticsGroup[];
     links: {
         self: string;
-        api: string;
+        recruiterLeads: string;
+        recruiterTeamCityBreakdown: string;
+        taskStatistics: string;
         userOverdueTasks: string;
     };
 };
@@ -125,6 +124,8 @@ type SourceBreakdownRow = {
     count: number;
     sources: Record<string, number>;
 };
+
+type LoadState<T> = { status: 'loading' } | { status: 'ok'; data: T } | { status: 'error'; message: string };
 
 const chartColors = ['#7C3AED', '#4F46E5', '#0EA5E9', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#64748B'];
 
@@ -184,7 +185,31 @@ const sortedBreakdownRows = (rows: Map<string, number>): BreakdownRow[] => (
     Array.from(rows.entries()).map(([name, count]) => ({ name, count })).sort((l, r) => r.count - l.count || l.name.localeCompare(r.name))
 );
 
-export default function TaskOverdueDashboardV2({ account, period, recruiterLeads, recruiterTeamCityBreakdown, taskStatistics, links }: Props) {
+async function apiFetch<T>(url: string, params: Record<string, string>): Promise<T> {
+    const u = new URL(url);
+    Object.entries(params).forEach(([k, v]) => u.searchParams.set(k, v));
+    const res = await fetch(u.toString());
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json.data as T;
+}
+
+function useApiData<T>(url: string, params: Record<string, string>): LoadState<T> {
+    const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+    const key = url + JSON.stringify(params);
+    useEffect(() => {
+        setState({ status: 'loading' });
+        let cancelled = false;
+        apiFetch<T>(url, params)
+            .then((data) => { if (!cancelled) setState({ status: 'ok', data }); })
+            .catch((err: unknown) => { if (!cancelled) setState({ status: 'error', message: String(err) }); });
+        return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key]);
+    return state;
+}
+
+export default function TaskOverdueDashboardV2({ account, period, links }: Props) {
     const debugIframe = useMemo(() => {
         if (typeof window === 'undefined') return false;
         return new URLSearchParams(window.location.search).get('debug_iframe') === '1';
@@ -200,6 +225,12 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
     const periodSourceLabel = period.source === 'amo_period' || period.source === 'amo_dates'
         ? 'Период с рабочего стола amoCRM'
         : 'Период выбран вручную';
+
+    const periodParams = { from: period.from, to: period.to };
+
+    const recruiterLeadsState = useApiData<RecruiterLeads>(links.recruiterLeads, periodParams);
+    const breakdownState = useApiData<RecruiterTeamCityBreakdown>(links.recruiterTeamCityBreakdown, periodParams);
+    const taskStatsState = useApiData<TaskStatisticsGroup[]>(links.taskStatistics, periodParams);
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') return;
@@ -261,116 +292,186 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
 
                 {debugIframe ? <DebugPanel iframeMessages={iframeMessages} /> : null}
 
-                <ReportSection
-                    eyebrow="Отчет по сделкам"
-                    title={`Поле "${recruiterLeads.field_name}"`}
-                    description={`Воронка: ${recruiterLeads.pipeline_name || (recruiterLeads.pipeline_id ? `ID ${recruiterLeads.pipeline_id}` : 'все воронки')}. Учитываются все этапы, включая успешные и закрытые нереализованные.`}
-                    aside={<AccentSummary label="Сделок с рекрутером" value={recruiterLeads.assigned_leads_count} note={`Передано менеджеру: ${recruiterLeads.transferred_to_manager_count}`} tone="brand" />}
-                >
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm">
-                            <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
-                                <tr>
-                                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Рекрутер из списка</th>
-                                    <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
-                                    <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Передано менеджеру</th>
-                                    <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {recruiterLeads.recruiters.length > 0 ? recruiterLeads.recruiters.map((recruiter) => {
-                                    const rate = recruiterLeads.assigned_leads_count > 0
-                                        ? Math.round((recruiter.leads_count / recruiterLeads.assigned_leads_count) * 1000) / 10 : 0;
-                                    const transferRate = recruiter.leads_count > 0
-                                        ? Math.round((recruiter.transferred_to_manager_count / recruiter.leads_count) * 1000) / 10 : 0;
-                                    return (
-                                        <tr className="transition-colors hover:bg-violet-50/50" key={recruiter.enum_id}>
-                                            <td className="px-5 py-3.5 font-semibold text-gray-900">{recruiter.name}</td>
-                                            <td className="px-4 py-3.5 font-mono font-semibold tabular-nums text-gray-900">{recruiter.leads_count}</td>
-                                            <td className="px-4 py-3.5">
-                                                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                                                    <ArrowRightLeft className="size-3" />
-                                                    {recruiter.transferred_to_manager_count} · {transferRate}%
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3.5">
-                                                <Progress value={rate} tone="brand" />
-                                            </td>
-                                        </tr>
-                                    );
-                                }) : (
-                                    <tr>
-                                        <td className="px-5 py-8" colSpan={4}>
-                                            <EmptyState>
-                                                {recruiterLeads.field_found
-                                                    ? 'В поле "Рекрутер" пока нет значений или нет сделок за выбранный период.'
-                                                    : 'Поле сделки "Рекрутер" не найдено. Запустите синхронизацию структуры CRM.'}
-                                            </EmptyState>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </ReportSection>
+                <RecruiterLeadsSection state={recruiterLeadsState} />
 
-                <ReportSection
-                    eyebrow="Весь отдел рекрутинга"
-                    title="Всего передано менеджерам по командам"
-                    description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${recruiterTeamCityBreakdown.team_field_name}".`}
-                    aside={<AccentSummary label="Передано менеджерам" value={recruiterTeamCityBreakdown.total_leads_count} note="по всему отделу" tone="warning" />}
-                >
-                    <BreakdownReportContent rows={departmentTeamRows(recruiterTeamCityBreakdown)} />
-                </ReportSection>
+                <RecruiterBreakdownSections state={breakdownState} />
 
-                <ReportSection
-                    eyebrow="Весь отдел рекрутинга"
-                    title="Всего передано менеджерам по городам"
-                    description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${recruiterTeamCityBreakdown.city_field_name}".`}
-                    aside={<AccentSummary label="Передано менеджерам" value={recruiterTeamCityBreakdown.total_leads_count} note="по всему отделу" tone="warning" />}
-                >
-                    <BreakdownReportContent compactLegend rows={departmentCityRows(recruiterTeamCityBreakdown)} />
-                </ReportSection>
+                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
-                <ReportSection
-                    eyebrow="Весь отдел рекрутинга"
-                    title="Всего передано менеджерам по источникам"
-                    description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${recruiterTeamCityBreakdown.source_field_name}".`}
-                    aside={<AccentSummary label="Передано менеджерам" value={recruiterTeamCityBreakdown.total_leads_count} note="по всему отделу" tone="warning" />}
-                >
-                    <BreakdownReportContent compactLegend rows={departmentSourceChartRows(recruiterTeamCityBreakdown)} />
-                </ReportSection>
-
-                <ReportSection
-                    eyebrow="Весь отдел рекрутинга"
-                    title="Общая таблица по городам и источникам"
-                    description={`Разрез по командам, городам и источникам. Источник: ${recruiterTeamCityBreakdown.source_field_found ? recruiterTeamCityBreakdown.source_field_name : 'поле не найдено'}.`}
-                    aside={<AccentSummary label="Сделок в таблице" value={recruiterTeamCityBreakdown.total_leads_count} note="по всему отделу" tone="warning" />}
-                >
-                    <SourceBreakdownTable sourceColumns={recruiterTeamCityBreakdown.source_columns} rows={departmentSourceRows(recruiterTeamCityBreakdown)} />
-                </ReportSection>
-
-                <TaskStatisticsSection rows={taskStatistics} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
-
-                <ReportSection
-                    eyebrow="Передачи рекрутеров"
-                    title="Подробно по каждому рекрутеру"
-                    description="Сделки с заполненными полями «Рекрутер» и «Менеджер», сгруппированные по команде, городу и источнику."
-                    aside={<AccentSummary label="Сделок в разрезе" value={recruiterTeamCityBreakdown.total_leads_count} note={`Источник: ${recruiterTeamCityBreakdown.source_field_found ? recruiterTeamCityBreakdown.source_field_name : 'поле не найдено'}`} tone="warning" />}
-                >
-                    <div className="grid gap-4 p-5">
-                        {recruiterTeamCityBreakdown.recruiters.length > 0 ? recruiterTeamCityBreakdown.recruiters.map((recruiter) => (
-                            <RecruiterCard key={recruiter.enum_id} recruiter={recruiter} breakdown={recruiterTeamCityBreakdown} />
-                        )) : (
-                            <EmptyState>
-                                Нет данных для отчета. Проверьте, что выбраны поля «Команда» и «Город», а в сделках заполнены рекрутер и менеджер.
-                            </EmptyState>
-                        )}
-                    </div>
-                </ReportSection>
+                <RecruiterDetailSection state={breakdownState} />
 
             </div>
         </div>
+    );
+}
+
+function RecruiterLeadsSection({ state }: { state: LoadState<RecruiterLeads> }) {
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const recruiterLeads = state.data;
+
+    return (
+        <ReportSection
+            eyebrow="Отчет по сделкам"
+            title={`Поле "${recruiterLeads.field_name}"`}
+            description={`Воронка: ${recruiterLeads.pipeline_name || (recruiterLeads.pipeline_id ? `ID ${recruiterLeads.pipeline_id}` : 'все воронки')}. Учитываются все этапы, включая успешные и закрытые нереализованные.`}
+            aside={<AccentSummary label="Сделок с рекрутером" value={recruiterLeads.assigned_leads_count} note={`Передано менеджеру: ${recruiterLeads.transferred_to_manager_count}`} tone="brand" />}
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                        <tr>
+                            <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Рекрутер из списка</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Передано менеджеру</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {recruiterLeads.recruiters.length > 0 ? recruiterLeads.recruiters.map((recruiter) => {
+                            const rate = recruiterLeads.assigned_leads_count > 0
+                                ? Math.round((recruiter.leads_count / recruiterLeads.assigned_leads_count) * 1000) / 10 : 0;
+                            const transferRate = recruiter.leads_count > 0
+                                ? Math.round((recruiter.transferred_to_manager_count / recruiter.leads_count) * 1000) / 10 : 0;
+                            return (
+                                <tr className="transition-colors hover:bg-violet-50/50" key={recruiter.enum_id}>
+                                    <td className="px-5 py-3.5 font-semibold text-gray-900">{recruiter.name}</td>
+                                    <td className="px-4 py-3.5 font-mono font-semibold tabular-nums text-gray-900">{recruiter.leads_count}</td>
+                                    <td className="px-4 py-3.5">
+                                        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                                            <ArrowRightLeft className="size-3" />
+                                            {recruiter.transferred_to_manager_count} · {transferRate}%
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                        <Progress value={rate} tone="brand" />
+                                    </td>
+                                </tr>
+                            );
+                        }) : (
+                            <tr>
+                                <td className="px-5 py-8" colSpan={4}>
+                                    <EmptyState>
+                                        {recruiterLeads.field_found
+                                            ? 'В поле "Рекрутер" пока нет значений или нет сделок за выбранный период.'
+                                            : 'Поле сделки "Рекрутер" не найдено. Запустите синхронизацию структуры CRM.'}
+                                    </EmptyState>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </ReportSection>
+    );
+}
+
+function RecruiterBreakdownSections({ state }: { state: LoadState<RecruiterTeamCityBreakdown> }) {
+    if (state.status === 'loading') return (
+        <>
+            <SectionSkeleton rows={3} />
+            <SectionSkeleton rows={3} />
+            <SectionSkeleton rows={3} />
+            <SectionSkeleton rows={3} />
+        </>
+    );
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const breakdown = state.data;
+
+    return (
+        <>
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Всего передано менеджерам по командам"
+                description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.team_field_name}".`}
+                aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <BreakdownReportContent rows={departmentTeamRows(breakdown)} />
+            </ReportSection>
+
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Всего передано менеджерам по городам"
+                description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.city_field_name}".`}
+                aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <BreakdownReportContent compactLegend rows={departmentCityRows(breakdown)} />
+            </ReportSection>
+
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Всего передано менеджерам по источникам"
+                description={`Сделки с заполненными полями "Рекрутер" и "Менеджер", сгруппированные по полю "${breakdown.source_field_name}".`}
+                aside={<AccentSummary label="Передано менеджерам" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <BreakdownReportContent compactLegend rows={departmentSourceChartRows(breakdown)} />
+            </ReportSection>
+
+            <ReportSection
+                eyebrow="Весь отдел рекрутинга"
+                title="Общая таблица по городам и источникам"
+                description={`Разрез по командам, городам и источникам. Источник: ${breakdown.source_field_found ? breakdown.source_field_name : 'поле не найдено'}.`}
+                aside={<AccentSummary label="Сделок в таблице" value={breakdown.total_leads_count} note="по всему отделу" tone="warning" />}
+            >
+                <SourceBreakdownTable sourceColumns={breakdown.source_columns} rows={departmentSourceRows(breakdown)} />
+            </ReportSection>
+        </>
+    );
+}
+
+function RecruiterDetailSection({ state }: { state: LoadState<RecruiterTeamCityBreakdown> }) {
+    if (state.status === 'loading') return <SectionSkeleton rows={5} />;
+    if (state.status === 'error') return null;
+    const breakdown = state.data;
+
+    return (
+        <ReportSection
+            eyebrow="Передачи рекрутеров"
+            title="Подробно по каждому рекрутеру"
+            description="Сделки с заполненными полями «Рекрутер» и «Менеджер», сгруппированные по команде, городу и источнику."
+            aside={<AccentSummary label="Сделок в разрезе" value={breakdown.total_leads_count} note={`Источник: ${breakdown.source_field_found ? breakdown.source_field_name : 'поле не найдено'}`} tone="warning" />}
+        >
+            <div className="grid gap-4 p-5">
+                {breakdown.recruiters.length > 0 ? breakdown.recruiters.map((recruiter) => (
+                    <RecruiterCard key={recruiter.enum_id} recruiter={recruiter} breakdown={breakdown} />
+                )) : (
+                    <EmptyState>
+                        Нет данных для отчета. Проверьте, что выбраны поля «Команда» и «Город», а в сделках заполнены рекрутер и менеджер.
+                    </EmptyState>
+                )}
+            </div>
+        </ReportSection>
+    );
+}
+
+function SectionSkeleton({ rows }: { rows: number }) {
+    return (
+        <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200/60">
+            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5">
+                <div className="h-3 w-24 animate-pulse rounded-full bg-slate-200" />
+                <div className="mt-3 h-5 w-64 animate-pulse rounded-full bg-slate-200" />
+                <div className="mt-2 h-3 w-96 animate-pulse rounded-full bg-slate-100" />
+            </div>
+            <div className="divide-y divide-slate-100">
+                {Array.from({ length: rows }).map((_, i) => (
+                    <div className="flex items-center gap-4 px-5 py-4" key={i}>
+                        <div className="h-4 flex-1 animate-pulse rounded-full bg-slate-100" style={{ animationDelay: `${i * 60}ms` }} />
+                        <div className="h-4 w-16 animate-pulse rounded-full bg-slate-100" style={{ animationDelay: `${i * 60 + 30}ms` }} />
+                        <div className="h-4 w-24 animate-pulse rounded-full bg-slate-100" style={{ animationDelay: `${i * 60 + 60}ms` }} />
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function SectionError({ message }: { message: string }) {
+    return (
+        <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-red-200/60">
+            <div className="px-5 py-8">
+                <EmptyState>Ошибка загрузки данных: {message}</EmptyState>
+            </div>
+        </section>
     );
 }
 
@@ -440,7 +541,7 @@ function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tas
     );
 }
 
-function TaskStatisticsSection({ rows, period, userOverdueTasksUrl }: { rows: TaskStatisticsGroup[]; period: { from: string; to: string }; userOverdueTasksUrl: string }) {
+function TaskStatisticsSection({ state, period, userOverdueTasksUrl }: { state: LoadState<TaskStatisticsGroup[]>; period: { from: string; to: string }; userOverdueTasksUrl: string }) {
     const [overdueModal, setOverdueModal] = useState<{ userName: string; userId: number; tasks: OverdueTask[] | null } | null>(null);
 
     const handleOverdueClick = async (userName: string, userId: number) => {
@@ -453,6 +554,11 @@ function TaskStatisticsSection({ rows, period, userOverdueTasksUrl }: { rows: Ta
         const data = await res.json();
         setOverdueModal((prev) => prev?.userId === userId ? { ...prev, tasks: data.tasks } : prev);
     };
+
+    if (state.status === 'loading') return <SectionSkeleton rows={5} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+
+    const rows = state.data;
     const totalCompleted = rows.reduce((sum, g) => sum + g.completed_count, 0);
     const totalCompletedOverdue = rows.reduce((sum, g) => sum + g.completed_overdue_count, 0);
     const hasAny = rows.some((g) => g.users.length > 0);
@@ -545,7 +651,6 @@ function TaskStatisticsSection({ rows, period, userOverdueTasksUrl }: { rows: Ta
                 onClose={() => setOverdueModal(null)}
             />
         )}
-
         </>
     );
 }
@@ -844,43 +949,6 @@ function AccentSummary({ label, value, note, tone }: { label: string; value: num
             <div className="text-xs font-semibold uppercase tracking-wider text-white/70">{label}</div>
             <div className="mt-1 text-4xl font-extrabold tabular-nums">{value}</div>
             <div className="mt-1 text-xs text-white/70">{note}</div>
-        </div>
-    );
-}
-
-function MetricCard({ label, value, icon, tone, progress, note }: { label: string; value: ReactNode; icon: ReactNode; tone: 'brand' | 'success' | 'warning' | 'danger' | 'neutral'; progress?: number; note?: string }) {
-    const iconGradient = {
-        brand: 'from-violet-500 to-indigo-600 shadow-violet-200',
-        success: 'from-emerald-400 to-green-600 shadow-emerald-200',
-        warning: 'from-amber-400 to-orange-500 shadow-amber-200',
-        danger: 'from-red-400 to-rose-600 shadow-red-200',
-        neutral: 'from-slate-400 to-slate-600 shadow-slate-200',
-    }[tone];
-    const barGradient = {
-        brand: 'from-violet-400 to-indigo-600',
-        success: 'from-emerald-400 to-green-500',
-        warning: 'from-amber-400 to-orange-500',
-        danger: 'from-red-400 to-rose-500',
-        neutral: 'from-slate-400 to-slate-500',
-    }[tone];
-
-    return (
-        <div className="rounded-2xl bg-white p-5 shadow-md ring-1 ring-slate-200/60 transition-shadow hover:shadow-lg">
-            <div className={`flex size-12 items-center justify-center rounded-xl bg-gradient-to-br ${iconGradient} shadow-lg text-white`}>
-                {icon}
-            </div>
-            <div className="mt-4 flex items-end justify-between gap-3">
-                <div>
-                    <div className="text-sm text-slate-500">{label}</div>
-                    <div className="mt-1.5 text-4xl font-extrabold tabular-nums text-gray-900">{value}</div>
-                </div>
-                {note ? <div className="text-xs text-slate-400">{note}</div> : null}
-            </div>
-            {progress !== undefined ? (
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                    <div className={`h-1.5 rounded-full bg-gradient-to-r ${barGradient} transition-all duration-700`} style={{ width: progressWidth(progress) }} />
-                </div>
-            ) : null}
         </div>
     );
 }
