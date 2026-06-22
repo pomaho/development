@@ -53,6 +53,7 @@ class AmoAccountWidgetsController extends Controller
                             'iframe_url' => match ($widget->code) {
                                 'task_overdue_dashboard' => route('widgets.amo.task-overdue-dashboard.show', $installation->public_key),
                                 'task_overdue_dashboard_v2' => route('widgets.amo.task-overdue-dashboard-v2.show', $installation->public_key),
+                                'manager_topup_dashboard' => route('widgets.amo.manager-topup.show', $installation->public_key),
                                 default => null,
                             },
                             'api_url' => in_array($widget->code, ['task_overdue_dashboard', 'task_overdue_dashboard_v2'])
@@ -87,34 +88,77 @@ class AmoAccountWidgetsController extends Controller
         $this->authorize('update', $amoAccount);
 
         $installation = $this->installation($amoAccount, $dashboardWidget);
+        $rawConfig = $installation->config ?? [];
+
+        $pipelines = CrmPipelineSnapshot::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->orderBy('sort')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (CrmPipelineSnapshot $pipeline): array => [
+                'id' => $pipeline->amo_pipeline_id,
+                'name' => $pipeline->name,
+                'is_archive' => $pipeline->is_archive,
+            ]);
+
+        $leadFields = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->where('entity_type', 'leads')
+            ->orderBy('sort')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (CrmCustomFieldSnapshot $field): array => [
+                'id' => $field->amo_field_id,
+                'name' => $field->name,
+                'field_type' => $field->field_type,
+            ]);
+
+        $isTopupWidget = $dashboardWidget->code === 'manager_topup_dashboard';
+
+        if ($isTopupWidget) {
+            $config = [
+                'pipeline_id' => data_get($rawConfig, 'pipeline_id'),
+                'manager_field_id' => data_get($rawConfig, 'manager_field_id'),
+                'prepayment_field_id' => data_get($rawConfig, 'prepayment_field_id'),
+                'topup_date_field_id' => data_get($rawConfig, 'topup_date_field_id'),
+            ];
+
+            return Inertia::render('AmoAccounts/Widgets/Settings', [
+                'account' => ['id' => $amoAccount->id, 'name' => $amoAccount->name, 'base_domain' => $amoAccount->base_domain],
+                'widget' => ['id' => $dashboardWidget->id, 'code' => $dashboardWidget->code, 'name' => $dashboardWidget->name],
+                'config' => $config,
+                'diagnostics' => null,
+                'pipelineStatuses' => [],
+                'pipelines' => $pipelines,
+                'leadFields' => $leadFields,
+                'links' => $this->links($amoAccount) + [
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                    'save' => route('amo-accounts.widgets.settings.update', [$amoAccount, $dashboardWidget]),
+                    'crm_fields' => route('amo-accounts.crm-audit.fields', $amoAccount),
+                ],
+            ]);
+        }
+
         $config = [
-            'pipeline_id' => data_get($installation->config, 'pipeline_id'),
-            'pipeline_name' => data_get($installation->config, 'pipeline_name'),
-            'recruiter_field_id' => data_get($installation->config, 'recruiter_field_id'),
-            'recruiter_field_name' => data_get($installation->config, 'recruiter_field_name'),
-            'manager_field_id' => data_get($installation->config, 'manager_field_id'),
-            'manager_field_name' => data_get($installation->config, 'manager_field_name'),
-            'team_field_id' => data_get($installation->config, 'team_field_id'),
-            'team_field_name' => data_get($installation->config, 'team_field_name'),
-            'city_field_id' => data_get($installation->config, 'city_field_id'),
-            'city_field_name' => data_get($installation->config, 'city_field_name'),
-            'source_field_id' => data_get($installation->config, 'source_field_id'),
-            'source_field_name' => data_get($installation->config, 'source_field_name'),
-            'success_status_id' => data_get($installation->config, 'success_status_id'),
-            'success_status_name' => data_get($installation->config, 'success_status_name'),
+            'pipeline_id' => data_get($rawConfig, 'pipeline_id'),
+            'pipeline_name' => data_get($rawConfig, 'pipeline_name'),
+            'recruiter_field_id' => data_get($rawConfig, 'recruiter_field_id'),
+            'recruiter_field_name' => data_get($rawConfig, 'recruiter_field_name'),
+            'manager_field_id' => data_get($rawConfig, 'manager_field_id'),
+            'manager_field_name' => data_get($rawConfig, 'manager_field_name'),
+            'team_field_id' => data_get($rawConfig, 'team_field_id'),
+            'team_field_name' => data_get($rawConfig, 'team_field_name'),
+            'city_field_id' => data_get($rawConfig, 'city_field_id'),
+            'city_field_name' => data_get($rawConfig, 'city_field_name'),
+            'source_field_id' => data_get($rawConfig, 'source_field_id'),
+            'source_field_name' => data_get($rawConfig, 'source_field_name'),
+            'success_status_id' => data_get($rawConfig, 'success_status_id'),
+            'success_status_name' => data_get($rawConfig, 'success_status_name'),
         ];
 
         return Inertia::render('AmoAccounts/Widgets/Settings', [
-            'account' => [
-                'id' => $amoAccount->id,
-                'name' => $amoAccount->name,
-                'base_domain' => $amoAccount->base_domain,
-            ],
-            'widget' => [
-                'id' => $dashboardWidget->id,
-                'code' => $dashboardWidget->code,
-                'name' => $dashboardWidget->name,
-            ],
+            'account' => ['id' => $amoAccount->id, 'name' => $amoAccount->name, 'base_domain' => $amoAccount->base_domain],
+            'widget' => ['id' => $dashboardWidget->id, 'code' => $dashboardWidget->code, 'name' => $dashboardWidget->name],
             'config' => [
                 'pipeline_id' => $config['pipeline_id'],
                 'recruiter_field_id' => $config['recruiter_field_id'],
@@ -135,27 +179,8 @@ class AmoAccountWidgetsController extends Controller
                     'name' => $status->name,
                     'pipeline_id' => $status->amo_pipeline_id,
                 ]),
-            'pipelines' => CrmPipelineSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->orderBy('sort')
-                ->orderBy('name')
-                ->get()
-                ->map(fn (CrmPipelineSnapshot $pipeline): array => [
-                    'id' => $pipeline->amo_pipeline_id,
-                    'name' => $pipeline->name,
-                    'is_archive' => $pipeline->is_archive,
-                ]),
-            'leadFields' => CrmCustomFieldSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('entity_type', 'leads')
-                ->orderBy('sort')
-                ->orderBy('name')
-                ->get()
-                ->map(fn (CrmCustomFieldSnapshot $field): array => [
-                    'id' => $field->amo_field_id,
-                    'name' => $field->name,
-                    'field_type' => $field->field_type,
-                ]),
+            'pipelines' => $pipelines,
+            'leadFields' => $leadFields,
             'links' => $this->links($amoAccount) + [
                 'widgets' => route('amo-accounts.widgets', $amoAccount),
                 'save' => route('amo-accounts.widgets.settings.update', [$amoAccount, $dashboardWidget]),
@@ -167,51 +192,11 @@ class AmoAccountWidgetsController extends Controller
     public function updateSettings(UpdateWidgetSettingsRequest $request, AmoAccount $amoAccount, DashboardWidget $dashboardWidget): RedirectResponse
     {
         $data = $request->validated();
+
         $pipeline = isset($data['pipeline_id'])
             ? CrmPipelineSnapshot::query()
                 ->where('amo_account_id', $amoAccount->id)
                 ->where('amo_pipeline_id', (int) $data['pipeline_id'])
-                ->first()
-            : null;
-        $field = isset($data['recruiter_field_id'])
-            ? CrmCustomFieldSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('entity_type', 'leads')
-                ->where('amo_field_id', (int) $data['recruiter_field_id'])
-                ->first()
-            : null;
-        $managerField = isset($data['manager_field_id'])
-            ? CrmCustomFieldSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('entity_type', 'leads')
-                ->where('amo_field_id', (int) $data['manager_field_id'])
-                ->first()
-            : null;
-        $teamField = isset($data['team_field_id'])
-            ? CrmCustomFieldSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('entity_type', 'leads')
-                ->where('amo_field_id', (int) $data['team_field_id'])
-                ->first()
-            : null;
-        $cityField = isset($data['city_field_id'])
-            ? CrmCustomFieldSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('entity_type', 'leads')
-                ->where('amo_field_id', (int) $data['city_field_id'])
-                ->first()
-            : null;
-        $sourceField = isset($data['source_field_id'])
-            ? CrmCustomFieldSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('entity_type', 'leads')
-                ->where('amo_field_id', (int) $data['source_field_id'])
-                ->first()
-            : null;
-        $successStatus = isset($data['success_status_id'])
-            ? CrmPipelineStatusSnapshot::query()
-                ->where('amo_account_id', $amoAccount->id)
-                ->where('amo_status_id', (int) $data['success_status_id'])
                 ->first()
             : null;
 
@@ -219,49 +204,90 @@ class AmoAccountWidgetsController extends Controller
             throw ValidationException::withMessages(['pipeline_id' => 'Выберите воронку из списка синхронизированных воронок.']);
         }
 
-        if (isset($data['recruiter_field_id']) && $field === null) {
-            throw ValidationException::withMessages(['recruiter_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
-        }
-
-        if (isset($data['manager_field_id']) && $managerField === null) {
-            throw ValidationException::withMessages(['manager_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
-        }
-
-        if (isset($data['team_field_id']) && $teamField === null) {
-            throw ValidationException::withMessages(['team_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
-        }
-
-        if (isset($data['city_field_id']) && $cityField === null) {
-            throw ValidationException::withMessages(['city_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
-        }
-
-        if (isset($data['source_field_id']) && $sourceField === null) {
-            throw ValidationException::withMessages(['source_field_id' => 'Выберите поле сделки из списка синхронизированных полей.']);
-        }
-
         $installation = $this->installation($amoAccount, $dashboardWidget);
-        $installation->forceFill([
-            'config' => [
-                'pipeline_id' => $pipeline?->amo_pipeline_id,
-                'pipeline_name' => $pipeline?->name,
-                'recruiter_field_id' => $field?->amo_field_id,
-                'recruiter_field_name' => $field?->name,
-                'manager_field_id' => $managerField?->amo_field_id,
-                'manager_field_name' => $managerField?->name,
-                'team_field_id' => $teamField?->amo_field_id,
-                'team_field_name' => $teamField?->name,
-                'city_field_id' => $cityField?->amo_field_id,
-                'city_field_name' => $cityField?->name,
-                'source_field_id' => $sourceField?->amo_field_id,
-                'source_field_name' => $sourceField?->name,
-                'success_status_id' => $successStatus?->amo_status_id,
-                'success_status_name' => $successStatus?->name,
-            ],
-        ])->save();
+
+        if ($dashboardWidget->code === 'manager_topup_dashboard') {
+            $installation->forceFill([
+                'config' => $this->buildTopupConfig($amoAccount, $data, $pipeline),
+            ])->save();
+        } else {
+            $installation->forceFill([
+                'config' => $this->buildRecruiterConfig($amoAccount, $data, $pipeline),
+            ])->save();
+        }
 
         return redirect()
             ->route('amo-accounts.widgets.settings', [$amoAccount, $dashboardWidget])
             ->with('status', 'Настройки отчета сохранены.');
+    }
+
+    private function buildTopupConfig(AmoAccount $amoAccount, array $data, ?CrmPipelineSnapshot $pipeline): array
+    {
+        $managerField = $this->resolveLeadField($amoAccount, $data['manager_field_id'] ?? null, 'manager_field_id');
+        $prepaymentField = $this->resolveLeadField($amoAccount, $data['prepayment_field_id'] ?? null, 'prepayment_field_id');
+        $topupDateField = $this->resolveLeadField($amoAccount, $data['topup_date_field_id'] ?? null, 'topup_date_field_id');
+
+        return [
+            'pipeline_id' => $pipeline?->amo_pipeline_id,
+            'pipeline_name' => $pipeline?->name,
+            'manager_field_id' => $managerField?->amo_field_id,
+            'manager_field_name' => $managerField?->name,
+            'prepayment_field_id' => $prepaymentField?->amo_field_id,
+            'prepayment_field_name' => $prepaymentField?->name,
+            'topup_date_field_id' => $topupDateField?->amo_field_id,
+            'topup_date_field_name' => $topupDateField?->name,
+        ];
+    }
+
+    private function buildRecruiterConfig(AmoAccount $amoAccount, array $data, ?CrmPipelineSnapshot $pipeline): array
+    {
+        $recruiterField = $this->resolveLeadField($amoAccount, $data['recruiter_field_id'] ?? null, 'recruiter_field_id');
+        $managerField = $this->resolveLeadField($amoAccount, $data['manager_field_id'] ?? null, 'manager_field_id');
+        $teamField = $this->resolveLeadField($amoAccount, $data['team_field_id'] ?? null, 'team_field_id');
+        $cityField = $this->resolveLeadField($amoAccount, $data['city_field_id'] ?? null, 'city_field_id');
+        $sourceField = $this->resolveLeadField($amoAccount, $data['source_field_id'] ?? null, 'source_field_id');
+        $successStatus = isset($data['success_status_id'])
+            ? CrmPipelineStatusSnapshot::query()
+                ->where('amo_account_id', $amoAccount->id)
+                ->where('amo_status_id', (int) $data['success_status_id'])
+                ->first()
+            : null;
+
+        return [
+            'pipeline_id' => $pipeline?->amo_pipeline_id,
+            'pipeline_name' => $pipeline?->name,
+            'recruiter_field_id' => $recruiterField?->amo_field_id,
+            'recruiter_field_name' => $recruiterField?->name,
+            'manager_field_id' => $managerField?->amo_field_id,
+            'manager_field_name' => $managerField?->name,
+            'team_field_id' => $teamField?->amo_field_id,
+            'team_field_name' => $teamField?->name,
+            'city_field_id' => $cityField?->amo_field_id,
+            'city_field_name' => $cityField?->name,
+            'source_field_id' => $sourceField?->amo_field_id,
+            'source_field_name' => $sourceField?->name,
+            'success_status_id' => $successStatus?->amo_status_id,
+            'success_status_name' => $successStatus?->name,
+        ];
+    }
+
+    private function resolveLeadField(AmoAccount $amoAccount, mixed $fieldId, string $formKey): ?CrmCustomFieldSnapshot
+    {
+        if (empty($fieldId)) {
+            return null;
+        }
+
+        $field = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->where('entity_type', 'leads')
+            ->where('amo_field_id', (int) $fieldId)
+            ->first();
+
+        if ($field === null) {
+            throw ValidationException::withMessages([$formKey => 'Выберите поле сделки из списка синхронизированных полей.']);
+        }
+
+        return $field;
     }
 
     private function installation(AmoAccount $amoAccount, DashboardWidget $dashboardWidget): AmoAccountDashboardWidget
