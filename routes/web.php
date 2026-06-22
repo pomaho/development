@@ -27,6 +27,7 @@ use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\LeadSyncScheduleController;
 use App\Http\Controllers\Webhook\AmoWebhookController;
+use App\Http\Controllers\Widget\AmoManagerTopupController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -77,6 +78,17 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/project-city-
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/recruiter-schedule', [AmoTaskOverdueDashboardController::class, 'recruiterScheduleBreakdown'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule');
+
+// Manager Topup Dashboard
+Route::get('/widgets/amo/{publicKey}/manager-topup', [AmoManagerTopupController::class, 'show'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('widgets.amo.manager-topup.show');
+Route::get('/api/widgets/amo/{publicKey}/manager-topup/data', [AmoManagerTopupController::class, 'data'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-topup.data');
+Route::get('/api/widgets/amo/{publicKey}/manager-topup/leads', [AmoManagerTopupController::class, 'leads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-topup.leads');
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:webhook')
