@@ -155,7 +155,7 @@ function RecruiterSettingsForm({ config, pipelines, pipelineStatuses, leadFields
                 name="source_field_id"
                 value={config.source_field_id}
                 leadFields={leadFields}
-                placeholder='Авто: поле "Источник"'
+                placeholder='Авто: поле “Источник”'
                 hint="Значения этого поля будут показаны отдельными колонками в отчёте по командам и городам."
             />
 
