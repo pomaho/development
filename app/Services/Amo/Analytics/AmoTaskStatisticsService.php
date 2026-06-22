@@ -40,7 +40,7 @@ class AmoTaskStatisticsService
         ])->all();
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'responsible_user_id', 'raw'])
+            ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->orderBy('id')
@@ -57,7 +57,7 @@ class AmoTaskStatisticsService
                     $completeTill = $this->timestamp($raw['complete_till'] ?? null);
                     $completedAt = $this->completionTime($raw) ?? $completeTill;
 
-                    if ($isCompleted && $this->inPeriod($completeTill, $from, $to)) {
+                    if ($isCompleted && $this->inPeriod($task->entity_created_at, $from, $to)) {
                         $rows[$responsibleId]['completed_count']++;
                         $rows[$responsibleId]['total_count']++;
 
@@ -67,7 +67,7 @@ class AmoTaskStatisticsService
                         }
                     }
 
-                    if (! $isCompleted && $this->inPeriod($completeTill, $from, $to)) {
+                    if (! $isCompleted) {
                         $rows[$responsibleId]['open_count']++;
                         $rows[$responsibleId]['total_count']++;
 
@@ -136,12 +136,12 @@ class AmoTaskStatisticsService
                         continue;
                     }
 
-                    $completeTill = $this->timestamp($raw['complete_till'] ?? null);
-                    $completedAt = $this->completionTime($raw) ?? $completeTill;
-
-                    if (! $this->inPeriod($completeTill, $from, $to)) {
+                    if (! $this->inPeriod($task->entity_created_at, $from, $to)) {
                         continue;
                     }
+
+                    $completeTill = $this->timestamp($raw['complete_till'] ?? null);
+                    $completedAt = $this->completionTime($raw) ?? $completeTill;
 
                     if ($completeTill === null || $completedAt === null || ! $completedAt->greaterThan($completeTill)) {
                         continue;
