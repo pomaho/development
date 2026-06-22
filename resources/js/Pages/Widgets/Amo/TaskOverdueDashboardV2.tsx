@@ -79,7 +79,6 @@ type TaskStatisticsRow = {
     overdue_count: number;
     total_count: number;
     overdue_rate: number;
-    overdue_tasks: OverdueTask[];
 };
 
 type TaskStatisticsGroup = {
@@ -105,6 +104,7 @@ type Props = {
     links: {
         self: string;
         api: string;
+        userOverdueTasks: string;
     };
 };
 
@@ -350,7 +350,7 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
                     <SourceBreakdownTable sourceColumns={recruiterTeamCityBreakdown.source_columns} rows={departmentSourceRows(recruiterTeamCityBreakdown)} />
                 </ReportSection>
 
-                <TaskStatisticsSection rows={taskStatistics} period={period} />
+                <TaskStatisticsSection rows={taskStatistics} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
                 <ReportSection
                     eyebrow="Передачи рекрутеров"
@@ -374,7 +374,7 @@ export default function TaskOverdueDashboardV2({ account, period, recruiterLeads
     );
 }
 
-function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tasks: OverdueTask[]; onClose: () => void }) {
+function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tasks: OverdueTask[] | null; onClose: () => void }) {
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', handleKey);
@@ -394,45 +394,65 @@ function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tas
                         <X className="size-5" />
                     </button>
                 </div>
-                <div className="overflow-y-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="sticky top-0 bg-slate-50">
-                            <tr>
-                                <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Задача</th>
-                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Дедлайн</th>
-                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Закрыта</th>
-                                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просрочка</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {tasks.map((task, i) => (
-                                <tr className="hover:bg-red-50/40" key={i}>
-                                    <td className="max-w-xs px-5 py-3.5 text-gray-800">
-                                        <span className="line-clamp-2">{task.text ?? '—'}</span>
-                                    </td>
-                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{task.complete_till}</td>
-                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{task.completed_at}</td>
-                                    <td className="px-4 py-3.5 text-right">
-                                        <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
-                                            +{task.days_overdue} дн.
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-400">
-                    {tasks.length} задач · отсортировано по убыванию просрочки
-                </div>
+                {tasks === null ? (
+                    <div className="flex items-center justify-center py-16 text-slate-400">
+                        <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                        Загрузка...
+                    </div>
+                ) : (
+                    <>
+                        <div className="overflow-y-auto">
+                            <table className="w-full text-left text-sm">
+                                <thead className="sticky top-0 bg-slate-50">
+                                    <tr>
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Задача</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Дедлайн</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Закрыта</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просрочка</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {tasks.map((task, i) => (
+                                        <tr className="hover:bg-red-50/40" key={i}>
+                                            <td className="max-w-xs px-5 py-3.5 text-gray-800">
+                                                <span className="line-clamp-2">{task.text ?? '—'}</span>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{task.complete_till}</td>
+                                            <td className="px-4 py-3.5 text-right tabular-nums text-slate-500">{task.completed_at}</td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
+                                                    +{task.days_overdue} дн.
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-400">
+                            {tasks.length} задач · отсортировано по убыванию просрочки
+                        </div>
+                    </>
+                )}
             </div>
         </div>,
         document.body,
     );
 }
 
-function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; period: { from: string; to: string } }) {
-    const [overdueModal, setOverdueModal] = useState<{ userName: string; tasks: OverdueTask[] } | null>(null);
+function TaskStatisticsSection({ rows, period, userOverdueTasksUrl }: { rows: TaskStatisticsGroup[]; period: { from: string; to: string }; userOverdueTasksUrl: string }) {
+    const [overdueModal, setOverdueModal] = useState<{ userName: string; userId: number; tasks: OverdueTask[] | null } | null>(null);
+
+    const handleOverdueClick = async (userName: string, userId: number) => {
+        setOverdueModal({ userName, userId, tasks: null });
+        const url = new URL(userOverdueTasksUrl);
+        url.searchParams.set('user_id', String(userId));
+        url.searchParams.set('from', period.from);
+        url.searchParams.set('to', period.to);
+        const res = await fetch(url.toString());
+        const data = await res.json();
+        setOverdueModal((prev) => prev?.userId === userId ? { ...prev, tasks: data.tasks } : prev);
+    };
     const totalCompleted = rows.reduce((sum, g) => sum + g.completed_count, 0);
     const totalCompletedOverdue = rows.reduce((sum, g) => sum + g.completed_overdue_count, 0);
     const hasAny = rows.some((g) => g.users.length > 0);
@@ -490,7 +510,7 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
                                                         type="button"
                                                         className="inline-flex items-center justify-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200 transition-colors hover:bg-red-100 hover:ring-red-300"
                                                         title="Показать просроченные задачи"
-                                                        onClick={() => setOverdueModal({ userName: row.responsible_name ?? `ID ${row.responsible_user_id}`, tasks: row.overdue_tasks })}
+                                                        onClick={() => handleOverdueClick(row.responsible_name ?? `ID ${row.responsible_user_id}`, row.responsible_user_id)}
                                                     >
                                                         {row.completed_overdue_count}
                                                     </button>
@@ -525,6 +545,7 @@ function TaskStatisticsSection({ rows, period }: { rows: TaskStatisticsGroup[]; 
                 onClose={() => setOverdueModal(null)}
             />
         )}
+
         </>
     );
 }

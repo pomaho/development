@@ -56,6 +56,9 @@ Route::get('/widgets/amo/{publicKey}/task-overdue-dashboard-v2', [AmoTaskOverdue
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard', [AmoTaskOverdueDashboardController::class, 'json'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard.show');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/user-overdue-tasks', [AmoTaskOverdueDashboardController::class, 'userOverdueTasks'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.user-overdue-tasks');
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:webhook')

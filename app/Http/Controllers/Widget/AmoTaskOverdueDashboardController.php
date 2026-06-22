@@ -77,7 +77,19 @@ class AmoTaskOverdueDashboardController extends Controller
             'links' => [
                 'self' => route('widgets.amo.task-overdue-dashboard-v2.show', $publicKey),
                 'api' => route('api.widgets.amo.task-overdue-dashboard.show', $publicKey),
+                'userOverdueTasks' => route('api.widgets.amo.task-overdue-dashboard-v2.user-overdue-tasks', $publicKey),
             ],
+        ]);
+    }
+
+    public function userOverdueTasks(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+        $userId = (int) $request->query('user_id', 0);
+
+        return response()->json([
+            'tasks' => $statisticsService->userOverdueTasks($installation->account, $userId, $from, $to),
         ]);
     }
 

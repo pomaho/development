@@ -36,12 +36,11 @@ class AmoTaskStatisticsService
                 'open_overdue_count' => 0,
                 'overdue_count' => 0,
                 'total_count' => 0,
-                'overdue_tasks' => [],
             ],
         ])->all();
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw', 'name'])
+            ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->orderBy('id')
@@ -65,12 +64,6 @@ class AmoTaskStatisticsService
                         if ($completeTill !== null && $completedAt !== null && $completedAt->greaterThan($completeTill)) {
                             $rows[$responsibleId]['completed_overdue_count']++;
                             $rows[$responsibleId]['overdue_count']++;
-                            $rows[$responsibleId]['overdue_tasks'][] = [
-                                'text' => $raw['text'] ?? $task->name,
-                                'complete_till' => $completeTill->format('d.m.Y'),
-                                'completed_at' => $completedAt->format('d.m.Y'),
-                                'days_overdue' => (int) $completedAt->diffInDays($completeTill),
-                            ];
                         }
                     }
 
@@ -91,8 +84,6 @@ class AmoTaskStatisticsService
                 $row['overdue_rate'] = $row['completed_count'] > 0
                     ? round($row['completed_overdue_count'] / $row['completed_count'] * 100, 1)
                     : 0.0;
-
-                usort($row['overdue_tasks'], fn (array $a, array $b): int => $b['days_overdue'] - $a['days_overdue']);
 
                 return $row;
             })
@@ -125,6 +116,49 @@ class AmoTaskStatisticsService
             ->sortBy('group_name')
             ->values()
             ->all();
+    }
+
+    public function userOverdueTasks(AmoAccount $account, int $userId, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $tasks = [];
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'entity_created_at', 'raw', 'name'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'tasks')
+            ->where('responsible_user_id', $userId)
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$tasks, $from, $to): void {
+                foreach ($chunk as $task) {
+                    $raw = $task->raw ?? [];
+
+                    if (! (bool) ($raw['is_completed'] ?? false)) {
+                        continue;
+                    }
+
+                    if (! $this->inPeriod($task->entity_created_at, $from, $to)) {
+                        continue;
+                    }
+
+                    $completeTill = $this->timestamp($raw['complete_till'] ?? null);
+                    $completedAt = $this->completionTime($raw) ?? $completeTill;
+
+                    if ($completeTill === null || $completedAt === null || ! $completedAt->greaterThan($completeTill)) {
+                        continue;
+                    }
+
+                    $tasks[] = [
+                        'text' => $raw['text'] ?? $task->name,
+                        'complete_till' => $completeTill->format('d.m.Y'),
+                        'completed_at' => $completedAt->format('d.m.Y'),
+                        'days_overdue' => (int) $completedAt->diffInDays($completeTill),
+                    ];
+                }
+            });
+
+        usort($tasks, fn (array $a, array $b): int => $b['days_overdue'] - $a['days_overdue']);
+
+        return $tasks;
     }
 
     public function completedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
