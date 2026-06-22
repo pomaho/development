@@ -41,6 +41,7 @@ class AmoTaskStatisticsService
         ])->all();
 
         CrmEntitySnapshot::query()
+            ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw', 'name'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->orderBy('id')
@@ -318,15 +319,15 @@ class AmoTaskStatisticsService
         $totalLeads = 0;
 
         CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'entity_created_at', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
+            ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$transferredLeadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue, $managerField, $managerFieldName, $managerEnumIdsByValue, $from, $to): void {
+            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$transferredLeadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue, $managerField, $managerFieldName, $managerEnumIdsByValue): void {
                 foreach ($leads as $lead) {
-                    if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
-                        continue;
-                    }
 
                     $totalLeads++;
                     $leadId = (string) $lead->external_id;
@@ -431,15 +432,15 @@ class AmoTaskStatisticsService
         $totalLeads = 0;
 
         CrmEntitySnapshot::query()
+            ->select(['id', 'entity_created_at', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
+            ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$sourceColumns, $from, $to, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$sourceColumns, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
                 foreach ($leads as $lead) {
-                    if (! $this->inPeriod($lead->entity_created_at, $from, $to)) {
-                        continue;
-                    }
 
                     $customFields = $lead->custom_fields_values ?? [];
 
