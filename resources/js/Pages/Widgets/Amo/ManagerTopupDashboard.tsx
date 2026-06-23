@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { CalendarDays, ChevronDown, ChevronUp, ExternalLink, Inbox, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { CalendarDays, ExternalLink, Inbox, X } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -279,75 +279,6 @@ function LeadsModal({ leadsUrl, from, to, manager, baseDomain, onClose }: {
     );
 }
 
-// ─── Manager Filter ───────────────────────────────────────────────────────────
-
-function ManagerFilter({ allNames, selected, onChange }: {
-    allNames: string[];
-    selected: string[];
-    onChange: (names: string[]) => void;
-}) {
-    const [open, setOpen] = useState(false);
-    const ref = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        function handleClick(e: MouseEvent) {
-            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-        }
-        document.addEventListener('mousedown', handleClick);
-        return () => document.removeEventListener('mousedown', handleClick);
-    }, []);
-
-    const label = selected.length === 0 ? 'Все менеджеры' : selected.length === 1 ? selected[0] : `${selected.length} менеджера`;
-
-    return (
-        <div className="relative" ref={ref}>
-            <button
-                type="button"
-                className="flex h-10 items-center gap-2 rounded-lg border-white/10 bg-white/10 px-4 text-sm font-medium text-white focus:border-violet-400 focus:ring-violet-400/20 hover:bg-white/20 transition-colors"
-                onClick={() => setOpen((v) => !v)}
-            >
-                {label}
-                {open ? <ChevronUp className="size-4 text-white/60" /> : <ChevronDown className="size-4 text-white/60" />}
-            </button>
-            {open && (
-                <div className="absolute left-0 top-full z-20 mt-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                    <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
-                        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Менеджеры</span>
-                        <button
-                            type="button"
-                            className="text-xs text-violet-600 hover:text-violet-700"
-                            onClick={() => onChange([])}
-                        >
-                            Сбросить
-                        </button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto py-1">
-                        {allNames.map((name) => {
-                            const checked = selected.includes(name);
-                            return (
-                                <label key={name} className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-50">
-                                    <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        className="size-4 rounded border-slate-300 text-indigo-600"
-                                        onChange={() => {
-                                            const next = checked
-                                                ? selected.filter((s) => s !== name)
-                                                : [...selected, name];
-                                            onChange(next);
-                                        }}
-                                    />
-                                    <span className="text-sm text-gray-700">{name}</span>
-                                </label>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
 // ─── Section components ───────────────────────────────────────────────────────
 
 function ManagerBarChart({ managers, onManagerClick }: { managers: ManagerSummary[]; onManagerClick: (name: string) => void }) {
@@ -469,13 +400,12 @@ function ManagerSummaryTable({ managers, onRowClick }: { managers: ManagerSummar
 export default function ManagerTopupDashboard({ account, period, links }: Props) {
     const [from, setFrom] = useState(period.from);
     const [to, setTo] = useState(period.to);
-    const [selectedManagers, setSelectedManagers] = useState<string[]>([]);
     const [state, setState] = useState<LoadState<BreakdownData>>({ status: 'loading' });
     const [modal, setModal] = useState<{ manager: string } | null>(null);
 
-    const loadData = (f: string, t: string, managers: string[]) => {
+    const loadData = (f: string, t: string) => {
         setState({ status: 'loading' });
-        const url = buildUrl(links.data, { from: f, to: t, managers: managers.join(',') });
+        const url = buildUrl(links.data, { from: f, to: t });
         fetch(url)
             .then((r) => r.json())
             .then((json) => setState({ status: 'loaded', data: json.data }))
@@ -483,18 +413,13 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
     };
 
     useEffect(() => {
-        loadData(from, to, selectedManagers);
+        loadData(from, to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        loadData(from, to, selectedManagers);
-    };
-
-    const handleManagerFilter = (managers: string[]) => {
-        setSelectedManagers(managers);
-        loadData(from, to, managers);
+        loadData(from, to);
     };
 
     const data = state.status === 'loaded' ? state.data : null;
@@ -531,7 +456,7 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
                                 <CalendarDays className="size-3.5 text-violet-400" />
                                 Период
                             </div>
-                            <div className="mb-3 grid grid-cols-[1fr_1fr_auto] gap-2">
+                            <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                                 <input
                                     className="h-10 rounded-lg border-white/10 bg-white/10 px-3 text-sm text-white focus:border-violet-400 focus:ring-violet-400/20"
                                     type="date"
@@ -551,13 +476,6 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
                                     Показать
                                 </button>
                             </div>
-                            {data && data.allManagerNames.length > 0 && (
-                                <ManagerFilter
-                                    allNames={data.allManagerNames}
-                                    selected={selectedManagers}
-                                    onChange={handleManagerFilter}
-                                />
-                            )}
                         </form>
                     </div>
                 </header>

@@ -110,7 +110,7 @@ class AmoManagerTopupController extends Controller
         return [
             now($timezone)->startOfMonth()->startOfDay(),
             now($timezone)->endOfDay(),
-            ['source' => 'default', 'preset' => null, 'label' => 'Текущий месяц'],
+            ['source' => 'default', 'preset' => null, 'label' => 'Текущий период'],
         ];
     }
 
