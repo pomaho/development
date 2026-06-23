@@ -273,6 +273,7 @@ class AmoTaskStatisticsService
             ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter, $teamFilter, $recruiterEnumId, $managerRequired, $useCustomDateFields, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
+                    $transferDate = null;
 
                     if ($useCustomDateFields) {
                         $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
