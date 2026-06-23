@@ -373,6 +373,7 @@ class AmoTaskStatisticsService
                         $leads[] = [
                             'id' => $lead->external_id,
                             'name' => $lead->name ?: 'Без названия',
+                            'created_at' => $lead->entity_created_at?->toDateString(),
                             'transfer_date' => $transferDate?->toDateString(),
                         ];
                     }
