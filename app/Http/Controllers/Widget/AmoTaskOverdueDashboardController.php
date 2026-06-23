@@ -73,9 +73,10 @@ class AmoTaskOverdueDashboardController extends Controller
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
 
         return response()->json([
-            'data' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? []),
+            'data' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? [], $tz),
         ]);
     }
 
@@ -83,9 +84,10 @@ class AmoTaskOverdueDashboardController extends Controller
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
 
         return response()->json([
-            'data' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? []),
+            'data' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
         ]);
     }
 
@@ -103,9 +105,10 @@ class AmoTaskOverdueDashboardController extends Controller
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
 
         return response()->json([
-            'data' => $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $installation->config ?? []),
+            'data' => $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
         ]);
     }
 
@@ -113,6 +116,7 @@ class AmoTaskOverdueDashboardController extends Controller
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
 
         return response()->json([
             'data' => $statisticsService->projectCityVacancyLeads(
@@ -128,6 +132,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 (int) $request->query('recruiter_enum_id', 0),
                 $request->query('manager_required', '1') !== '0',
                 (int) $request->query('status_id', 0),
+                200,
+                $tz,
             ),
         ]);
     }
@@ -136,9 +142,10 @@ class AmoTaskOverdueDashboardController extends Controller
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
 
         return response()->json([
-            'data' => $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $installation->config ?? []),
+            'data' => $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
         ]);
     }
 

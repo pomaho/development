@@ -18,6 +18,9 @@ class AmoTaskStatisticsService
     private const SOURCE_FIELD_NAME = 'Источник';
     private const PROJECT_FIELD_NAME = 'Проект';
     private const VACANCY_FIELD_NAME = 'Вакансия';
+    private const TAKEN_TO_WORK_FIELD_ID = 1435399;  // "Взято в работу"
+    private const TRANSFER_DATE_FIELD_ID = 1435403;   // "Дата передачи менеджеру"
+    private const MISSING_DATES_LEAD_LIMIT = 300;
 
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
@@ -177,39 +180,39 @@ class AmoTaskStatisticsService
         Cache::put($this->dashboardCacheVersionKey($account), (string) now()->getPreciseTimestamp(6), now()->addDays(2));
     }
 
-    public function recruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    public function recruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         return Cache::remember(
-            $this->recruiterLeadDistributionCacheKey($account, $from, $to, $config),
+            $this->recruiterLeadDistributionCacheKey($account, $from, $to, $config, $timezone),
             now()->addMinutes(10),
-            fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to, $config),
+            fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to, $config, $timezone),
         );
     }
 
-    public function recruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    public function recruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         return Cache::remember(
-            $this->recruiterTeamCityBreakdownCacheKey($account, $from, $to, $config),
+            $this->recruiterTeamCityBreakdownCacheKey($account, $from, $to, $config, $timezone),
             now()->addMinutes(10),
-            fn (): array => $this->buildRecruiterTeamCityBreakdown($account, $from, $to, $config),
+            fn (): array => $this->buildRecruiterTeamCityBreakdown($account, $from, $to, $config, $timezone),
         );
     }
 
-    public function projectCityVacancyBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    public function projectCityVacancyBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         return Cache::remember(
-            $this->projectCityVacancyBreakdownCacheKey($account, $from, $to, $config),
+            $this->projectCityVacancyBreakdownCacheKey($account, $from, $to, $config, $timezone),
             now()->addMinutes(10),
-            fn (): array => $this->buildProjectCityVacancyBreakdown($account, $from, $to, $config),
+            fn (): array => $this->buildProjectCityVacancyBreakdown($account, $from, $to, $config, $timezone),
         );
     }
 
-    public function recruiterScheduleBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    public function recruiterScheduleBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         return Cache::remember(
-            $this->recruiterScheduleBreakdownCacheKey($account, $from, $to, $config),
+            $this->recruiterScheduleBreakdownCacheKey($account, $from, $to, $config, $timezone),
             now()->addMinutes(10),
-            fn (): array => $this->buildRecruiterScheduleBreakdown($account, $from, $to, $config),
+            fn (): array => $this->buildRecruiterScheduleBreakdown($account, $from, $to, $config, $timezone),
         );
     }
 
@@ -226,7 +229,8 @@ class AmoTaskStatisticsService
         int $recruiterEnumId = 0,
         bool $managerRequired = true,
         int $statusId = 0,
-        int $limit = 200
+        int $limit = 200,
+        string $timezone = 'UTC'
     ): array {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $fieldQuery = CrmCustomFieldSnapshot::query()
@@ -251,24 +255,28 @@ class AmoTaskStatisticsService
 
         $leads = [];
         $total = 0;
+        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
+            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($statusId > 0, fn ($q) => $q->where('status_id', $statusId))
-            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter, $teamFilter, $recruiterEnumId, $managerRequired): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter, $teamFilter, $recruiterEnumId, $managerRequired, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
 
-                    if ($managerRequired && $managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                    // Filter by "Дата передачи менеджеру" (1435403) instead of entity_created_at
+                    $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                         continue;
                     }
 
+                    // Recruiter must be set
                     $leadRecruiterIds = $recruiterField !== null
                         ? $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue)
                         : [];
@@ -278,6 +286,11 @@ class AmoTaskStatisticsService
                     }
 
                     if ($recruiterEnumId > 0 && !in_array($recruiterEnumId, $leadRecruiterIds, true)) {
+                        continue;
+                    }
+
+                    // Manager check is optional (managers fill it later for some stages)
+                    if ($managerRequired && $managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
                         continue;
                     }
 
@@ -353,7 +366,7 @@ class AmoTaskStatisticsService
                         $leads[] = [
                             'id' => $lead->external_id,
                             'name' => $lead->name ?: 'Без названия',
-                            'created_at' => $lead->entity_created_at?->toDateString(),
+                            'transfer_date' => $transferDate?->toDateString(),
                         ];
                     }
                 }
@@ -470,7 +483,7 @@ class AmoTaskStatisticsService
         ];
     }
 
-    private function buildRecruiterScheduleBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    private function buildRecruiterScheduleBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $pipelineName = data_get($config, 'pipeline_name');
@@ -501,46 +514,57 @@ class AmoTaskStatisticsService
 
         $countsByEnum = [];
         $totalCount = 0;
+        $missingDatesLeads = [];
+        $missingDatesCount = 0;
 
-        $baseQuery = CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'custom_fields_values'])
+        $recruiterFieldId = (int) ($recruiterField?->amo_field_id ?? 0);
+        $recruiterFieldName = $recruiterField?->name ?? self::RECRUITER_FIELD_NAME;
+        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($successStatusId > 0, fn ($q) => $q->where('status_id', $successStatusId))
-            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
-            ->orderBy('id');
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, &$missingDatesLeads, &$missingDatesCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                foreach ($leads as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
 
-        $recruiterFieldId = (int) ($recruiterField?->amo_field_id ?? 0);
-        $recruiterFieldName = $recruiterField?->name ?? self::RECRUITER_FIELD_NAME;
-        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
-        $managerFieldName = $managerField?->name ?? self::MANAGER_FIELD_NAME;
+                    if ($recruiterField !== null) {
+                        $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
+                        if ($rIds === []) {
+                            continue;
+                        }
+                    }
 
-        $baseQuery->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $managerField, $managerFieldId, $managerFieldName, $managerEnumIdsByValue): void {
-            foreach ($leads as $lead) {
-                $customFields = $lead->custom_fields_values ?? [];
+                    $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
 
-                if ($recruiterField !== null) {
-                    $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
-                    if ($rIds === []) {
+                    // Deals with recruiter but no transfer date → "Не заполнены даты"
+                    if ($transferDate === null) {
+                        $missingDatesCount++;
+                        if (count($missingDatesLeads) < self::MISSING_DATES_LEAD_LIMIT) {
+                            $missingDatesLeads[] = $this->missingDatesEntry($lead, ['transfer_date']);
+                        }
                         continue;
                     }
-                }
 
-                if ($managerField !== null && !$this->fieldHasAnyValue($customFields, $managerFieldId, $managerFieldName, $managerEnumIdsByValue)) {
-                    continue;
-                }
+                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
+                        continue;
+                    }
 
-                $totalCount++;
-                $leadId = (string) $lead->external_id;
-                $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
+                    $totalCount++;
+                    $leadId = (string) $lead->external_id;
+                    $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
 
-                foreach ($rIds as $enumId) {
-                    $countsByEnum[$enumId][$leadId] = true;
+                    foreach ($rIds as $enumId) {
+                        $countsByEnum[$enumId][$leadId] = true;
+                    }
                 }
-            }
-        });
+            });
 
         $recruiters = [];
         foreach ($countsByEnum as $enumId => $leadIds) {
@@ -562,10 +586,15 @@ class AmoTaskStatisticsService
             'pipeline_name' => $pipelineName,
             'total_count' => $totalCount,
             'recruiters' => $recruiters,
+            'missing_dates' => [
+                'count' => $missingDatesCount,
+                'truncated' => $missingDatesCount > count($missingDatesLeads),
+                'leads' => $missingDatesLeads,
+            ],
         ];
     }
 
-    private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         $fieldId = (int) data_get($config, 'recruiter_field_id', 0);
         $fieldName = (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME);
@@ -600,62 +629,95 @@ class AmoTaskStatisticsService
             ->mapWithKeys(fn (array $enum): array => [$this->normaliseRecruiterValue($enum['value']) => (int) $enum['id']])
             ->all();
 
+        $emptyResult = [
+            'field_name' => $fieldName,
+            'field_id' => null,
+            'field_found' => false,
+            'manager_field_name' => $managerFieldName,
+            'manager_field_id' => null,
+            'manager_field_found' => false,
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
+            'total_leads_count' => 0,
+            'assigned_leads_count' => 0,
+            'transferred_to_manager_count' => 0,
+            'recruiters' => [],
+            'missing_dates' => ['count' => 0, 'truncated' => false, 'leads' => []],
+        ];
+
         if ($field === null) {
-            return [
-                'field_name' => $fieldName,
-                'field_id' => null,
-                'field_found' => false,
-                'manager_field_name' => $managerFieldName,
-                'manager_field_id' => null,
-                'manager_field_found' => false,
-                'pipeline_id' => $pipelineId ?: null,
-                'pipeline_name' => $pipelineName,
-                'total_leads_count' => 0,
-                'assigned_leads_count' => 0,
-                'transferred_to_manager_count' => 0,
-                'recruiters' => [],
-            ];
+            return $emptyResult;
         }
 
-        $leadIdsByEnum = [];
-        $transferredLeadIdsByEnum = [];
-        $totalLeads = 0;
+        // Leads that are "taken to work" (field 1435399) in the period — per recruiter
+        $intakeLeadIdsByEnum = [];
+        // Leads that are "transferred to manager" (field 1435403) in the period — per recruiter
+        $transferLeadIdsByEnum = [];
+        // All leads with field 1435399 in period (with or without recruiter)
+        $allIntakeLeadIds = [];
+        $missingDatesLeads = [];
+        $missingDatesCount = 0;
+
+        $takenToWorkFieldId = (int) data_get($config, 'taken_to_work_field_id', self::TAKEN_TO_WORK_FIELD_ID);
+        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'entity_created_at', 'custom_fields_values'])
+            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
-            ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$leadIdsByEnum, &$transferredLeadIdsByEnum, &$totalLeads, $field, $fieldName, $enumIdsByValue, $managerField, $managerFieldName, $managerEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, &$missingDatesLeads, &$missingDatesCount, $field, $fieldName, $enumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($leads as $lead) {
-
-                    $totalLeads++;
+                    $customFields = $lead->custom_fields_values ?? [];
                     $leadId = (string) $lead->external_id;
-                    $hasManager = $managerField !== null
-                        && $this->fieldHasAnyValue($lead->custom_fields_values ?? [], (int) $managerField->amo_field_id, $managerFieldName, $managerEnumIdsByValue);
 
-                    foreach ($this->recruiterEnumIds($lead->custom_fields_values ?? [], (int) $field->amo_field_id, $fieldName, $enumIdsByValue) as $enumId) {
-                        $leadIdsByEnum[$enumId][$leadId] = true;
+                    $recruiterEnumIds = $this->recruiterEnumIds($customFields, (int) $field->amo_field_id, $fieldName, $enumIdsByValue);
+                    $hasRecruiter = $recruiterEnumIds !== [];
 
-                        if ($hasManager) {
-                            $transferredLeadIdsByEnum[$enumId][$leadId] = true;
+                    $intakeDate = $this->customDateFieldValue($customFields, $takenToWorkFieldId, $timezone);
+                    $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+
+                    $intakeInPeriod = $this->dateInPeriod($intakeDate, $fromDate, $toDate);
+                    $transferInPeriod = $this->dateInPeriod($transferDate, $fromDate, $toDate);
+
+                    // Total intake: any lead where "Взято в работу" is in period
+                    if ($intakeInPeriod) {
+                        $allIntakeLeadIds[$leadId] = true;
+                        if ($hasRecruiter) {
+                            foreach ($recruiterEnumIds as $enumId) {
+                                $intakeLeadIdsByEnum[$enumId][$leadId] = true;
+                            }
+                        }
+                    }
+
+                    // Transfer count: "Дата передачи менеджеру" in period AND recruiter set
+                    if ($transferInPeriod && $hasRecruiter) {
+                        foreach ($recruiterEnumIds as $enumId) {
+                            $transferLeadIdsByEnum[$enumId][$leadId] = true;
+                        }
+                    }
+
+                    // Missing dates: recruiter set but neither date field is filled
+                    if ($hasRecruiter && $intakeDate === null && $transferDate === null) {
+                        $missingDatesCount++;
+                        if (count($missingDatesLeads) < self::MISSING_DATES_LEAD_LIMIT) {
+                            $missingDatesLeads[] = $this->missingDatesEntry($lead, ['intake_date', 'transfer_date']);
                         }
                     }
                 }
             });
 
-        foreach ($leadIdsByEnum as $enumId => $leadIds) {
-            $enums[$enumId] ??= [
-                'enum_id' => $enumId,
-                'name' => "Значение {$enumId}",
-                'leads_count' => 0,
-                'transferred_to_manager_count' => 0,
-            ];
+        // Build per-recruiter rows from enums map
+        foreach ($intakeLeadIdsByEnum as $enumId => $leadIds) {
+            $enums[$enumId] ??= ['enum_id' => $enumId, 'name' => "Значение {$enumId}", 'leads_count' => 0, 'transferred_to_manager_count' => 0];
             $enums[$enumId]['leads_count'] = count($leadIds);
-            $enums[$enumId]['transferred_to_manager_count'] = count($transferredLeadIdsByEnum[$enumId] ?? []);
+        }
+        foreach ($transferLeadIdsByEnum as $enumId => $leadIds) {
+            $enums[$enumId] ??= ['enum_id' => $enumId, 'name' => "Значение {$enumId}", 'leads_count' => 0, 'transferred_to_manager_count' => 0];
+            $enums[$enumId]['transferred_to_manager_count'] = count($leadIds);
         }
 
         $rows = collect($enums)
@@ -672,20 +734,25 @@ class AmoTaskStatisticsService
             'manager_field_found' => $managerField !== null,
             'pipeline_id' => $pipelineId ?: null,
             'pipeline_name' => $pipelineName,
-            'total_leads_count' => $totalLeads,
-            'assigned_leads_count' => collect($leadIdsByEnum)
-                ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
+            'total_leads_count' => count($allIntakeLeadIds),
+            'assigned_leads_count' => collect($intakeLeadIdsByEnum)
+                ->flatMap(fn (array $ids): array => array_keys($ids))
                 ->unique()
                 ->count(),
-            'transferred_to_manager_count' => collect($transferredLeadIdsByEnum)
-                ->flatMap(fn (array $leadIds): array => array_keys($leadIds))
+            'transferred_to_manager_count' => collect($transferLeadIdsByEnum)
+                ->flatMap(fn (array $ids): array => array_keys($ids))
                 ->unique()
                 ->count(),
             'recruiters' => $rows,
+            'missing_dates' => [
+                'count' => $missingDatesCount,
+                'truncated' => $missingDatesCount > count($missingDatesLeads),
+                'leads' => $missingDatesLeads,
+            ],
         ];
     }
 
-    private function buildRecruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    private function buildRecruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $pipelineName = data_get($config, 'pipeline_name');
@@ -693,17 +760,16 @@ class AmoTaskStatisticsService
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads');
         $recruiterField = $this->leadField($fieldQuery, (int) data_get($config, 'recruiter_field_id', 0), (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME));
-        $managerField = $this->leadField($fieldQuery, (int) data_get($config, 'manager_field_id', 0), (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME));
         $teamField = $this->leadField($fieldQuery, (int) data_get($config, 'team_field_id', 0), (string) (data_get($config, 'team_field_name') ?: self::TEAM_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
         $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
-        if ($recruiterField === null || $managerField === null || $teamField === null || $cityField === null) {
+        if ($recruiterField === null || $teamField === null || $cityField === null) {
             return [
                 'pipeline_id' => $pipelineId ?: null,
                 'pipeline_name' => $pipelineName,
                 'recruiter_field_found' => $recruiterField !== null,
-                'manager_field_found' => $managerField !== null,
+                'manager_field_found' => false,
                 'team_field_found' => $teamField !== null,
                 'city_field_found' => $cityField !== null,
                 'source_field_found' => $sourceField !== null,
@@ -713,12 +779,12 @@ class AmoTaskStatisticsService
                 'total_leads_count' => 0,
                 'source_columns' => [],
                 'recruiters' => [],
+                'missing_dates' => ['count' => 0, 'truncated' => false, 'leads' => []],
             ];
         }
 
         $recruiterNames = $this->enumNamesById($recruiterField);
         $recruiterEnumIdsByValue = $this->enumIdsByValue($recruiterField);
-        $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
         $teamEnumIdsByValue = $this->enumIdsByValue($teamField);
         $cityEnumIdsByValue = $this->enumIdsByValue($cityField);
         $sourceEnumIdsByValue = $sourceField !== null ? $this->enumIdsByValue($sourceField) : [];
@@ -734,27 +800,40 @@ class AmoTaskStatisticsService
         $rows = [];
         $totalLeads = 0;
         $withoutTeamCount = 0;
+        $missingDatesLeads = [];
+        $missingDatesCount = 0;
+
+        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'entity_created_at', 'custom_fields_values'])
+            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
-            ->when($from, fn ($query) => $query->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($query) => $query->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, &$missingDatesLeads, &$missingDatesCount, $recruiterField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($leads as $lead) {
 
                     $customFields = $lead->custom_fields_values ?? [];
 
-                    if (! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
-                        continue;
-                    }
-
                     $recruiterIds = $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue);
 
                     if ($recruiterIds === []) {
+                        continue;
+                    }
+
+                    // Filter by "Дата передачи менеджеру" (1435403)
+                    $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                    if ($transferDate === null) {
+                        $missingDatesCount++;
+                        if (count($missingDatesLeads) < self::MISSING_DATES_LEAD_LIMIT) {
+                            $missingDatesLeads[] = $this->missingDatesEntry($lead, ['transfer_date']);
+                        }
+                        continue;
+                    }
+                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                         continue;
                     }
 
@@ -862,10 +941,15 @@ class AmoTaskStatisticsService
             'without_team_count' => $withoutTeamCount,
             'source_columns' => $sourceColumns,
             'recruiters' => $recruiters,
+            'missing_dates' => [
+                'count' => $missingDatesCount,
+                'truncated' => $missingDatesCount > count($missingDatesLeads),
+                'leads' => $missingDatesLeads,
+            ],
         ];
     }
 
-    private function buildProjectCityVacancyBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    private function buildProjectCityVacancyBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
     {
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $pipelineName = data_get($config, 'pipeline_name');
@@ -882,7 +966,6 @@ class AmoTaskStatisticsService
         $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
         $recruiterEnumIdsByValue = $recruiterField ? $this->enumIdsByValue($recruiterField) : [];
-        $managerEnumIdsByValue = $managerField ? $this->enumIdsByValue($managerField) : [];
         $teamEnumIdsByValue = $teamField ? $this->enumIdsByValue($teamField) : [];
         $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
         $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
@@ -892,24 +975,38 @@ class AmoTaskStatisticsService
         $projects = [];
         $allSourceNames = [];
         $totalLeads = 0;
+        $missingDatesLeads = [];
+        $missingDatesCount = 0;
+
+        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'entity_created_at', 'custom_fields_values'])
+            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
-            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, &$missingDatesLeads, &$missingDatesCount, $recruiterField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($leads as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
 
-                    if ($managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                    // Recruiter must be set
+                    if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
                         continue;
                     }
 
-                    if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
+                    // Filter by "Дата передачи менеджеру" (1435403)
+                    $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                    if ($transferDate === null) {
+                        $missingDatesCount++;
+                        if (count($missingDatesLeads) < self::MISSING_DATES_LEAD_LIMIT) {
+                            $missingDatesLeads[] = $this->missingDatesEntry($lead, ['transfer_date']);
+                        }
+                        continue;
+                    }
+                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                         continue;
                     }
 
@@ -1001,10 +1098,15 @@ class AmoTaskStatisticsService
             'source_columns' => $sourceColumns,
             'total_leads_count' => $totalLeads,
             'projects' => $projectsList,
+            'missing_dates' => [
+                'count' => $missingDatesCount,
+                'truncated' => $missingDatesCount > count($missingDatesLeads),
+                'leads' => $missingDatesLeads,
+            ],
         ];
     }
 
-    private function projectCityVacancyBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
+    private function projectCityVacancyBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone = 'UTC'): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -1014,6 +1116,7 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            $timezone,
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'project_field_id') ?: data_get($config, 'project_field_name', self::PROJECT_FIELD_NAME),
             data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
@@ -1022,7 +1125,7 @@ class AmoTaskStatisticsService
         ]);
     }
 
-    private function recruiterScheduleBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
+    private function recruiterScheduleBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone = 'UTC'): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -1032,14 +1135,14 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            $timezone,
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'success_status_id') ?: 'none',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
-            data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
         ]);
     }
 
-    private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
+    private function recruiterLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone = 'UTC'): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -1049,13 +1152,14 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            $timezone,
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
             data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
         ]);
     }
 
-    private function recruiterTeamCityBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config): string
+    private function recruiterTeamCityBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone = 'UTC'): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -1065,9 +1169,9 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            $timezone,
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
-            data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
             data_get($config, 'team_field_id') ?: data_get($config, 'team_field_name', self::TEAM_FIELD_NAME),
             data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
             data_get($config, 'source_field_id') ?: data_get($config, 'source_field_name', self::SOURCE_FIELD_NAME),
@@ -1160,6 +1264,50 @@ class AmoTaskStatisticsService
     private function normaliseRecruiterValue(mixed $value): string
     {
         return mb_strtolower(trim((string) $value));
+    }
+
+    // Parse a date custom field (stored as Unix timestamp = midnight in account timezone).
+    private function customDateFieldValue(array $customFields, int $fieldId, string $timezone): ?Carbon
+    {
+        foreach ($customFields as $field) {
+            $fId = (int) ($field['field_id'] ?? $field['id'] ?? 0);
+            if ($fId !== $fieldId) {
+                continue;
+            }
+            $value = $field['values'][0]['value'] ?? null;
+            if ($value === null || $value === '') {
+                return null;
+            }
+            return is_numeric($value)
+                ? Carbon::createFromTimestamp((int) $value, $timezone)
+                : Carbon::parse((string) $value, $timezone);
+        }
+        return null;
+    }
+
+    // Y-m-d string comparison to avoid DST edge cases.
+    private function dateInPeriod(?Carbon $date, ?string $fromDate, ?string $toDate): bool
+    {
+        if ($date === null) {
+            return false;
+        }
+        $d = $date->toDateString();
+        if ($fromDate !== null && $d < $fromDate) {
+            return false;
+        }
+        if ($toDate !== null && $d > $toDate) {
+            return false;
+        }
+        return true;
+    }
+
+    private function missingDatesEntry(CrmEntitySnapshot $lead, array $missingFields): array
+    {
+        return [
+            'id' => $lead->external_id,
+            'name' => $lead->name ?: 'Без названия',
+            'missing_fields' => $missingFields,
+        ];
     }
 
     private function buildCompletedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
