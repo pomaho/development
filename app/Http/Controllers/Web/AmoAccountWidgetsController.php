@@ -53,6 +53,7 @@ class AmoAccountWidgetsController extends Controller
                             'iframe_url' => match ($widget->code) {
                                 'task_overdue_dashboard' => route('widgets.amo.task-overdue-dashboard.show', $installation->public_key),
                                 'task_overdue_dashboard_v2' => route('widgets.amo.task-overdue-dashboard-v2.show', $installation->public_key),
+                                'task_overdue_dashboard_v2_dev' => route('widgets.amo.task-overdue-dashboard-v2-dev.show', $installation->public_key),
                                 'manager_topup_dashboard' => route('widgets.amo.manager-topup.show', $installation->public_key),
                                 default => null,
                             },

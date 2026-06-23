@@ -55,6 +55,14 @@ class DatabaseSeeder extends Seeder
                 'sort_order' => 71,
                 'is_enabled' => true,
             ],
+            [
+                'code' => 'task_overdue_dashboard_v2_dev',
+                'name' => 'Рекрутинг DEV (тестовая версия)',
+                'description' => 'Dev-версия V2 виджета для тестирования изменений перед накаткой на прод.',
+                'component_key' => 'amo_iframe_task_overdue_dashboard_v2_dev',
+                'sort_order' => 72,
+                'is_enabled' => true,
+            ],
         ];
     }
 

@@ -184,6 +184,125 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function showV2Dev(Request $request, string $publicKey): Response
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to, $periodMeta] = $this->period($request);
+
+        return Inertia::render('Widgets/Amo/TaskOverdueDashboardV2Dev', [
+            'account' => [
+                'name' => $installation->account->name,
+                'base_domain' => $installation->account->base_domain,
+            ],
+            'period' => [
+                'from' => $from->toDateString(),
+                'to' => $to->toDateString(),
+                ...$periodMeta,
+            ],
+            'links' => [
+                'self' => route('widgets.amo.task-overdue-dashboard-v2-dev.show', $publicKey),
+                'recruiterLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.recruiter-leads', $publicKey),
+                'recruiterTeamCityBreakdown' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.recruiter-team-city-breakdown', $publicKey),
+                'taskStatistics' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.task-statistics', $publicKey),
+                'userOverdueTasks' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.user-overdue-tasks', $publicKey),
+                'projectCityVacancy' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.project-city-vacancy', $publicKey),
+                'projectCityVacancyLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.project-city-vacancy-leads', $publicKey),
+                'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.recruiter-schedule', $publicKey),
+            ],
+        ]);
+    }
+
+    public function recruiterLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function recruiterTeamCityBreakdownDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function taskStatisticsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->statistics($installation->account, $from, $to),
+        ]);
+    }
+
+    public function projectCityVacancyBreakdownDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function projectCityVacancyLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->projectCityVacancyLeads(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                (string) $request->query('project', ''),
+                (string) $request->query('city', ''),
+                (string) $request->query('vacancy', ''),
+                (string) $request->query('source', ''),
+                (string) $request->query('team', ''),
+                (int) $request->query('recruiter_enum_id', 0),
+                $request->query('manager_required', '1') !== '0',
+                (int) $request->query('status_id', 0),
+                200,
+                $tz,
+            ),
+        ]);
+    }
+
+    public function recruiterScheduleBreakdownDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function userOverdueTasksDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $userId = (int) $request->query('user_id', 0);
+
+        return response()->json([
+            'tasks' => $statisticsService->userOverdueTasks($installation->account, $userId, $from, $to),
+        ]);
+    }
+
     private function installation(string $publicKey, string $widgetCode = 'task_overdue_dashboard'): AmoAccountDashboardWidget
     {
         return AmoAccountDashboardWidget::query()

@@ -256,6 +256,7 @@ class AmoTaskStatisticsService
 
         $leads = [];
         $total = 0;
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
         $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
         $fromDate = $from?->toDateString();
         $toDate = $to?->toDateString();
@@ -266,15 +267,18 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->when($statusId > 0, fn ($q) => $q->where('status_id', $statusId))
+            ->when(!$useCustomDateFields && $from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when(!$useCustomDateFields && $to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter, $teamFilter, $recruiterEnumId, $managerRequired, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $recruiterField, $managerField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $projectFilter, $cityFilter, $vacancyFilter, $sourceFilter, $teamFilter, $recruiterEnumId, $managerRequired, $useCustomDateFields, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
 
-                    // Use field 1435403 if filled, otherwise fall back to entity_created_at
-                    $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
-                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
-                        continue;
+                    if ($useCustomDateFields) {
+                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
+                            continue;
+                        }
                     }
 
                     // Recruiter must be set
@@ -518,43 +522,63 @@ class AmoTaskStatisticsService
 
         $recruiterFieldId = (int) ($recruiterField?->amo_field_id ?? 0);
         $recruiterFieldName = $recruiterField?->name ?? self::RECRUITER_FIELD_NAME;
-        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
-        $fromDate = $from?->toDateString();
-        $toDate = $to?->toDateString();
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
 
-        CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
-            ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'leads')
-            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
-            ->when($successStatusId > 0, fn ($q) => $q->where('status_id', $successStatusId))
-            ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
-                foreach ($leads as $lead) {
-                    $customFields = $lead->custom_fields_values ?? [];
+        if (!$useCustomDateFields) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($successStatusId > 0, fn ($q) => $q->where('status_id', $successStatusId))
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $managerField, $managerEnumIdsByValue): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
+                        if ($rIds === [] || !$this->fieldHasAnyValue($customFields, (int) ($managerField?->amo_field_id ?? 0), self::MANAGER_FIELD_NAME, $managerEnumIdsByValue)) {
+                            continue;
+                        }
+                        $totalCount++;
+                        $leadId = (string) $lead->external_id;
+                        foreach ($rIds as $enumId) {
+                            $countsByEnum[$enumId][$leadId] = true;
+                        }
+                    }
+                });
+        } else {
+            $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+            $fromDate = $from?->toDateString();
+            $toDate = $to?->toDateString();
 
-                    if ($recruiterField !== null) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($successStatusId > 0, fn ($q) => $q->where('status_id', $successStatusId))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
                         $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
                         if ($rIds === []) {
                             continue;
                         }
+                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
+                            continue;
+                        }
+                        $totalCount++;
+                        $leadId = (string) $lead->external_id;
+                        foreach ($rIds as $enumId) {
+                            $countsByEnum[$enumId][$leadId] = true;
+                        }
                     }
-
-                    // Use field 1435403 if filled, otherwise fall back to entity_created_at
-                    $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
-                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
-                        continue;
-                    }
-
-                    $totalCount++;
-                    $leadId = (string) $lead->external_id;
-                    $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
-
-                    foreach ($rIds as $enumId) {
-                        $countsByEnum[$enumId][$leadId] = true;
-                    }
-                }
-            });
+                });
+        }
 
         $recruiters = [];
         foreach ($countsByEnum as $enumId => $leadIds) {
@@ -633,49 +657,73 @@ class AmoTaskStatisticsService
             return $emptyResult;
         }
 
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
         $intakeLeadIdsByEnum = [];
         $transferLeadIdsByEnum = [];
         $allIntakeLeadIds = [];
         $missingIntakeLeads = [];
         $missingIntakeCount = 0;
 
-        $takenToWorkFieldId = (int) data_get($config, 'taken_to_work_field_id', self::TAKEN_TO_WORK_FIELD_ID);
-        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
-        $fromDate = $from?->toDateString();
-        $toDate = $to?->toDateString();
-
-        CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
-            ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'leads')
-            ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
-            ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, &$missingIntakeLeads, &$missingIntakeCount, $field, $fieldName, $enumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
-                foreach ($leads as $lead) {
-                    $customFields = $lead->custom_fields_values ?? [];
-                    $leadId = (string) $lead->external_id;
-
-                    $recruiterEnumIds = $this->recruiterEnumIds($customFields, (int) $field->amo_field_id, $fieldName, $enumIdsByValue);
-                    $hasRecruiter = $recruiterEnumIds !== [];
-
-                    $intakeCustomDate = $this->customDateFieldValue($customFields, $takenToWorkFieldId, $timezone);
-                    $createdAtInTz = $lead->entity_created_at?->copy()->setTimezone($timezone);
-
-                    // Flag deals created in period where field 1435399 is not filled
-                    if ($intakeCustomDate === null && $this->dateInPeriod($createdAtInTz, $fromDate, $toDate)) {
-                        $missingIntakeCount++;
-                        if (count($missingIntakeLeads) < self::MISSING_DATES_LEAD_LIMIT) {
-                            $missingIntakeLeads[] = [
-                                'id' => (int) $lead->external_id,
-                                'name' => $lead->name ?: 'Без названия',
-                                'created_at' => $createdAtInTz?->toDateString(),
-                            ];
+        if (!$useCustomDateFields) {
+            // Prod: DB-level date filter on entity_created_at, manager required for transfer
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, $field, $fieldName, $enumIdsByValue, $managerField, $managerFieldName, $managerEnumIdsByValue): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $leadId = (string) $lead->external_id;
+                        $allIntakeLeadIds[$leadId] = true;
+                        $hasManager = $managerField !== null && $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerFieldName, $managerEnumIdsByValue);
+                        foreach ($this->recruiterEnumIds($customFields, (int) $field->amo_field_id, $fieldName, $enumIdsByValue) as $enumId) {
+                            $intakeLeadIdsByEnum[$enumId][$leadId] = true;
+                            if ($hasManager) {
+                                $transferLeadIdsByEnum[$enumId][$leadId] = true;
+                            }
                         }
                     }
+                });
+        } else {
+            $takenToWorkFieldId = (int) data_get($config, 'taken_to_work_field_id', self::TAKEN_TO_WORK_FIELD_ID);
+            $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+            $fromDate = $from?->toDateString();
+            $toDate = $to?->toDateString();
 
-                    // Use custom field if filled, otherwise fall back to entity_created_at
-                    $intakeDate = $intakeCustomDate ?? $createdAtInTz;
-                    $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, &$missingIntakeLeads, &$missingIntakeCount, $field, $fieldName, $enumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $leadId = (string) $lead->external_id;
+
+                        $recruiterEnumIds = $this->recruiterEnumIds($customFields, (int) $field->amo_field_id, $fieldName, $enumIdsByValue);
+                        $hasRecruiter = $recruiterEnumIds !== [];
+
+                        $intakeCustomDate = $this->customDateFieldValue($customFields, $takenToWorkFieldId, $timezone);
+                        $createdAtInTz = $lead->entity_created_at?->copy()->setTimezone($timezone);
+
+                        if ($intakeCustomDate === null && $this->dateInPeriod($createdAtInTz, $fromDate, $toDate)) {
+                            $missingIntakeCount++;
+                            if (count($missingIntakeLeads) < self::MISSING_DATES_LEAD_LIMIT) {
+                                $missingIntakeLeads[] = [
+                                    'id' => (int) $lead->external_id,
+                                    'name' => $lead->name ?: 'Без названия',
+                                    'created_at' => $createdAtInTz?->toDateString(),
+                                ];
+                            }
+                        }
+
+                        $intakeDate = $intakeCustomDate ?? $createdAtInTz;
+                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
 
                     if ($this->dateInPeriod($intakeDate, $fromDate, $toDate)) {
                         $allIntakeLeadIds[$leadId] = true;
@@ -693,6 +741,7 @@ class AmoTaskStatisticsService
                     }
                 }
             });
+        } // end else (use_custom_date_fields)
 
         foreach ($intakeLeadIdsByEnum as $enumId => $leadIds) {
             $enums[$enumId] ??= ['enum_id' => $enumId, 'name' => "Значение {$enumId}", 'leads_count' => 0, 'transferred_to_manager_count' => 0];
@@ -743,9 +792,11 @@ class AmoTaskStatisticsService
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads');
         $recruiterField = $this->leadField($fieldQuery, (int) data_get($config, 'recruiter_field_id', 0), (string) (data_get($config, 'recruiter_field_name') ?: self::RECRUITER_FIELD_NAME));
+        $managerField = $this->leadField($fieldQuery, (int) data_get($config, 'manager_field_id', 0), (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME));
         $teamField = $this->leadField($fieldQuery, (int) data_get($config, 'team_field_id', 0), (string) (data_get($config, 'team_field_name') ?: self::TEAM_FIELD_NAME));
         $cityField = $this->leadField($fieldQuery, (int) data_get($config, 'city_field_id', 0), (string) (data_get($config, 'city_field_name') ?: self::CITY_FIELD_NAME));
         $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
+        $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
 
         if ($recruiterField === null || $teamField === null || $cityField === null) {
             return [
@@ -783,32 +834,80 @@ class AmoTaskStatisticsService
         $totalLeads = 0;
         $withoutTeamCount = 0;
 
-        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
-        $fromDate = $from?->toDateString();
-        $toDate = $to?->toDateString();
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
 
-        CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
-            ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'leads')
-            ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
-            ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
-                foreach ($leads as $lead) {
-
-                    $customFields = $lead->custom_fields_values ?? [];
-
-                    $recruiterIds = $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue);
-
-                    if ($recruiterIds === []) {
-                        continue;
+        if (!$useCustomDateFields) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $managerField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $managerEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $recruiterIds = $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue);
+                        if ($recruiterIds === []) {
+                            continue;
+                        }
+                        if ($managerField !== null && !$this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                            continue;
+                        }
+                        $teamValues = $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue);
+                        $cityValues = $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue);
+                        $sourceValues = $sourceField !== null
+                            ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue)
+                            : [];
+                        $totalLeads++;
+                        if ($teamValues === []) { $withoutTeamCount++; continue; }
+                        if ($cityValues === []) { continue; }
+                        foreach ($recruiterIds as $recruiterId) {
+                            $rows[$recruiterId] ??= ['enum_id' => $recruiterId, 'name' => $recruiterNames[$recruiterId] ?? "Значение {$recruiterId}", 'total_leads_count' => 0, 'teams' => []];
+                            $rows[$recruiterId]['total_leads_count']++;
+                            foreach ($teamValues as $teamValue) {
+                                $rows[$recruiterId]['teams'][$teamValue] ??= ['name' => $teamValue, 'total_leads_count' => 0, 'cities' => []];
+                                $rows[$recruiterId]['teams'][$teamValue]['total_leads_count']++;
+                                foreach ($cityValues as $cityValue) {
+                                    $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue] ??= ['name' => $cityValue, 'leads_count' => 0, 'sources' => []];
+                                    $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['leads_count']++;
+                                    foreach ($sourceValues as $sourceValue) {
+                                        if (! in_array($sourceValue, $sourceColumns, true)) { $sourceColumns[] = $sourceValue; }
+                                        $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['sources'][$sourceValue] ??= 0;
+                                        $rows[$recruiterId]['teams'][$teamValue]['cities'][$cityValue]['sources'][$sourceValue]++;
+                                    }
+                                }
+                            }
+                        }
                     }
+                });
+        } else {
+            $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+            $fromDate = $from?->toDateString();
+            $toDate = $to?->toDateString();
 
-                    // Use field 1435403 if filled, otherwise fall back to entity_created_at
-                    $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
-                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
-                        continue;
-                    }
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                    foreach ($leads as $lead) {
+
+                        $customFields = $lead->custom_fields_values ?? [];
+
+                        $recruiterIds = $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue);
+
+                        if ($recruiterIds === []) {
+                            continue;
+                        }
+
+                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
+                            continue;
+                        }
 
                     $teamValues = $this->fieldValueLabels($customFields, (int) $teamField->amo_field_id, $teamField->name, $teamEnumIdsByValue);
                     $cityValues = $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue);
@@ -865,6 +964,7 @@ class AmoTaskStatisticsService
                     }
                 }
             });
+        } // end else (use_custom_date_fields) for TeamCity
 
         $sourceColumns = collect($sourceColumns)
             ->filter(fn (string $value): bool => trim($value) !== '')
@@ -943,77 +1043,77 @@ class AmoTaskStatisticsService
         $projects = [];
         $allSourceNames = [];
         $totalLeads = 0;
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
 
-        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
-        $fromDate = $from?->toDateString();
-        $toDate = $to?->toDateString();
-
-        CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
-            ->where('amo_account_id', $account->id)
-            ->where('entity_type', 'leads')
-            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
-            ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, $recruiterField, $teamField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
-                foreach ($leads as $lead) {
-                    $customFields = $lead->custom_fields_values ?? [];
-
-                    // Recruiter must be set
-                    if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
-                        continue;
-                    }
-
-                    // Use field 1435403 if filled, otherwise fall back to entity_created_at
-                    $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
-                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
-                        continue;
-                    }
-
-                    $cityValues = $cityField
-                        ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue)
-                        : [];
-                    $projectValues = $projectField
-                        ? $this->fieldValueLabels($customFields, (int) $projectField->amo_field_id, $projectField->name, $projectEnumIdsByValue)
-                        : [];
-                    $vacancyValues = $vacancyField
-                        ? $this->fieldValueLabels($customFields, (int) $vacancyField->amo_field_id, $vacancyField->name, $vacancyEnumIdsByValue)
-                        : [];
-                    $sourceValues = $sourceField
-                        ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue)
-                        : [];
-
-                    $projectKeys = $projectValues ?: ['Без проекта'];
-                    $cityKeys = $cityValues ?: ['—'];
-                    $vacancyKeys = $vacancyValues ?: ['—'];
-                    $sourceKeys = $sourceValues ?: ['—'];
-
-                    foreach ($sourceKeys as $sourceName) {
-                        $allSourceNames[$sourceName] = true;
-                    }
-
-                    $totalLeads++;
-
-                    foreach ($projectKeys as $projectName) {
-                        $projects[$projectName] ??= ['name' => $projectName, 'total_leads_count' => 0, 'cities' => []];
-                        $projects[$projectName]['total_leads_count']++;
-
-                        foreach ($cityKeys as $cityName) {
-                            $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName, 'leads_count' => 0, 'vacancies' => []];
-                            $projects[$projectName]['cities'][$cityName]['leads_count']++;
-
-                            foreach ($vacancyKeys as $vacancyName) {
-                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= ['leads_count' => 0, 'sources' => []];
-                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['leads_count']++;
-
-                                foreach ($sourceKeys as $sourceName) {
-                                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['sources'][$sourceName] ??= 0;
-                                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['sources'][$sourceName]++;
-                                }
+        $chunkCallback = function ($leads) use (&$projects, &$allSourceNames, &$totalLeads, $recruiterField, $projectField, $cityField, $vacancyField, $sourceField, $recruiterEnumIdsByValue, $projectEnumIdsByValue, $cityEnumIdsByValue, $vacancyEnumIdsByValue, $sourceEnumIdsByValue): void {
+            foreach ($leads as $lead) {
+                $customFields = $lead->custom_fields_values ?? [];
+                if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
+                    continue;
+                }
+                $cityValues = $cityField ? $this->fieldValueLabels($customFields, (int) $cityField->amo_field_id, $cityField->name, $cityEnumIdsByValue) : [];
+                $projectValues = $projectField ? $this->fieldValueLabels($customFields, (int) $projectField->amo_field_id, $projectField->name, $projectEnumIdsByValue) : [];
+                $vacancyValues = $vacancyField ? $this->fieldValueLabels($customFields, (int) $vacancyField->amo_field_id, $vacancyField->name, $vacancyEnumIdsByValue) : [];
+                $sourceValues = $sourceField ? $this->fieldValueLabels($customFields, (int) $sourceField->amo_field_id, $sourceField->name, $sourceEnumIdsByValue) : [];
+                $projectKeys = $projectValues ?: ['Без проекта'];
+                $cityKeys = $cityValues ?: ['—'];
+                $vacancyKeys = $vacancyValues ?: ['—'];
+                $sourceKeys = $sourceValues ?: ['—'];
+                foreach ($sourceKeys as $sourceName) { $allSourceNames[$sourceName] = true; }
+                $totalLeads++;
+                foreach ($projectKeys as $projectName) {
+                    $projects[$projectName] ??= ['name' => $projectName, 'total_leads_count' => 0, 'cities' => []];
+                    $projects[$projectName]['total_leads_count']++;
+                    foreach ($cityKeys as $cityName) {
+                        $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName, 'leads_count' => 0, 'vacancies' => []];
+                        $projects[$projectName]['cities'][$cityName]['leads_count']++;
+                        foreach ($vacancyKeys as $vacancyName) {
+                            $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= ['leads_count' => 0, 'sources' => []];
+                            $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['leads_count']++;
+                            foreach ($sourceKeys as $sourceName) {
+                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['sources'][$sourceName] ??= 0;
+                                $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['sources'][$sourceName]++;
                             }
                         }
                     }
                 }
-            });
+            }
+        };
+
+        if (!$useCustomDateFields) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, $chunkCallback);
+        } else {
+            $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+            $fromDate = $from?->toDateString();
+            $toDate = $to?->toDateString();
+
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use ($chunkCallback, $transferDateFieldId, $fromDate, $toDate, $timezone, $recruiterField, $recruiterEnumIdsByValue): void {
+                    $filtered = $leads->filter(function ($lead) use ($transferDateFieldId, $fromDate, $toDate, $timezone, $recruiterField, $recruiterEnumIdsByValue): bool {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        // Recruiter must be set
+                        if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
+                            return false;
+                        }
+                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        return $this->dateInPeriod($transferDate, $fromDate, $toDate);
+                    });
+                    $chunkCallback($filtered);
+                });
+        }
 
         $sourceColumns = array_keys($allSourceNames);
 
