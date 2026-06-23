@@ -1176,6 +1176,7 @@ class AmoTaskStatisticsService
             data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
             data_get($config, 'vacancy_field_id') ?: data_get($config, 'vacancy_field_name', self::VACANCY_FIELD_NAME),
             data_get($config, 'source_field_id') ?: data_get($config, 'source_field_name', self::SOURCE_FIELD_NAME),
+            data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
         ]);
     }
 
@@ -1193,6 +1194,7 @@ class AmoTaskStatisticsService
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'success_status_id') ?: 'none',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
+            data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
         ]);
     }
 
@@ -1210,6 +1212,7 @@ class AmoTaskStatisticsService
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
             data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
+            data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
         ]);
     }
 
@@ -1229,6 +1232,7 @@ class AmoTaskStatisticsService
             data_get($config, 'team_field_id') ?: data_get($config, 'team_field_name', self::TEAM_FIELD_NAME),
             data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
             data_get($config, 'source_field_id') ?: data_get($config, 'source_field_name', self::SOURCE_FIELD_NAME),
+            data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
         ]);
     }
 
