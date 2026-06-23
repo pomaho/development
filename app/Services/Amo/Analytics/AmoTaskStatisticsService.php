@@ -294,8 +294,8 @@ class AmoTaskStatisticsService
                         continue;
                     }
 
-                    // Manager check is optional (managers fill it later for some stages)
-                    if ($managerRequired && $managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
+                    // In dev mode, "transferred" is determined by the transfer date field — manager presence is irrelevant
+                    if (!$useCustomDateFields && $managerRequired && $managerField !== null && ! $this->fieldHasAnyValue($customFields, (int) $managerField->amo_field_id, $managerField->name, $managerEnumIdsByValue)) {
                         continue;
                     }
 
