@@ -1040,6 +1040,7 @@ class AmoTaskStatisticsService
         $sourceField = $this->leadField($fieldQuery, (int) data_get($config, 'source_field_id', 0), (string) (data_get($config, 'source_field_name') ?: self::SOURCE_FIELD_NAME));
 
         $recruiterEnumIdsByValue = $recruiterField ? $this->enumIdsByValue($recruiterField) : [];
+        $managerEnumIdsByValue = $managerField ? $this->enumIdsByValue($managerField) : [];
         $teamEnumIdsByValue = $teamField ? $this->enumIdsByValue($teamField) : [];
         $projectEnumIdsByValue = $projectField ? $this->enumIdsByValue($projectField) : [];
         $cityEnumIdsByValue = $cityField ? $this->enumIdsByValue($cityField) : [];
