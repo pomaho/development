@@ -276,7 +276,8 @@ class AmoTaskStatisticsService
                     $transferDate = null;
 
                     if ($useCustomDateFields) {
-                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
+                        $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldId, self::MANAGER_FIELD_NAME, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
                         if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                             continue;
                         }
@@ -561,14 +562,15 @@ class AmoTaskStatisticsService
                 ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
                 ->when($successStatusId > 0, fn ($q) => $q->where('status_id', $successStatusId))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                ->chunkById(500, function ($leads) use (&$countsByEnum, &$totalCount, $recruiterField, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue, $managerField, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                     foreach ($leads as $lead) {
                         $customFields = $lead->custom_fields_values ?? [];
                         $rIds = $this->recruiterEnumIds($customFields, $recruiterFieldId, $recruiterFieldName, $recruiterEnumIdsByValue);
                         if ($rIds === []) {
                             continue;
                         }
-                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
+                        $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldId, self::MANAGER_FIELD_NAME, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
                         if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                             continue;
                         }
@@ -701,7 +703,7 @@ class AmoTaskStatisticsService
                 ->where('entity_type', 'leads')
                 ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, &$missingIntakeLeads, &$missingIntakeCount, $field, $fieldName, $enumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, &$missingIntakeLeads, &$missingIntakeCount, $field, $fieldName, $enumIdsByValue, $managerField, $managerFieldName, $managerEnumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                     foreach ($leads as $lead) {
                         $customFields = $lead->custom_fields_values ?? [];
                         $leadId = (string) $lead->external_id;
@@ -724,7 +726,8 @@ class AmoTaskStatisticsService
                         }
 
                         $intakeDate = $intakeCustomDate ?? $createdAtInTz;
-                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
+                        $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldId, $managerFieldName, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
 
                     if ($this->dateInPeriod($intakeDate, $fromDate, $toDate)) {
                         $allIntakeLeadIds[$leadId] = true;
@@ -894,7 +897,7 @@ class AmoTaskStatisticsService
                 ->where('entity_type', 'leads')
                 ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+                ->chunkById(500, function ($leads) use (&$rows, &$totalLeads, &$withoutTeamCount, &$sourceColumns, $recruiterField, $managerField, $managerEnumIdsByValue, $teamField, $cityField, $sourceField, $recruiterNames, $recruiterEnumIdsByValue, $teamEnumIdsByValue, $cityEnumIdsByValue, $sourceEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                     foreach ($leads as $lead) {
 
                         $customFields = $lead->custom_fields_values ?? [];
@@ -905,7 +908,8 @@ class AmoTaskStatisticsService
                             continue;
                         }
 
-                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
+                        $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldId, self::MANAGER_FIELD_NAME, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
                         if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                             continue;
                         }
@@ -1102,14 +1106,14 @@ class AmoTaskStatisticsService
                 ->where('entity_type', 'leads')
                 ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use ($chunkCallback, $transferDateFieldId, $fromDate, $toDate, $timezone, $recruiterField, $recruiterEnumIdsByValue): void {
-                    $filtered = $leads->filter(function ($lead) use ($transferDateFieldId, $fromDate, $toDate, $timezone, $recruiterField, $recruiterEnumIdsByValue): bool {
+                ->chunkById(500, function ($leads) use ($chunkCallback, $transferDateFieldId, $fromDate, $toDate, $timezone, $recruiterField, $recruiterEnumIdsByValue, $managerField, $managerEnumIdsByValue): void {
+                    $filtered = $leads->filter(function ($lead) use ($transferDateFieldId, $fromDate, $toDate, $timezone, $recruiterField, $recruiterEnumIdsByValue, $managerField, $managerEnumIdsByValue): bool {
                         $customFields = $lead->custom_fields_values ?? [];
-                        // Recruiter must be set
                         if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
                             return false;
                         }
-                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
+                        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
+                        $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldId, self::MANAGER_FIELD_NAME, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
                         return $this->dateInPeriod($transferDate, $fromDate, $toDate);
                     });
                     $chunkCallback($filtered);
@@ -1367,6 +1371,24 @@ class AmoTaskStatisticsService
             return $fieldDate;
         }
         return $entityCreatedAt?->copy()->setTimezone($timezone);
+    }
+
+    /**
+     * Effective transfer date:
+     * - field 1435403 filled → use it
+     * - field not filled but manager is set → fall back to entity_created_at
+     * - neither → null (not transferred)
+     */
+    private function transferEffectiveDate(array $customFields, int $transferFieldId, int $managerFieldId, string $managerFieldName, array $managerEnumIdsByValue, ?Carbon $entityCreatedAt, string $timezone): ?Carbon
+    {
+        $fieldDate = $this->customDateFieldValue($customFields, $transferFieldId, $timezone);
+        if ($fieldDate !== null) {
+            return $fieldDate;
+        }
+        if ($managerFieldId > 0 && $this->fieldHasAnyValue($customFields, $managerFieldId, $managerFieldName, $managerEnumIdsByValue)) {
+            return $entityCreatedAt?->copy()->setTimezone($timezone);
+        }
+        return null;
     }
 
     private function buildCompletedOverdueDashboard(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
