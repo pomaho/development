@@ -20,6 +20,7 @@ class AmoTaskStatisticsService
     private const VACANCY_FIELD_NAME = 'Вакансия';
     private const TAKEN_TO_WORK_FIELD_ID = 1435399;  // "Взято в работу"
     private const TRANSFER_DATE_FIELD_ID = 1435403;   // "Дата передачи менеджеру"
+    private const MISSING_DATES_LEAD_LIMIT = 300;
 
 
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
@@ -635,6 +636,8 @@ class AmoTaskStatisticsService
         $intakeLeadIdsByEnum = [];
         $transferLeadIdsByEnum = [];
         $allIntakeLeadIds = [];
+        $missingIntakeLeads = [];
+        $missingIntakeCount = 0;
 
         $takenToWorkFieldId = (int) data_get($config, 'taken_to_work_field_id', self::TAKEN_TO_WORK_FIELD_ID);
         $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
@@ -647,7 +650,7 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($query) => $query->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, $field, $fieldName, $enumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
+            ->chunkById(500, function ($leads) use (&$intakeLeadIdsByEnum, &$transferLeadIdsByEnum, &$allIntakeLeadIds, &$missingIntakeLeads, &$missingIntakeCount, $field, $fieldName, $enumIdsByValue, $takenToWorkFieldId, $transferDateFieldId, $fromDate, $toDate, $timezone): void {
                 foreach ($leads as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
                     $leadId = (string) $lead->external_id;
@@ -655,8 +658,23 @@ class AmoTaskStatisticsService
                     $recruiterEnumIds = $this->recruiterEnumIds($customFields, (int) $field->amo_field_id, $fieldName, $enumIdsByValue);
                     $hasRecruiter = $recruiterEnumIds !== [];
 
+                    $intakeCustomDate = $this->customDateFieldValue($customFields, $takenToWorkFieldId, $timezone);
+                    $createdAtInTz = $lead->entity_created_at?->copy()->setTimezone($timezone);
+
+                    // Flag deals created in period where field 1435399 is not filled
+                    if ($intakeCustomDate === null && $this->dateInPeriod($createdAtInTz, $fromDate, $toDate)) {
+                        $missingIntakeCount++;
+                        if (count($missingIntakeLeads) < self::MISSING_DATES_LEAD_LIMIT) {
+                            $missingIntakeLeads[] = [
+                                'id' => (int) $lead->external_id,
+                                'name' => $lead->name ?: 'Без названия',
+                                'created_at' => $createdAtInTz?->toDateString(),
+                            ];
+                        }
+                    }
+
                     // Use custom field if filled, otherwise fall back to entity_created_at
-                    $intakeDate = $this->effectiveDate($customFields, $takenToWorkFieldId, $lead->entity_created_at, $timezone);
+                    $intakeDate = $intakeCustomDate ?? $createdAtInTz;
                     $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
 
                     if ($this->dateInPeriod($intakeDate, $fromDate, $toDate)) {
@@ -709,6 +727,11 @@ class AmoTaskStatisticsService
                 ->unique()
                 ->count(),
             'recruiters' => $rows,
+            'missing_intake_dates' => [
+                'count' => $missingIntakeCount,
+                'truncated' => $missingIntakeCount > count($missingIntakeLeads),
+                'leads' => $missingIntakeLeads,
+            ],
         ];
     }
 

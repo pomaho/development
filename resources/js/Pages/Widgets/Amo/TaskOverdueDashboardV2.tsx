@@ -21,6 +21,18 @@ type RecruiterLeadRow = {
     transferred_to_manager_count: number;
 };
 
+type MissingIntakeLead = {
+    id: number;
+    name: string;
+    created_at: string | null;
+};
+
+type MissingIntakeDates = {
+    count: number;
+    truncated: boolean;
+    leads: MissingIntakeLead[];
+};
+
 type RecruiterLeads = {
     field_name: string;
     field_id: number | null;
@@ -31,6 +43,7 @@ type RecruiterLeads = {
     assigned_leads_count: number;
     transferred_to_manager_count: number;
     recruiters: RecruiterLeadRow[];
+    missing_intake_dates?: MissingIntakeDates;
 };
 
 type RecruiterTeamCityBreakdown = {
@@ -513,10 +526,71 @@ function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { 
         {leadsFilter !== null && (
             <LeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
         )}
+        {recruiterLeads.missing_intake_dates && recruiterLeads.missing_intake_dates.count > 0 && (
+            <MissingIntakeDatesBlock data={recruiterLeads.missing_intake_dates} baseDomain={baseDomain} />
+        )}
         </>
     );
 }
 
+function MissingIntakeDatesBlock({ data, baseDomain }: { data: MissingIntakeDates; baseDomain: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-amber-200/80">
+            <button
+                type="button"
+                className="flex w-full items-center justify-between px-5 py-4 text-sm font-semibold text-amber-800 hover:bg-amber-50/60 transition-colors"
+                onClick={() => setOpen((v) => !v)}
+            >
+                <span className="flex items-center gap-3">
+                    <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-amber-100 px-2 text-xs font-bold text-amber-900 ring-1 ring-amber-300">
+                        {data.count}
+                    </span>
+                    <span>Не заполнено поле «Взято в работу»</span>
+                    {data.truncated && (
+                        <span className="text-xs font-normal text-amber-500">
+                            (показано {data.leads.length} из {data.count})
+                        </span>
+                    )}
+                </span>
+                <ChevronDown className={`size-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+            {open && (
+                <div className="border-t border-amber-100">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-amber-50">
+                                <tr>
+                                    <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-amber-700">ID</th>
+                                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-amber-700">Название сделки</th>
+                                    <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-amber-700">Дата создания</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-amber-50">
+                                {data.leads.map((lead) => (
+                                    <tr key={lead.id} className="hover:bg-amber-50/50 transition-colors">
+                                        <td className="px-5 py-3">
+                                            <a
+                                                href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="font-mono text-xs text-amber-700 underline decoration-dotted hover:text-amber-900"
+                                            >
+                                                #{lead.id}
+                                            </a>
+                                        </td>
+                                        <td className="px-4 py-3 text-gray-800">{lead.name}</td>
+                                        <td className="px-4 py-3 tabular-nums text-slate-500">{lead.created_at ?? '—'}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+        </section>
+    );
+}
 
 function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain }: {
     state: LoadState<RecruiterTeamCityBreakdown>;
