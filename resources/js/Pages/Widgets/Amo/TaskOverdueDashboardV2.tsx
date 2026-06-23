@@ -14,18 +14,6 @@ type Account = {
     base_domain: string;
 };
 
-type MissingDatesLead = {
-    id: number;
-    name: string;
-    missing_fields: string[];
-};
-
-type MissingDates = {
-    count: number;
-    truncated: boolean;
-    leads: MissingDatesLead[];
-};
-
 type RecruiterLeadRow = {
     enum_id: number;
     name: string;
@@ -43,7 +31,6 @@ type RecruiterLeads = {
     assigned_leads_count: number;
     transferred_to_manager_count: number;
     recruiters: RecruiterLeadRow[];
-    missing_dates?: MissingDates;
 };
 
 type RecruiterTeamCityBreakdown = {
@@ -91,7 +78,6 @@ type RecruiterScheduleBreakdown = {
     pipeline_name: string | null;
     total_count: number;
     recruiters: RecruiterScheduleRow[];
-    missing_dates?: MissingDates;
 };
 
 type OverdueTask = {
@@ -157,7 +143,6 @@ type ProjectCityVacancyBreakdown = {
     source_columns: string[];
     total_leads_count: number;
     projects: ProjectCityVacancyProject[];
-    missing_dates?: MissingDates;
 };
 
 type Props = {
@@ -455,64 +440,11 @@ function RecruiterScheduleSection({ state, leadsUrl, periodParams, baseDomain }:
                     <p className="text-sm">Нет сделок на этапе "{data.success_status_name}" за выбранный период</p>
                 </div>
             )}
-            {data.missing_dates && <MissingDatesBlock data={data.missing_dates} baseDomain={baseDomain} />}
         </ReportSection>
         {leadsFilter !== null && (
             <LeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
         )}
         </>
-    );
-}
-
-function MissingDatesBlock({ data, baseDomain }: { data: MissingDates; baseDomain: string }) {
-    const [open, setOpen] = useState(false);
-    if (data.count === 0) return null;
-    return (
-        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50">
-            <button
-                type="button"
-                className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-amber-800 hover:bg-amber-100/60 rounded-lg transition-colors"
-                onClick={() => setOpen((v) => !v)}
-            >
-                <span className="flex items-center gap-2">
-                    <span className="inline-flex size-5 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-900">{data.count}</span>
-                    Не заполнены даты
-                    {data.truncated && <span className="text-xs font-normal text-amber-600">(показано {data.leads.length} из {data.count})</span>}
-                </span>
-                <ChevronDown className={`size-4 transition-transform ${open ? 'rotate-180' : ''}`} />
-            </button>
-            {open && data.leads.length > 0 && (
-                <div className="border-t border-amber-200 px-4 pb-3">
-                    <table className="w-full text-left text-xs mt-2">
-                        <thead>
-                            <tr className="text-amber-700">
-                                <th className="py-1.5 pr-4 font-semibold">ID</th>
-                                <th className="py-1.5 font-semibold">Название сделки</th>
-                                <th className="py-1.5 pl-4 font-semibold">Незаполненные поля</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-amber-100">
-                            {data.leads.map((lead) => (
-                                <tr key={lead.id} className="hover:bg-amber-100/50">
-                                    <td className="py-1.5 pr-4">
-                                        <a
-                                            href={`https://${baseDomain}/leads/detail/${lead.id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-amber-700 underline decoration-dotted hover:text-amber-900"
-                                        >
-                                            #{lead.id}
-                                        </a>
-                                    </td>
-                                    <td className="py-1.5">{lead.name}</td>
-                                    <td className="py-1.5 pl-4 text-amber-600">{lead.missing_fields.join(', ')}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
     );
 }
 
@@ -577,7 +509,6 @@ function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { 
                     </tbody>
                 </table>
             </div>
-            {recruiterLeads.missing_dates && <MissingDatesBlock data={recruiterLeads.missing_dates} baseDomain={baseDomain} />}
         </ReportSection>
         {leadsFilter !== null && (
             <LeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
@@ -670,7 +601,6 @@ function RecruiterDetailSection({ state, leadsUrl, periodParams, baseDomain }: {
                     </EmptyState>
                 )}
             </div>
-            {breakdown.missing_dates && <MissingDatesBlock data={breakdown.missing_dates} baseDomain={baseDomain} />}
         </ReportSection>
     );
 }
@@ -936,8 +866,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                         </table>
                     </div>
                 )}
-                {data.missing_dates && <MissingDatesBlock data={data.missing_dates} baseDomain={baseDomain} />}
-            </ReportSection>
+                </ReportSection>
 
             {leadsFilter !== null && (
                 <LeadsModal
