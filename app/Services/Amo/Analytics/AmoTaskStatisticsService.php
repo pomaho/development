@@ -276,7 +276,7 @@ class AmoTaskStatisticsService
                     $transferDate = null;
 
                     if ($useCustomDateFields) {
-                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
                         if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                             continue;
                         }
@@ -568,7 +568,7 @@ class AmoTaskStatisticsService
                         if ($rIds === []) {
                             continue;
                         }
-                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
                         if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                             continue;
                         }
@@ -724,7 +724,7 @@ class AmoTaskStatisticsService
                         }
 
                         $intakeDate = $intakeCustomDate ?? $createdAtInTz;
-                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
 
                     if ($this->dateInPeriod($intakeDate, $fromDate, $toDate)) {
                         $allIntakeLeadIds[$leadId] = true;
@@ -905,7 +905,7 @@ class AmoTaskStatisticsService
                             continue;
                         }
 
-                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
                         if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
                             continue;
                         }
@@ -1109,7 +1109,7 @@ class AmoTaskStatisticsService
                         if ($recruiterField !== null && $this->recruiterEnumIds($customFields, (int) $recruiterField->amo_field_id, $recruiterField->name, $recruiterEnumIdsByValue) === []) {
                             return false;
                         }
-                        $transferDate = $this->effectiveDate($customFields, $transferDateFieldId, $lead->entity_created_at, $timezone);
+                        $transferDate = $this->customDateFieldValue($customFields, $transferDateFieldId, $timezone);
                         return $this->dateInPeriod($transferDate, $fromDate, $toDate);
                     });
                     $chunkCallback($filtered);
