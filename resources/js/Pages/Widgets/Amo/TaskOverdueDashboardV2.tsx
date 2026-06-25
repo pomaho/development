@@ -138,6 +138,12 @@ type ProjectCityVacancyProject = {
     cities: ProjectCity[];
 };
 
+type ProjectCityVacancyTeam = {
+    name: string;
+    total_leads_count: number;
+    projects: ProjectCityVacancyProject[];
+};
+
 type ProjectCityVacancyBreakdown = {
     pipeline_id: number | null;
     pipeline_name: string | null;
@@ -145,6 +151,8 @@ type ProjectCityVacancyBreakdown = {
     manager_field_name: string;
     recruiter_field_found: boolean;
     recruiter_field_name: string;
+    team_field_found: boolean;
+    team_field_name: string;
     project_field_found: boolean;
     project_field_name: string;
     city_field_found: boolean;
@@ -156,6 +164,7 @@ type ProjectCityVacancyBreakdown = {
     source_columns: string[];
     total_leads_count: number;
     projects: ProjectCityVacancyProject[];
+    teams: ProjectCityVacancyTeam[];
 };
 
 type Props = {
@@ -370,8 +379,6 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
                     baseDomain={account.base_domain}
                 />
 
-                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
-
                 <ProjectCityVacancySection
                     state={projectCityVacancyState}
                     leadsUrl={links.projectCityVacancyLeads}
@@ -380,6 +387,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
                 />
 
                 <RecruiterDetailSection state={breakdownState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
+
+                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
             </div>
         </div>
@@ -716,6 +725,17 @@ function aggregateProjectSources(project: ProjectCityVacancyProject, columns: st
     return result;
 }
 
+function aggregateTeamSources(team: ProjectCityVacancyTeam, columns: string[]): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const project of team.projects) {
+        const ps = aggregateProjectSources(project, columns);
+        for (const col of columns) {
+            result[col] = (result[col] ?? 0) + (ps[col] ?? 0);
+        }
+    }
+    return result;
+}
+
 function LeadsModal({
     filter,
     leadsUrl,
@@ -843,16 +863,16 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
         <>
             <ReportSection
                 eyebrow="Весь отдел рекрутинга"
-                title="Разрез по проекту, городу и вакансии"
-                description={`Только сделки переданные менеджерам (заполнены поля "${data.recruiter_field_name}" и "${data.manager_field_name}"), сгруппированные по "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Нажмите на число — откроется список сделок.`}
-                aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="с заполненным городом" tone="warning" />}
+                title="Разрез по команде, проекту, городу и вакансии"
+                description={`Сделки переданные менеджерам, сгруппированные по "${data.team_field_name}" → "${data.project_field_name}" → "${data.city_field_name}" → "${data.vacancy_field_name}". Нажмите на число — откроется список сделок.`}
+                aside={<AccentSummary label="Сделок в таблице" value={data.total_leads_count} note="передано менеджерам" tone="warning" />}
             >
-                {data.projects.length === 0 ? (
+                {data.teams.length === 0 ? (
                     <div className="px-5 py-8">
                         <EmptyState>
                             {!data.city_field_found
                                 ? `Поле "${data.city_field_name}" не найдено. Запустите синхронизацию структуры CRM.`
-                                : 'Нет сделок с заполненным городом за выбранный период.'}
+                                : 'Нет сделок переданных менеджерам за выбранный период.'}
                         </EmptyState>
                     </div>
                 ) : (
@@ -860,6 +880,7 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                         <table className="w-full text-left text-sm">
                             <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
                                 <tr>
+                                    <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.team_field_name} / {data.project_field_name}</th>
                                     <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
                                     <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
                                     <th className="w-20 px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Всего</th>
@@ -869,70 +890,99 @@ function ProjectCityVacancySection({ state, leadsUrl, periodParams, baseDomain }
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.projects.map((project) => {
-                                    const projectSources = aggregateProjectSources(project, data.source_columns);
+                                {data.teams.map((team) => {
+                                    const teamSources = aggregateTeamSources(team, data.source_columns);
                                     return (
                                         <>
-                                            <tr key={`project-${project.name}`} className="bg-slate-100">
-                                                <td className="border-l-4 border-indigo-400 px-5 py-2.5 font-bold text-slate-800" colSpan={2}>
-                                                    {project.name}
+                                            <tr key={`team-${team.name}`} className="bg-indigo-50">
+                                                <td className="border-l-4 border-indigo-500 px-5 py-2 font-bold text-indigo-900" colSpan={3}>
+                                                    {team.name === '—' ? <span className="italic text-slate-400">Без команды</span> : team.name}
                                                 </td>
-                                                <td className="px-4 py-2.5 text-right">
+                                                <td className="px-4 py-2 text-right">
                                                     <CountButton
-                                                        value={project.total_leads_count}
-                                                        onClick={() => openLeads({ project: project.name, city: '', vacancy: '', source: '', label: project.name })}
+                                                        value={team.total_leads_count}
+                                                        onClick={() => openLeads({ team: team.name, project: '', city: '', vacancy: '', source: '', label: team.name === '—' ? 'Без команды' : team.name })}
                                                     />
                                                 </td>
                                                 {data.source_columns.map((src) => (
-                                                    <td key={src} className="px-4 py-2.5 text-right">
+                                                    <td key={src} className="px-4 py-2 text-right">
                                                         <CountButton
-                                                            value={projectSources[src] ?? 0}
-                                                            onClick={() => openLeads({ project: project.name, city: '', vacancy: '', source: src, label: `${project.name} / ${src}` })}
+                                                            value={teamSources[src] ?? 0}
+                                                            onClick={() => openLeads({ team: team.name, project: '', city: '', vacancy: '', source: src, label: `${team.name} / ${src}` })}
                                                         />
                                                     </td>
                                                 ))}
                                             </tr>
-                                            {project.cities.map((city) =>
-                                                (city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }]).map((vacancy, vi) => (
-                                                    <tr
-                                                        key={`${project.name}-${city.name}-${vacancy.name}`}
-                                                        className="border-t border-slate-100 transition-colors hover:bg-violet-50/40"
-                                                    >
-                                                        <td className="px-5 py-2.5 text-gray-800">
-                                                            {vi === 0 ? (city.name === '—' ? <span className="italic text-slate-400">Без города</span> : city.name) : ''}
-                                                        </td>
-                                                        <td className="px-5 py-2.5 text-gray-500">
-                                                            {vacancy.name !== '—' ? vacancy.name : ''}
-                                                        </td>
-                                                        <td className="px-4 py-2.5 text-right">
-                                                            <CountButton
-                                                                value={vacancy.leads_count}
-                                                                onClick={() => openLeads({
-                                                                    project: project.name,
-                                                                    city: city.name,
-                                                                    vacancy: vacancy.name,
-                                                                    source: '',
-                                                                    label: `${project.name} / ${city.name === '—' ? 'Без города' : city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''}`,
-                                                                })}
-                                                            />
-                                                        </td>
-                                                        {data.source_columns.map((src) => (
-                                                            <td key={src} className="px-4 py-2.5 text-right">
+                                            {team.projects.map((project) => {
+                                                const projectSources = aggregateProjectSources(project, data.source_columns);
+                                                return (
+                                                    <>
+                                                        <tr key={`project-${team.name}-${project.name}`} className="bg-slate-100">
+                                                            <td className="border-l-4 border-slate-300 pl-9 pr-5 py-2 font-semibold text-slate-700" colSpan={3}>
+                                                                {project.name}
+                                                            </td>
+                                                            <td className="px-4 py-2 text-right">
                                                                 <CountButton
-                                                                    value={(vacancy.sources ?? {})[src] ?? 0}
-                                                                    onClick={() => openLeads({
-                                                                        project: project.name,
-                                                                        city: city.name,
-                                                                        vacancy: vacancy.name,
-                                                                        source: src,
-                                                                        label: `${project.name} / ${city.name === '—' ? 'Без города' : city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''} / ${src}`,
-                                                                    })}
+                                                                    value={project.total_leads_count}
+                                                                    onClick={() => openLeads({ team: team.name, project: project.name, city: '', vacancy: '', source: '', label: `${team.name} / ${project.name}` })}
                                                                 />
                                                             </td>
-                                                        ))}
-                                                    </tr>
-                                                ))
-                                            )}
+                                                            {data.source_columns.map((src) => (
+                                                                <td key={src} className="px-4 py-2 text-right">
+                                                                    <CountButton
+                                                                        value={projectSources[src] ?? 0}
+                                                                        onClick={() => openLeads({ team: team.name, project: project.name, city: '', vacancy: '', source: src, label: `${team.name} / ${project.name} / ${src}` })}
+                                                                    />
+                                                                </td>
+                                                            ))}
+                                                        </tr>
+                                                        {project.cities.map((city) =>
+                                                            (city.vacancies.length > 0 ? city.vacancies : [{ name: '—', leads_count: 0, sources: {} }]).map((vacancy, vi) => (
+                                                                <tr
+                                                                    key={`${team.name}-${project.name}-${city.name}-${vacancy.name}`}
+                                                                    className="border-t border-slate-100 transition-colors hover:bg-violet-50/40"
+                                                                >
+                                                                    <td className="pl-14 pr-3 py-2 text-slate-400 text-xs" />
+                                                                    <td className="px-5 py-2 text-slate-600 text-xs">
+                                                                        {vi === 0 ? (city.name === '—' ? <span className="italic text-slate-400">Без города</span> : city.name) : ''}
+                                                                    </td>
+                                                                    <td className="px-5 py-2 text-gray-500 text-xs">
+                                                                        {vacancy.name !== '—' ? vacancy.name : ''}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right">
+                                                                        <CountButton
+                                                                            value={vacancy.leads_count}
+                                                                            onClick={() => openLeads({
+                                                                                team: team.name,
+                                                                                project: project.name,
+                                                                                city: city.name,
+                                                                                vacancy: vacancy.name,
+                                                                                source: '',
+                                                                                label: `${team.name} / ${project.name} / ${city.name === '—' ? 'Без города' : city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''}`,
+                                                                            })}
+                                                                        />
+                                                                    </td>
+                                                                    {data.source_columns.map((src) => (
+                                                                        <td key={src} className="px-4 py-2 text-right">
+                                                                            <CountButton
+                                                                                value={(vacancy.sources ?? {})[src] ?? 0}
+                                                                                onClick={() => openLeads({
+                                                                                    team: team.name,
+                                                                                    project: project.name,
+                                                                                    city: city.name,
+                                                                                    vacancy: vacancy.name,
+                                                                                    source: src,
+                                                                                    label: `${team.name} / ${project.name} / ${city.name === '—' ? 'Без города' : city.name}${vacancy.name !== '—' ? ` / ${vacancy.name}` : ''} / ${src}`,
+                                                                                })}
+                                                                            />
+                                                                        </td>
+                                                                    ))}
+                                                                </tr>
+                                                            ))
+                                                        )}
+                                                    </>
+                                                );
+                                            })}
                                         </>
                                     );
                                 })}
