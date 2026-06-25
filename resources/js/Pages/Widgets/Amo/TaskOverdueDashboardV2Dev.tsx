@@ -384,8 +384,6 @@ export default function TaskOverdueDashboardV2Dev({ account, period, links }: Pr
                     baseDomain={account.base_domain}
                 />
 
-                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
-
                 <ProjectCityVacancySection
                     state={projectCityVacancyState}
                     leadsUrl={links.projectCityVacancyLeads}
@@ -394,6 +392,8 @@ export default function TaskOverdueDashboardV2Dev({ account, period, links }: Pr
                 />
 
                 <RecruiterDetailSection state={breakdownState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
+
+                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
 
             </div>
         </div>
