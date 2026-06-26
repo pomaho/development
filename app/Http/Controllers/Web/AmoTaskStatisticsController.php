@@ -80,9 +80,9 @@ class AmoTaskStatisticsController extends Controller
                     && isset($task->raw['complete_till'])
                     && (int) $task->raw['complete_till'] > 0
                     && (int) $task->raw['complete_till'] < $now,
-                'completed_by_id' => $task->raw['_task_statistics']['completed_by'] ?? null,
-                'completed_by_name' => isset($task->raw['_task_statistics']['completed_by'])
-                    ? ($userMap->get($task->raw['_task_statistics']['completed_by'])?->name ?? "ID {$task->raw['_task_statistics']['completed_by']}")
+                'completed_by_id' => ($task->raw['_task_statistics']['completed_by'] ?? 0) ?: null,
+                'completed_by_name' => ($completedById = ($task->raw['_task_statistics']['completed_by'] ?? 0) ?: null)
+                    ? ($userMap->get($completedById)?->name ?? "ID {$completedById}")
                     : null,
                 'created_at' => $task->entity_created_at?->format('d.m.Y H:i'),
             ]),
