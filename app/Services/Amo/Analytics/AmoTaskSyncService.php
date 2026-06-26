@@ -205,6 +205,7 @@ class AmoTaskSyncService
             'is_completed' => (bool) ($task['is_completed'] ?? false),
             'complete_till' => $task['complete_till'] ?? null,
             'text' => $task['text'] ?? null,
+            'result' => $task['result']['text'] ?? null,
         ];
 
         if ($taskStats !== null) {

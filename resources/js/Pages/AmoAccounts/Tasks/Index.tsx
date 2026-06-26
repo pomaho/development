@@ -19,6 +19,7 @@ type Task = {
     is_overdue: boolean;
     completed_by_id: number | null;
     completed_by_name: string | null;
+    result: string | null;
     created_at: string | null;
 };
 
@@ -134,6 +135,7 @@ export default function TasksIndex({ account, tasks, users, filters, links }: Pr
                                 <th className="px-5 py-3">Дедлайн</th>
                                 <th className="px-5 py-3">Статус</th>
                                 <th className="px-5 py-3">Закрыл</th>
+                                <th className="px-5 py-3">Результат</th>
                                 <th className="px-5 py-3">Создана</th>
                             </tr>
                         </thead>
@@ -163,11 +165,16 @@ export default function TasksIndex({ account, tasks, users, filters, links }: Pr
                                             ? (task.completed_by_name ?? <span className="text-gray-400">—</span>)
                                             : <span className="text-gray-300">—</span>}
                                     </td>
+                                    <td className="max-w-xs px-5 py-3 text-gray-600">
+                                        {task.is_completed
+                                            ? (task.result ? <span className="line-clamp-2">{task.result}</span> : <span className="text-gray-400">—</span>)
+                                            : <span className="text-gray-300">—</span>}
+                                    </td>
                                     <td className="px-5 py-3 text-gray-500">{task.created_at || '—'}</td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td className="px-5 py-8 text-center text-gray-500" colSpan={7}>
+                                    <td className="px-5 py-8 text-center text-gray-500" colSpan={8}>
                                         Задачи не найдены.{' '}
                                         {!filters.status && !filters.overdue && !filters.responsible_user_id
                                             ? 'Запустите синхронизацию задач в разделе Расписания.'

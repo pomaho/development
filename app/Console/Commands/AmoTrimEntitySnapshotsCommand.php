@@ -144,6 +144,7 @@ class AmoTrimEntitySnapshotsCommand extends Command
             'is_completed' => (bool) ($raw['is_completed'] ?? false),
             'complete_till' => $raw['complete_till'] ?? null,
             'text' => $raw['text'] ?? null,
+            'result' => $raw['result'] ?? null,
         ];
 
         if (isset($raw['_task_statistics']) && is_array($raw['_task_statistics'])) {
