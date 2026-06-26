@@ -84,7 +84,9 @@ class AmoTaskStatisticsController extends Controller
                 'completed_by_name' => ($completedById = ($task->raw['_task_statistics']['completed_by'] ?? 0) ?: null)
                     ? ($userMap->get($completedById)?->name ?? "ID {$completedById}")
                     : null,
-                'result' => $task->raw['result'] ?? null,
+                'result' => is_array($task->raw['result'] ?? null)
+                    ? ($task->raw['result']['text'] ?? null)
+                    : ($task->raw['result'] ?? null),
                 'created_at' => $task->entity_created_at?->format('d.m.Y H:i'),
             ]),
             'users' => $userMap->values()->map(fn ($u): array => [
