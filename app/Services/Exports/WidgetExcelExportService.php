@@ -8,7 +8,6 @@ use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Font;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -25,7 +24,6 @@ class WidgetExcelExportService
         array $breakdown,
         array $projectCityVacancy,
         array $taskStatistics,
-        array $schedule,
     ): StreamedResponse {
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
@@ -34,7 +32,6 @@ class WidgetExcelExportService
         $this->teamCitySheet($spreadsheet, $breakdown);
         $this->projectCityVacancySheet($spreadsheet, $projectCityVacancy);
         $this->taskStatisticsSheet($spreadsheet, $taskStatistics);
-        $this->scheduleSheet($spreadsheet, $schedule);
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -182,29 +179,6 @@ class WidgetExcelExportService
                 $row++;
             }
         }
-
-        $this->autoWidth($sheet, count($headers));
-    }
-
-    private function scheduleSheet(Spreadsheet $spreadsheet, array $data): void
-    {
-        $sheet = $spreadsheet->createSheet();
-        $sheet->setTitle('Расписание');
-
-        $headers = ['Рекрутер', 'Кол-во собеседований'];
-        $this->writeHeader($sheet, $headers, 1);
-
-        $row = 2;
-        foreach ($data['recruiters'] ?? [] as $recruiter) {
-            $sheet->setCellValue("A{$row}", $recruiter['name']);
-            $sheet->setCellValue("B{$row}", $recruiter['schedule_count']);
-            if ($row % 2 === 0) {
-                $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
-            }
-            $row++;
-        }
-
-        $this->writeTotalRow($sheet, $row, ['Итого', $data['total_count'] ?? 0]);
 
         $this->autoWidth($sheet, count($headers));
     }

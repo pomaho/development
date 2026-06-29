@@ -320,7 +320,6 @@ class AmoTaskOverdueDashboardController extends Controller
             $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->statistics($installation->account, $from, $to),
-            $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $config, $tz),
         );
     }
 
@@ -337,7 +336,6 @@ class AmoTaskOverdueDashboardController extends Controller
             $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->statistics($installation->account, $from, $to),
-            $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $config, $tz),
         );
     }
 
