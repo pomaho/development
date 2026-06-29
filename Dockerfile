@@ -21,7 +21,8 @@ RUN composer install \
     --no-interaction \
     --no-progress \
     --no-scripts \
-    --optimize-autoloader
+    --optimize-autoloader \
+    --ignore-platform-req=ext-gd
 
 COPY . .
 RUN composer dump-autoload --no-dev --optimize
@@ -32,11 +33,16 @@ WORKDIR /var/www/html
 
 RUN apk add --no-cache \
         bash \
+        freetype-dev \
         icu-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
         libzip-dev \
         postgresql-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         bcmath \
+        gd \
         intl \
         opcache \
         pdo_mysql \
