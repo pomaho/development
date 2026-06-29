@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Widget;
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccountDashboardWidget;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
+use App\Services\Exports\WidgetExcelExportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AmoTaskOverdueDashboardController extends Controller
 {
@@ -65,6 +67,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'projectCityVacancy' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy', $publicKey),
                 'projectCityVacancyLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy-leads', $publicKey),
                 'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule', $publicKey),
+                'export' => route('api.widgets.amo.task-overdue-dashboard-v2.export', $publicKey),
             ],
         ]);
     }
@@ -208,6 +211,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'projectCityVacancy' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.project-city-vacancy', $publicKey),
                 'projectCityVacancyLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.project-city-vacancy-leads', $publicKey),
                 'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.recruiter-schedule', $publicKey),
+                'export' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.export', $publicKey),
             ],
         ]);
     }
@@ -301,6 +305,40 @@ class AmoTaskOverdueDashboardController extends Controller
         return response()->json([
             'tasks' => $statisticsService->userOverdueTasks($installation->account, $userId, $from, $to),
         ]);
+    }
+
+    public function exportV2(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+        $config = $installation->config ?? [];
+
+        return $excelExport->export(
+            WidgetExcelExportService::filename($from, $to),
+            $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $config, $tz),
+            $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
+            $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
+            $statisticsService->statistics($installation->account, $from, $to),
+            $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $config, $tz),
+        );
+    }
+
+    public function exportV2Dev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+        $config = $installation->config ?? [];
+
+        return $excelExport->export(
+            WidgetExcelExportService::filename($from, $to),
+            $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $config, $tz),
+            $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
+            $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
+            $statisticsService->statistics($installation->account, $from, $to),
+            $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $config, $tz),
+        );
     }
 
     private function installation(string $publicKey, string $widgetCode = 'task_overdue_dashboard'): AmoAccountDashboardWidget

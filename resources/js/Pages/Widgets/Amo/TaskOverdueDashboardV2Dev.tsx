@@ -5,6 +5,7 @@ import {
     CalendarDays,
     ChevronDown,
     Database,
+    Download,
     Inbox,
     X,
 } from 'lucide-react';
@@ -185,6 +186,7 @@ type Props = {
         projectCityVacancy: string;
         projectCityVacancyLeads: string;
         recruiterSchedule: string;
+        export: string;
     };
 };
 
@@ -366,6 +368,16 @@ export default function TaskOverdueDashboardV2Dev({ account, period, links }: Pr
                                 <button className="h-10 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 hover:from-violet-500 hover:to-indigo-500" type="submit">
                                     Показать
                                 </button>
+                            </div>
+                            <div className="mt-3">
+                                <a
+                                    href={`${links.export}?from=${period.from}&to=${period.to}`}
+                                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600/20 px-4 text-sm font-semibold text-emerald-300 ring-1 ring-emerald-500/30 hover:bg-emerald-600/30 hover:text-emerald-200"
+                                    download
+                                >
+                                    <Download className="size-3.5" />
+                                    Экспорт в Excel
+                                </a>
                             </div>
                         </form>
                     </div>
