@@ -29,6 +29,7 @@ class WidgetExcelExportService
         $spreadsheet->removeSheetByIndex(0);
 
         $this->recruiterLeadsSheet($spreadsheet, $recruiterLeads);
+        $this->sourceBreakdownSheet($spreadsheet, $breakdown);
         $this->teamCitySheet($spreadsheet, $breakdown);
         $this->projectCityVacancySheet($spreadsheet, $projectCityVacancy);
         $this->taskStatisticsSheet($spreadsheet, $taskStatistics);
@@ -68,6 +69,42 @@ class WidgetExcelExportService
             $data['transferred_to_manager_count'] ?? 0,
         ]);
 
+        $this->autoWidth($sheet, count($headers));
+    }
+
+    private function sourceBreakdownSheet(Spreadsheet $spreadsheet, array $data): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('По источникам');
+
+        $sourceCols = $data['source_columns'] ?? [];
+        $headers = ['Источник', 'Кол-во лидов'];
+        $this->writeHeader($sheet, $headers, 1);
+
+        $totals = [];
+        foreach ($data['recruiters'] ?? [] as $recruiter) {
+            foreach ($recruiter['teams'] ?? [] as $team) {
+                foreach ($team['cities'] ?? [] as $city) {
+                    foreach ($sourceCols as $src) {
+                        $totals[$src] = ($totals[$src] ?? 0) + ($city['sources'][$src] ?? 0);
+                    }
+                }
+            }
+        }
+
+        arsort($totals);
+
+        $row = 2;
+        foreach ($totals as $source => $count) {
+            $sheet->setCellValue("A{$row}", $source);
+            $sheet->setCellValue("B{$row}", $count);
+            if ($row % 2 === 0) {
+                $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
+            }
+            $row++;
+        }
+
+        $this->writeTotalRow($sheet, $row, ['Итого', array_sum($totals)]);
         $this->autoWidth($sheet, count($headers));
     }
 
