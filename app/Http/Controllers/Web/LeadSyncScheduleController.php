@@ -108,6 +108,7 @@ class LeadSyncScheduleController extends Controller
                     'users' => route('amo-accounts.users', $amoAccount),
                     'roles' => route('amo-accounts.roles', $amoAccount),
                     'leads' => route('amo-accounts.leads', $amoAccount),
+                    'contacts' => route('amo-accounts.contacts', $amoAccount),
                     'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
                     'lead_sync_schedules' => route('amo-accounts.lead-sync-schedules.index', $amoAccount),
                     'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),

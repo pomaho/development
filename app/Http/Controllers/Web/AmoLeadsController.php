@@ -83,6 +83,7 @@ class AmoLeadsController extends Controller
                     'users' => route('amo-accounts.users', $amoAccount),
                     'roles' => route('amo-accounts.roles', $amoAccount),
                     'leads' => route('amo-accounts.leads', $amoAccount),
+                    'contacts' => route('amo-accounts.contacts', $amoAccount),
                     'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
                     'crm_audit' => route('amo-accounts.crm-audit.index', $amoAccount),
                     'integrations' => route('amo-accounts.integrations', $amoAccount),

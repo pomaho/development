@@ -14,6 +14,7 @@ use App\Http\Controllers\Web\AmoCrmStructureCenterController;
 use App\Http\Controllers\Web\AmoDataCenterController;
 use App\Http\Controllers\Web\AmoExternalOAuthController;
 use App\Http\Controllers\Web\AmoLeadTransferController;
+use App\Http\Controllers\Web\AmoContactsController;
 use App\Http\Controllers\Web\AmoLeadsController;
 use App\Http\Controllers\Web\AmoPipelinesController;
 use App\Http\Controllers\Web\AmoResponsibilityRedistributionController;
@@ -188,6 +189,8 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/amo-accounts/{amo_account}/users-export', [AmoUsersController::class, 'export'])->name('amo-accounts.users.export');
     Route::get('/amo-accounts/{amo_account}/leads', AmoLeadsController::class)->name('amo-accounts.leads');
     Route::get('/amo-accounts/{amo_account}/leads-export', [AmoLeadsController::class, 'export'])->name('amo-accounts.leads.export');
+    Route::get('/amo-accounts/{amo_account}/contacts', AmoContactsController::class)->name('amo-accounts.contacts');
+    Route::get('/amo-accounts/{amo_account}/contacts-export', [AmoContactsController::class, 'export'])->name('amo-accounts.contacts.export');
     Route::get('/amo-accounts/{amo_account}/roles', AmoRolesController::class)->name('amo-accounts.roles');
     Route::get('/amo-accounts/{amo_account}/roles-export', [AmoRolesController::class, 'export'])->name('amo-accounts.roles.export');
     Route::get('/logs/api', ApiLogController::class)->name('logs.api');

@@ -47,6 +47,7 @@ class AmoDataCenterController extends Controller
                     'users' => route('amo-accounts.users', $amoAccount),
                     'roles' => route('amo-accounts.roles', $amoAccount),
                     'leads' => route('amo-accounts.leads', $amoAccount),
+                    'contacts' => route('amo-accounts.contacts', $amoAccount),
                     'pipelines' => route('amo-accounts.pipelines.index', $amoAccount),
                     'catalogs' => route('amo-accounts.catalogs.index', $amoAccount),
                     'lead_sync_schedules' => route('amo-accounts.lead-sync-schedules.index', $amoAccount),

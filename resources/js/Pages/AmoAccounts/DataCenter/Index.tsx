@@ -1,4 +1,4 @@
-import { Activity, ClipboardList, Database, RefreshCcw, SquareCheckBig } from 'lucide-react';
+import { Activity, ClipboardList, Contact, Database, RefreshCcw, SquareCheckBig } from 'lucide-react';
 import DashboardMetric from '../../../Components/DashboardMetric';
 import AuthenticatedLayout from '../../../Layouts/AuthenticatedLayout';
 
@@ -35,6 +35,7 @@ type Props = {
             users: string;
             roles: string;
             leads: string;
+            contacts: string;
             pipelines: string;
             catalogs: string;
             lead_sync_schedules: string;
@@ -57,6 +58,12 @@ export default function DataCenterIndex({ account, summary, links }: Props) {
             description: 'Поиск, фильтры, экспорт и проверка сохраненных сделок.',
             href: accountLinks.leads,
             icon: <ClipboardList size={20} />,
+        },
+        {
+            title: 'Контакты',
+            description: 'Список контактов и компаний, синхронизированных из amoCRM.',
+            href: accountLinks.contacts,
+            icon: <Contact size={20} />,
         },
         {
             title: 'Расписания загрузки',

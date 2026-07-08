@@ -6,6 +6,7 @@ import {
     BriefcaseBusiness,
     ChevronRight,
     ClipboardList,
+    Contact,
     Database,
     FileText,
     ListTree,
@@ -46,6 +47,7 @@ type Props = {
             users: string;
             roles: string;
             leads: string;
+            contacts?: string;
             data_center?: string;
             pipelines: string;
             catalogs?: string;
@@ -84,6 +86,7 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
     const automationCenterHref = href(currentLinks?.automation_center, base ? `${base}/automation` : null);
     const crmStructureCenterHref = href(currentLinks?.crm_structure_center, base ? `${base}/crm-structure` : null);
     const dataCenterHref = href(currentLinks?.data_center, base ? `${base}/data` : null);
+    const contactsHref = href(currentLinks?.contacts, base ? `${base}/contacts` : null);
     const crmFieldsHref = base ? `${base}/crm-audit/fields` : null;
 
     const n = ru.nav;
@@ -118,6 +121,7 @@ function buildSections(links: Props['links'], url: string, isAdmin: boolean): Na
     const crmDataLinks: NavLink[] = currentLinks ? [
         ...(dataCenterHref ? [{ label: n.dataCenter, href: dataCenterHref, icon: <Database />, active: url === `${base}/data` }] : []),
         { label: n.leads, href: currentLinks.leads, icon: <ClipboardList />, active: url.endsWith('/leads') },
+        ...(contactsHref ? [{ label: n.contacts, href: contactsHref, icon: <Contact />, active: url.endsWith('/contacts') }] : []),
         ...(taskStatisticsHref ? [{ label: n.tasks, href: taskStatisticsHref, icon: <SquareCheckBig />, active: url.includes('/task-statistics') }] : []),
         ...(eventsSyncHref ? [{ label: n.events, href: eventsSyncHref, icon: <Activity />, active: url.includes('/events-sync') }] : []),
     ] : [];

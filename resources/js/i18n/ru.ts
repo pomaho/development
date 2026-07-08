@@ -19,6 +19,7 @@ const ru = {
 
         dataCenter: 'Центр данных',
         leads: 'Сделки',
+        contacts: 'Контакты',
 
         structureCenter: 'Центр структуры',
         pipelines: 'Воронки',
