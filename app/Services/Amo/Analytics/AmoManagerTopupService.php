@@ -324,7 +324,9 @@ class AmoManagerTopupService
             ->where('amo_account_id', $account->id)
             ->when($pipelineId > 0, fn ($q) => $q->where('amo_pipeline_id', $pipelineId))
             ->where(function ($q): void {
-                $q->whereIn('type', [142, 143])
+                // 142/143 are amoCRM's fixed status_id values for "Успешно реализовано" / "Закрыто и не реализовано" —
+                // the status `type` field is not populated with 142/143 in practice, so it can't be used here.
+                $q->whereIn('amo_status_id', [142, 143])
                     ->orWhere('name', 'like', '%тлож%')
                     ->orWhere('name', 'like', '%аморожен%');
             })

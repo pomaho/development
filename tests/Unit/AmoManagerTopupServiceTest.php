@@ -155,8 +155,9 @@ class AmoManagerTopupServiceTest extends TestCase
 
     public function test_breakdown_excludes_won_stages(): void
     {
-        $this->createStatus(amo_status_id: 999, type: 142); // won
-        $this->createLead('1', 'Иванов', price: 100_000, prepayment: 20_000, topupDate: now(), statusId: 999);
+        // 142 is amoCRM's fixed status_id for "Успешно реализовано" — its `type` is 0 in practice, not 142.
+        $this->createStatus(amo_status_id: 142, name: 'Успешно реализовано', type: 0);
+        $this->createLead('1', 'Иванов', price: 100_000, prepayment: 20_000, topupDate: now(), statusId: 142);
 
         $result = $this->service->breakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
 
@@ -165,8 +166,9 @@ class AmoManagerTopupServiceTest extends TestCase
 
     public function test_breakdown_excludes_lost_stages(): void
     {
-        $this->createStatus(amo_status_id: 888, type: 143); // lost
-        $this->createLead('1', 'Иванов', price: 100_000, prepayment: 20_000, topupDate: now(), statusId: 888);
+        // 143 is amoCRM's fixed status_id for "Закрыто и не реализовано" — its `type` is 0 in practice, not 143.
+        $this->createStatus(amo_status_id: 143, name: 'Закрыто и не реализовано', type: 0);
+        $this->createLead('1', 'Иванов', price: 100_000, prepayment: 20_000, topupDate: now(), statusId: 143);
 
         $result = $this->service->breakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
 
