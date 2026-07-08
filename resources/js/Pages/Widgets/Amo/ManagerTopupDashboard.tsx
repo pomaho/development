@@ -11,7 +11,7 @@ type Period = { from: string; to: string; label: string };
 type Props = {
     account: Account;
     period: Period;
-    links: { self: string; data: string; leads: string };
+    links: { self: string; data: string; leads: string; designers: string; designerLeads: string };
 };
 
 type ManagerSummary = {
@@ -40,6 +40,27 @@ type LeadItem = {
     price: number;
     prepayment: number;
     topup: number;
+};
+
+type DesignerSummary = {
+    key: string;
+    name: string;
+    type: 'contacts' | 'companies';
+    category: string;
+    budgetTotal: number;
+    dealCount: number;
+};
+
+type DesignerBreakdownData = {
+    summary: { designerCount: number; dealCount: number; budgetTotal: number };
+    designers: DesignerSummary[];
+};
+
+type DesignerLeadItem = {
+    id: string | number;
+    name: string;
+    closed_date: string | null;
+    price: number;
 };
 
 type LoadState<T> =
@@ -279,6 +300,125 @@ function LeadsModal({ leadsUrl, from, to, manager, baseDomain, onClose }: {
     );
 }
 
+function DesignerLeadsModal({ leadsUrl, from, to, designerKey, designerLabel, baseDomain, onClose }: {
+    leadsUrl: string;
+    from: string;
+    to: string;
+    designerKey: string;
+    designerLabel: string;
+    baseDomain: string;
+    onClose: () => void;
+}) {
+    const [state, setState] = useState<LoadState<{ leads: DesignerLeadItem[]; total: number; limited: boolean; limit: number }>>({ status: 'loading' });
+
+    useEffect(() => {
+        const url = buildUrl(leadsUrl, { from, to, designer: designerKey });
+        fetch(url)
+            .then((r) => r.json())
+            .then((json) => setState({ status: 'loaded', data: json.data }))
+            .catch(() => setState({ status: 'error', message: 'Ошибка загрузки' }));
+    }, [leadsUrl, from, to, designerKey]);
+
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    const title = designerLabel ? `Сделки: ${designerLabel}` : 'Все сделки';
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="designer-modal-title"
+        >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">По дизайнерам</p>
+                        <h3 id="designer-modal-title" className="mt-0.5 font-bold text-gray-900">{title}</h3>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="Закрыть"
+                    >
+                        <X className="size-5" />
+                    </button>
+                </div>
+                <div className="overflow-y-auto">
+                    {state.status === 'loading' && (
+                        <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
+                            <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                            Загрузка...
+                        </div>
+                    )}
+                    {state.status === 'error' && (
+                        <div className="px-6 py-10 text-center text-sm text-red-500">{state.message}</div>
+                    )}
+                    {state.status === 'loaded' && (
+                        <>
+                            {state.data.limited && (
+                                <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs text-amber-700">
+                                    Показаны {state.data.limit} из {state.data.total} сделок — отсортированы по бюджету
+                                </div>
+                            )}
+                            <table className="w-full text-left text-sm">
+                                <thead className="sticky top-0 bg-slate-50">
+                                    <tr>
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата закрытия</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Бюджет</th>
+                                        <th className="px-4 py-3" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {state.data.leads.length > 0 ? state.data.leads.map((lead) => (
+                                        <tr className="transition-colors hover:bg-violet-50/50" key={lead.id}>
+                                            <td className="px-5 py-3.5 font-semibold text-gray-900">{lead.name}</td>
+                                            <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-slate-500">{lead.closed_date ?? '—'}</td>
+                                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-emerald-700">{rubFull(lead.price)}</td>
+                                            <td className="px-4 py-3.5">
+                                                <a
+                                                    href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-slate-400 transition-colors hover:text-indigo-500"
+                                                >
+                                                    <ExternalLink className="size-4" />
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td className="px-5 py-8 text-center text-slate-400" colSpan={4}>
+                                                Нет сделок за выбранный период
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </>
+                    )}
+                </div>
+                {state.status === 'loaded' && (
+                    <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-400">
+                        {state.data.total} сделок · отсортировано по убыванию бюджета
+                    </div>
+                )}
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
 // ─── Section components ───────────────────────────────────────────────────────
 
 function ManagerBarChart({ managers, onManagerClick }: { managers: ManagerSummary[]; onManagerClick: (name: string) => void }) {
@@ -395,6 +535,66 @@ function ManagerSummaryTable({ managers, onRowClick }: { managers: ManagerSummar
     );
 }
 
+function DesignerSummaryTable({ designers, onRowClick }: { designers: DesignerSummary[]; onRowClick: (designer: DesignerSummary) => void }) {
+    const grandTotal = designers.reduce((s, d) => s + d.budgetTotal, 0);
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                    <tr>
+                        <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Дизайнер</th>
+                        <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Категория</th>
+                        <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                        <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сумма</th>
+                        <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {designers.map((d) => {
+                        const share = grandTotal > 0 ? Math.round((d.budgetTotal / grandTotal) * 100) : 0;
+                        return (
+                            <tr key={d.key} className="transition-colors hover:bg-violet-50/50">
+                                <td className="px-5 py-3.5 font-semibold text-gray-900">{d.name}</td>
+                                <td className="px-4 py-3.5 text-slate-600">{d.category}</td>
+                                <td className="px-4 py-3.5 text-right tabular-nums text-slate-600">{d.dealCount}</td>
+                                <td className="px-4 py-3.5 text-right">
+                                    <button
+                                        type="button"
+                                        className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
+                                        onClick={() => onRowClick(d)}
+                                    >
+                                        {rubFull(d.budgetTotal)}
+                                    </button>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                    <div className="flex min-w-40 items-center gap-2.5">
+                                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                            <div
+                                                className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600"
+                                                style={{ width: `${share}%` }}
+                                            />
+                                        </div>
+                                        <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-600">{share}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                    {designers.length > 1 && (
+                        <tr className="bg-slate-50">
+                            <td className="px-5 py-3.5 font-bold text-gray-900">Итого</td>
+                            <td className="px-4 py-3.5" />
+                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{designers.reduce((s, d) => s + d.dealCount, 0)}</td>
+                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{rubFull(grandTotal)}</td>
+                            <td className="px-4 py-3.5 text-xs text-slate-400">100%</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ManagerTopupDashboard({ account, period, links }: Props) {
@@ -402,6 +602,8 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
     const [to, setTo] = useState(period.to);
     const [state, setState] = useState<LoadState<BreakdownData>>({ status: 'loading' });
     const [modal, setModal] = useState<{ manager: string } | null>(null);
+    const [designerState, setDesignerState] = useState<LoadState<DesignerBreakdownData>>({ status: 'loading' });
+    const [designerModal, setDesignerModal] = useState<{ key: string; label: string } | null>(null);
 
     const loadData = (f: string, t: string) => {
         setState({ status: 'loading' });
@@ -412,17 +614,29 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
             .catch((err) => setState({ status: 'error', message: String(err) }));
     };
 
+    const loadDesignerData = (f: string, t: string) => {
+        setDesignerState({ status: 'loading' });
+        const url = buildUrl(links.designers, { from: f, to: t });
+        fetch(url)
+            .then((r) => r.json())
+            .then((json) => setDesignerState({ status: 'loaded', data: json.data }))
+            .catch((err) => setDesignerState({ status: 'error', message: String(err) }));
+    };
+
     useEffect(() => {
         loadData(from, to);
+        loadDesignerData(from, to);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         loadData(from, to);
+        loadDesignerData(from, to);
     };
 
     const data = state.status === 'loaded' ? state.data : null;
+    const designerData = designerState.status === 'loaded' ? designerState.data : null;
     const periodLabel = `${period.label}: ${period.from} — ${period.to}`;
 
     return (
@@ -548,6 +762,41 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
                         )}
                     </>
                 )}
+
+                {/* ── Designers ───────────────────────────────────────────── */}
+                {designerState.status === 'loading' && <SectionSkeleton rows={4} />}
+                {designerState.status === 'error' && <SectionError message={designerState.message} />}
+                {designerData && (
+                    designerData.designers.length > 0 ? (
+                        <ReportSection
+                            eyebrow="По дизайнерам"
+                            title="По дизайнерам (кто принёс больше денег за указанный период)"
+                            description="Дизайнер сделки — привязанный контакт, а при его отсутствии — привязанная компания. Учитываются только успешно реализованные сделки по дате закрытия. Сумма — бюджет сделки. Нажмите на сумму — откроется список сделок."
+                            aside={
+                                <AccentSummary
+                                    label="Итого"
+                                    value={rub(designerData.summary.budgetTotal)}
+                                    note={`${designerData.summary.dealCount} сделок · ${designerData.summary.designerCount} дизайнеров`}
+                                    tone="brand"
+                                />
+                            }
+                        >
+                            <DesignerSummaryTable
+                                designers={designerData.designers}
+                                onRowClick={(designer) => setDesignerModal({ key: designer.key, label: designer.name })}
+                            />
+                        </ReportSection>
+                    ) : (
+                        <ReportSection
+                            eyebrow="По дизайнерам"
+                            title="По дизайнерам (кто принёс больше денег за указанный период)"
+                        >
+                            <div className="px-5 py-8">
+                                <EmptyState>Нет успешно реализованных сделок с контактом или компанией за выбранный период</EmptyState>
+                            </div>
+                        </ReportSection>
+                    )
+                )}
             </div>
 
             {modal !== null && (
@@ -558,6 +807,18 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
                     manager={modal.manager}
                     baseDomain={account.base_domain}
                     onClose={() => setModal(null)}
+                />
+            )}
+
+            {designerModal !== null && (
+                <DesignerLeadsModal
+                    leadsUrl={links.designerLeads}
+                    from={from}
+                    to={to}
+                    designerKey={designerModal.key}
+                    designerLabel={designerModal.label}
+                    baseDomain={account.base_domain}
+                    onClose={() => setDesignerModal(null)}
                 />
             )}
         </div>

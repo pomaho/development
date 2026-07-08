@@ -390,6 +390,152 @@ class AmoManagerTopupServiceTest extends TestCase
         $this->assertSame(0, $resultMsk['summary']['dealCount'], 'Moscow: same ts is July 1 → outside June');
     }
 
+    // ─── designerBreakdown() / designerLeads() ──────────────────────────────────
+
+    private const CATEGORY_FIELD_ID = 845859;
+    // amoCRM reserves status_id 142 for "Успешно реализовано" on every pipeline; its `type` is 0, not 142.
+    private const WON_STATUS_ID = 142;
+
+    public function test_designer_breakdown_prefers_contact_over_company_when_both_present(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт');
+        $this->createCompanySnapshot(2001, 'ООО Компания');
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [['id' => 2001]], 100_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertCount(1, $result['designers']);
+        $this->assertSame('contacts', $result['designers'][0]['type']);
+        $this->assertSame('Иванов Контакт', $result['designers'][0]['name']);
+    }
+
+    public function test_designer_breakdown_falls_back_to_company_when_no_contact(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createCompanySnapshot(2001, 'ООО Компания');
+        $this->createWonLead('1', [], [['id' => 2001]], 100_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertCount(1, $result['designers']);
+        $this->assertSame('companies', $result['designers'][0]['type']);
+        $this->assertSame('ООО Компания', $result['designers'][0]['name']);
+    }
+
+    public function test_designer_breakdown_excludes_lead_without_contact_or_company(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createWonLead('1', [], [], 100_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame(0, $result['summary']['dealCount']);
+        $this->assertCount(0, $result['designers']);
+    }
+
+    public function test_designer_breakdown_excludes_non_won_status(): void
+    {
+        $this->createStatus(555, 'В работе', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт');
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [], 100_000, now(), statusId: 555);
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame(0, $result['summary']['dealCount']);
+    }
+
+    public function test_designer_breakdown_filters_by_closed_date_range(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт');
+        // Inside period
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [], 100_000, now());
+        // Outside period — last month
+        $this->createWonLead('2', [['id' => 1001, 'is_main' => true]], [], 200_000, now()->subMonth());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame(1, $result['summary']['dealCount']);
+        $this->assertEquals(100_000, $result['designers'][0]['budgetTotal']);
+    }
+
+    public function test_designer_breakdown_excludes_zero_or_negative_price(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт');
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [], 0, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame(0, $result['summary']['dealCount']);
+    }
+
+    public function test_designer_breakdown_returns_category_for_contact(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт', 'A');
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [], 100_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame('A', $result['designers'][0]['category']);
+    }
+
+    public function test_designer_breakdown_returns_dash_category_for_company(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createCompanySnapshot(2001, 'ООО Компания');
+        $this->createWonLead('1', [], [['id' => 2001]], 100_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame('-', $result['designers'][0]['category']);
+    }
+
+    public function test_designer_breakdown_sorts_by_budget_total_desc(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт');
+        $this->createContactSnapshot(1002, 'Петров Контакт');
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [], 100_000, now());
+        $this->createWonLead('2', [['id' => 1002, 'is_main' => true]], [], 300_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame('Петров Контакт', $result['designers'][0]['name']);
+        $this->assertSame('Иванов Контакт', $result['designers'][1]['name']);
+    }
+
+    public function test_designer_breakdown_uses_is_main_contact_when_multiple_contacts_embedded(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Не главный контакт');
+        $this->createContactSnapshot(1002, 'Главный контакт');
+        $this->createWonLead('1', [
+            ['id' => 1001, 'is_main' => false],
+            ['id' => 1002, 'is_main' => true],
+        ], [], 100_000, now());
+
+        $result = $this->service->designerBreakdown($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config);
+
+        $this->assertSame('Главный контакт', $result['designers'][0]['name']);
+    }
+
+    public function test_designer_leads_filters_by_composite_key(): void
+    {
+        $this->createStatus(self::WON_STATUS_ID, 'Успешно реализовано', 0);
+        $this->createContactSnapshot(1001, 'Иванов Контакт');
+        $this->createContactSnapshot(1002, 'Петров Контакт');
+        $this->createWonLead('1', [['id' => 1001, 'is_main' => true]], [], 100_000, now());
+        $this->createWonLead('2', [['id' => 1002, 'is_main' => true]], [], 200_000, now());
+
+        $result = $this->service->designerLeads($this->account, now()->startOfMonth(), now()->endOfMonth(), $this->config, 'contacts:1001');
+
+        $this->assertSame(1, $result['total']);
+        $this->assertEquals(100_000, $result['leads'][0]['price']);
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private function createLead(
@@ -440,6 +586,60 @@ class AmoManagerTopupServiceTest extends TestCase
             'entity_created_at' => now(),
             'custom_fields_values' => $customFields,
             'raw' => ['price' => $price],
+            'synced_at' => now(),
+        ]);
+    }
+
+    private function createWonLead(
+        string $externalId,
+        array $contactEmbedded,
+        array $companyEmbedded,
+        float $price,
+        Carbon $closedAt,
+        int $pipelineId = self::PIPELINE_ID,
+        int $statusId = self::WON_STATUS_ID,
+    ): CrmEntitySnapshot {
+        return CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $this->account->id,
+            'entity_type' => 'leads',
+            'external_id' => $externalId,
+            'name' => 'Lead ' . $externalId,
+            'pipeline_id' => $pipelineId,
+            'status_id' => $statusId,
+            'entity_created_at' => now(),
+            'entity_closed_at' => $closedAt,
+            'custom_fields_values' => [],
+            'embedded' => ['contacts' => $contactEmbedded, 'companies' => $companyEmbedded],
+            'raw' => ['price' => $price],
+            'synced_at' => now(),
+        ]);
+    }
+
+    private function createContactSnapshot(int $externalId, string $name, ?string $category = null): CrmEntitySnapshot
+    {
+        $customFields = $category !== null ? [
+            ['field_id' => self::CATEGORY_FIELD_ID, 'values' => [['value' => $category]]],
+        ] : [];
+
+        return CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $this->account->id,
+            'entity_type' => 'contacts',
+            'external_id' => (string) $externalId,
+            'name' => $name,
+            'custom_fields_values' => $customFields,
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+    }
+
+    private function createCompanySnapshot(int $externalId, string $name): CrmEntitySnapshot
+    {
+        return CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $this->account->id,
+            'entity_type' => 'companies',
+            'external_id' => (string) $externalId,
+            'name' => $name,
+            'raw' => [],
             'synced_at' => now(),
         ]);
     }

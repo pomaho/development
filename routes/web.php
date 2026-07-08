@@ -122,6 +122,12 @@ Route::get('/api/widgets/amo/{publicKey}/manager-topup/data', [AmoManagerTopupCo
 Route::get('/api/widgets/amo/{publicKey}/manager-topup/leads', [AmoManagerTopupController::class, 'leads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-topup.leads');
+Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers', [AmoManagerTopupController::class, 'designers'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-topup.designers');
+Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers/leads', [AmoManagerTopupController::class, 'designerLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-topup.designers-leads');
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:webhook')

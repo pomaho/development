@@ -36,6 +36,8 @@ class AmoManagerTopupController extends Controller
                 'self' => route('widgets.amo.manager-topup.show', $publicKey),
                 'data' => route('api.widgets.amo.manager-topup.data', $publicKey),
                 'leads' => route('api.widgets.amo.manager-topup.leads', $publicKey),
+                'designers' => route('api.widgets.amo.manager-topup.designers', $publicKey),
+                'designerLeads' => route('api.widgets.amo.manager-topup.designers-leads', $publicKey),
             ],
         ]);
     }
@@ -76,6 +78,42 @@ class AmoManagerTopupController extends Controller
                 $to,
                 $installation->config ?? [],
                 (string) $request->query('manager', ''),
+                300,
+                $tz,
+            ),
+        ]);
+    }
+
+    public function designers(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        $tz = $installation->account->timezone();
+        [$from, $to] = $this->period($request, $tz);
+
+        return response()->json([
+            'data' => $service->designerBreakdown(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                $tz,
+            ),
+        ]);
+    }
+
+    public function designerLeads(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        $tz = $installation->account->timezone();
+        [$from, $to] = $this->period($request, $tz);
+
+        return response()->json([
+            'data' => $service->designerLeads(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                (string) $request->query('designer', ''),
                 300,
                 $tz,
             ),
