@@ -2665,7 +2665,7 @@ class AuthAndAmoAccountsTest extends TestCase
                 'lookback_days' => 45,
             ])
             ->assertRedirect()
-            ->assertSessionHas('status', 'Разовая синхронизация завершена. Загружено сделок: 250.');
+            ->assertSessionHas('status', 'Разовая синхронизация завершена. Загружено записей: 250.');
 
         $schedule->refresh();
         $this->assertSame(2, $schedule->lookback_days);

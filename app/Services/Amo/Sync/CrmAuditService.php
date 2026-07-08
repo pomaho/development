@@ -106,6 +106,19 @@ class CrmAuditService
 
         return [
             'leads' => $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, $leadQuery),
+            ...$this->syncContacts($account, $from, $to),
+            'events' => $this->syncSimpleEntity($account, 'events', '/api/v4/events', 'events', $syncedAt, $periodQuery),
+            'tasks' => $this->syncSimpleEntity($account, 'tasks', '/api/v4/tasks', 'tasks', $syncedAt, $periodQuery),
+            'unsorted' => $this->syncSimpleEntity($account, 'unsorted', '/api/v4/leads/unsorted', 'unsorted', $syncedAt, $periodQuery),
+        ];
+    }
+
+    public function syncContacts(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $syncedAt = now();
+        $periodQuery = $this->periodQuery($from, $to);
+
+        return [
             'contacts' => $this->syncSimpleEntity($account, 'contacts', '/api/v4/contacts', 'contacts', $syncedAt, [
                 'with' => 'leads,companies',
                 ...$periodQuery,
@@ -114,9 +127,6 @@ class CrmAuditService
                 'with' => 'contacts,leads',
                 ...$periodQuery,
             ]),
-            'events' => $this->syncSimpleEntity($account, 'events', '/api/v4/events', 'events', $syncedAt, $periodQuery),
-            'tasks' => $this->syncSimpleEntity($account, 'tasks', '/api/v4/tasks', 'tasks', $syncedAt, $periodQuery),
-            'unsorted' => $this->syncSimpleEntity($account, 'unsorted', '/api/v4/leads/unsorted', 'unsorted', $syncedAt, $periodQuery),
         ];
     }
 

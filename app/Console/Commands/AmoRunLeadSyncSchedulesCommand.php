@@ -38,7 +38,7 @@ class AmoRunLeadSyncSchedulesCommand extends Command
         }
 
         foreach ($schedules as $schedule) {
-            if ($schedule->entity_type === LeadSyncSchedule::ENTITY_TYPE_LEADS) {
+            if (in_array($schedule->entity_type, [LeadSyncSchedule::ENTITY_TYPE_LEADS, LeadSyncSchedule::ENTITY_TYPE_CONTACTS], true)) {
                 $this->runLeadsSchedule($schedule, $runner);
             } else {
                 $this->runNonLeadsSchedule($schedule);
@@ -53,9 +53,9 @@ class AmoRunLeadSyncSchedulesCommand extends Command
         try {
             $syncedCount = $runner->run($schedule);
 
-            $this->components->info("Schedule {$schedule->id} (leads): synced {$syncedCount} leads.");
+            $this->components->info("Schedule {$schedule->id} ({$schedule->entity_type}): synced {$syncedCount}.");
         } catch (Throwable $exception) {
-            $this->components->error("Schedule {$schedule->id} (leads): {$exception->getMessage()}");
+            $this->components->error("Schedule {$schedule->id} ({$schedule->entity_type}): {$exception->getMessage()}");
         }
     }
 

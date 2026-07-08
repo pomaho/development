@@ -27,13 +27,18 @@ class LeadSyncScheduleRunner
         ])->save();
 
         try {
-            $counts = $this->auditService->syncOperationalData(
-                $schedule->account,
-                $from,
-                $to,
-                $schedule->amo_pipeline_id
-            );
-            $syncedCount = (int) ($counts['leads'] ?? 0);
+            if ($schedule->entity_type === LeadSyncSchedule::ENTITY_TYPE_CONTACTS) {
+                $counts = $this->auditService->syncContacts($schedule->account, $from, $to);
+                $syncedCount = (int) ($counts['contacts'] ?? 0) + (int) ($counts['companies'] ?? 0);
+            } else {
+                $counts = $this->auditService->syncOperationalData(
+                    $schedule->account,
+                    $from,
+                    $to,
+                    $schedule->amo_pipeline_id
+                );
+                $syncedCount = (int) ($counts['leads'] ?? 0);
+            }
 
             $schedule->forceFill([
                 'last_finished_at' => now(),

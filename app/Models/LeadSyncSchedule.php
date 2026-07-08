@@ -15,11 +15,13 @@ class LeadSyncSchedule extends Model
     public const ENTITY_TYPE_LEADS = 'leads';
     public const ENTITY_TYPE_TASKS = 'tasks';
     public const ENTITY_TYPE_EVENTS = 'events';
+    public const ENTITY_TYPE_CONTACTS = 'contacts';
 
     public const ENTITY_TYPES = [
         self::ENTITY_TYPE_LEADS,
         self::ENTITY_TYPE_TASKS,
         self::ENTITY_TYPE_EVENTS,
+        self::ENTITY_TYPE_CONTACTS,
     ];
 
     protected $fillable = [

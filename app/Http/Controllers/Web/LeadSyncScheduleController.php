@@ -32,6 +32,7 @@ class LeadSyncScheduleController extends Controller
         LeadSyncSchedule::ENTITY_TYPE_LEADS => 'Сделки',
         LeadSyncSchedule::ENTITY_TYPE_TASKS => 'Задачи',
         LeadSyncSchedule::ENTITY_TYPE_EVENTS => 'События',
+        LeadSyncSchedule::ENTITY_TYPE_CONTACTS => 'Контакты и компании',
     ];
 
     public function index(AmoAccount $amoAccount): Response
@@ -182,10 +183,10 @@ class LeadSyncScheduleController extends Controller
             'lookback_days' => ['required', 'integer', 'min:1', 'max:365'],
         ]);
 
-        if ($leadSyncSchedule->entity_type === LeadSyncSchedule::ENTITY_TYPE_LEADS) {
+        if (in_array($leadSyncSchedule->entity_type, [LeadSyncSchedule::ENTITY_TYPE_LEADS, LeadSyncSchedule::ENTITY_TYPE_CONTACTS], true)) {
             $syncedCount = $runner->run($leadSyncSchedule->load('account'), (int) $data['lookback_days'], false);
 
-            return back()->with('status', "Разовая синхронизация завершена. Загружено сделок: {$syncedCount}.");
+            return back()->with('status', "Разовая синхронизация завершена. Загружено записей: {$syncedCount}.");
         }
 
         $run = $this->dispatchNonLeadsSync($amoAccount, (int) $data['lookback_days']);
