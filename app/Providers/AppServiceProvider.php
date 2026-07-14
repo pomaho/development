@@ -4,11 +4,13 @@ namespace App\Providers;
 
 use App\Events\AmoAccountSynced;
 use App\Events\AmoAccountSyncQueued;
+use App\Listeners\AlertOnJobFailure;
 use App\Listeners\InvalidateInertiaAccountsCacheOnSync;
 use App\Models\AmoAccount;
 use App\Policies\AmoAccountPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
@@ -34,6 +36,8 @@ class AppServiceProvider extends ServiceProvider
 
         Event::listen(AmoAccountSynced::class, [$listener, 'handleSynced']);
         Event::listen(AmoAccountSyncQueued::class, [$listener, 'handleSyncQueued']);
+
+        Event::listen(JobFailed::class, AlertOnJobFailure::class);
     }
 
     private function configureRateLimiting(): void
