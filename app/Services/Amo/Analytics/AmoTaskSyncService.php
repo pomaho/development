@@ -242,7 +242,7 @@ class AmoTaskSyncService
                     'entity_id' => $event['entity_id'] ?? null,
                     'entity_type' => $event['entity_type'] ?? $event['entity'] ?? null,
                 ],
-                'raw' => null,
+                'raw' => [],
                 'synced_at' => $syncedAt,
             ]
         );
