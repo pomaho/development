@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
 use App\Services\Alerts\TelegramNotifier;
@@ -19,7 +21,12 @@ class AmoTestAlertCommand extends Command
             return self::FAILURE;
         }
 
-        $notifier->send('✅ Тестовое уведомление: алерты настроены и работают.');
+        if (! $notifier->send('✅ Тестовое уведомление: алерты настроены и работают.')) {
+            $this->error('Telegram API отклонил сообщение или недоступен. Проверьте логи.');
+
+            return self::FAILURE;
+        }
+
         $this->info('Отправлено.');
 
         return self::SUCCESS;
