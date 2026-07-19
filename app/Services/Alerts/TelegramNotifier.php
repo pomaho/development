@@ -15,6 +15,8 @@ class TelegramNotifier
         $chatId = config('alerts.telegram.chat_id');
 
         if (! $token || ! $chatId) {
+            $this->logMissingConfigOnce();
+
             return false;
         }
 
@@ -57,5 +59,22 @@ class TelegramNotifier
         if ($this->send($message)) {
             Cache::put($cacheKey, true, now()->addMinutes($minutes));
         }
+    }
+
+    /**
+     * Missing config means every alert silently fails, so surface it at
+     * least once instead of never logging anything — throttled to avoid
+     * spamming the log if this is called from a crash loop.
+     */
+    private function logMissingConfigOnce(): void
+    {
+        $cacheKey = 'alerts:telegram:missing_config_warned';
+
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+
+        Cache::put($cacheKey, true, now()->addHour());
+        Log::warning('Telegram alerts not configured: missing bot token or chat id.');
     }
 }
