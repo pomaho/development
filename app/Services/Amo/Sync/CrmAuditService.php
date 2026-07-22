@@ -113,6 +113,40 @@ class CrmAuditService
         ];
     }
 
+    /**
+     * Like syncOperationalData()'s leads branch, but filters by amoCRM's updated_at instead
+     * of created_at — so leads that were already synced but later edited (e.g. the
+     * "Менеджер" field was filled/changed) get re-fetched too, not just brand-new leads.
+     * Used by recurring schedules that need to catch "all changes in the last N days",
+     * not just "new leads in the last N days".
+     */
+    public function syncRecentlyUpdatedLeads(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, ?int $pipelineId = null): array
+    {
+        $syncedAt = now();
+        $updatedQuery = $this->updatedPeriodQuery($from, $to);
+        $leadQuery = [
+            'with' => 'contacts,loss_reason,source',
+            ...$updatedQuery,
+            ...$this->pipelineQuery($pipelineId),
+        ];
+
+        $leads = $this->syncSimpleEntity($account, 'leads', '/api/v4/leads', 'leads', $syncedAt, $leadQuery);
+
+        if ($leads === 0 && $pipelineId !== null) {
+            $leads = $this->syncSimpleEntity(
+                $account,
+                'leads',
+                '/api/v4/leads',
+                'leads',
+                $syncedAt,
+                ['with' => 'contacts,loss_reason,source', ...$updatedQuery],
+                fn (array $lead): bool => (int) ($lead['pipeline_id'] ?? 0) === $pipelineId
+            );
+        }
+
+        return ['leads' => $leads];
+    }
+
     public function syncContacts(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
         $syncedAt = now();
@@ -272,6 +306,14 @@ class CrmAuditService
     private function pipelineQuery(?int $pipelineId): array
     {
         return $pipelineId ? ['filter[pipeline_id]' => $pipelineId] : [];
+    }
+
+    private function updatedPeriodQuery(?Carbon $from, ?Carbon $to): array
+    {
+        return array_filter([
+            'filter[updated_at][from]' => $from?->timestamp,
+            'filter[updated_at][to]' => $to?->timestamp,
+        ], fn ($value) => $value !== null);
     }
 
     private function timestamp(mixed $timestamp): ?Carbon

@@ -2631,6 +2631,48 @@ class AuthAndAmoAccountsTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_due_lead_sync_schedule_with_use_updated_at_calls_recently_updated_leads_sync(): void
+    {
+        Carbon::setTestNow('2026-06-11 12:00:00');
+
+        $account = AmoAccount::query()->create([
+            'name' => 'Client',
+            'base_domain' => 'client.amocrm.ru',
+            'is_active' => true,
+        ]);
+        $due = LeadSyncSchedule::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'pipeline_name' => 'Sales',
+            'interval_minutes' => 180,
+            'lookback_days' => 2,
+            'use_updated_at' => true,
+            'is_enabled' => true,
+            'next_run_at' => now()->subMinute(),
+        ]);
+
+        $auditService = Mockery::mock(CrmAuditService::class);
+        $auditService->shouldReceive('syncRecentlyUpdatedLeads')
+            ->once()
+            ->withArgs(fn (AmoAccount $passedAccount, Carbon $from, Carbon $to, int $pipelineId): bool =>
+                $passedAccount->id === $account->id
+                && $from->toDateTimeString() === '2026-06-09 00:00:00'
+                && $to->toDateTimeString() === '2026-06-11 23:59:59'
+                && $pipelineId === 10
+            )
+            ->andReturn(['leads' => 301]);
+        $auditService->shouldNotReceive('syncOperationalData');
+        $this->app->instance(CrmAuditService::class, $auditService);
+
+        $this->artisan('amo:run-lead-sync-schedules')->assertExitCode(0);
+
+        $due->refresh();
+        $this->assertSame(LeadSyncSchedule::STATUS_COMPLETED, $due->last_status);
+        $this->assertSame(301, $due->last_synced_count);
+
+        Carbon::setTestNow();
+    }
+
     public function test_admin_can_run_one_time_lead_sync_without_changing_schedule_window(): void
     {
         Carbon::setTestNow('2026-06-11 12:00:00');
