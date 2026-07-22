@@ -13,11 +13,19 @@ class SyncAmoTaskStatisticsJob implements ShouldQueue
 {
     use Queueable;
 
-    public int $tries = 1;
+    // Sync writes are idempotent (updateOrCreate by external_id), so retrying a
+    // transient failure (API timeout, etc.) is safe and lets the job self-heal within
+    // minutes instead of waiting for the next scheduled run up to 6h later.
+    public int $tries = 3;
     public int $timeout = 1200;
 
     public function __construct(public readonly int $runId)
     {
+    }
+
+    public function backoff(): array
+    {
+        return [60, 300];
     }
 
     public function handle(AmoTaskSyncService $syncService): void
