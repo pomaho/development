@@ -1041,6 +1041,63 @@ class AmoServicesTest extends TestCase
         $this->assertSame('Без сделок', $distribution['recruiters'][2]['name']);
         $this->assertSame(0, $distribution['recruiters'][2]['leads_count']);
         $this->assertSame(0, $distribution['recruiters'][2]['transferred_to_manager_count']);
+
+        $this->assertSame(8, $distribution['days_in_period']);
+        $this->assertSame(8.5, $distribution['leads_plan_per_day']);
+        $this->assertSame(68.0, $distribution['plan_total']);
+        $this->assertSame(68.0, $distribution['recruiters'][0]['plan_total']);
+        $this->assertSame(2.9, $distribution['recruiters'][0]['plan_completion_percent']);
+        $this->assertSame(0.0, $distribution['recruiters'][2]['plan_completion_percent']);
+    }
+
+    public function test_recruiter_lead_distribution_uses_configured_leads_plan_per_day(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client2.amocrm.ru']);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 777,
+            'name' => 'Рекрутер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 1001, 'value' => 'Иван Рекрутер'],
+            ],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        CrmEntitySnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '601',
+            'name' => 'Lead 601',
+            'pipeline_id' => 10,
+            'status_id' => 111,
+            'entity_created_at' => now()->subDay(),
+            'custom_fields_values' => [[
+                'field_id' => 777,
+                'field_name' => 'Рекрутер',
+                'values' => [['enum_id' => 1001, 'value' => 'Иван Рекрутер']],
+            ]],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        $distribution = (new AmoTaskStatisticsService())
+            ->recruiterLeadDistribution($account, now()->subDays(1), now(), [
+                'pipeline_id' => 10,
+                'recruiter_field_id' => 777,
+                'recruiter_field_name' => 'Рекрутер',
+                'leads_plan_per_day' => 2,
+            ]);
+
+        $this->assertSame(2, $distribution['days_in_period']);
+        $this->assertSame(2.0, $distribution['leads_plan_per_day']);
+        $this->assertSame(4.0, $distribution['plan_total']);
+        $this->assertSame(1, $distribution['recruiters'][0]['leads_count']);
+        $this->assertSame(25.0, $distribution['recruiters'][0]['plan_completion_percent']);
     }
 
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void

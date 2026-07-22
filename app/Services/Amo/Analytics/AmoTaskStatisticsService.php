@@ -21,6 +21,7 @@ class AmoTaskStatisticsService
     private const TAKEN_TO_WORK_FIELD_ID = 1435399;  // "Взято в работу"
     private const TRANSFER_DATE_FIELD_ID = 1435403;   // "Дата передачи менеджеру"
     private const MISSING_DATES_LEAD_LIMIT = 300;
+    private const DEFAULT_LEADS_PLAN_PER_DAY = 8.5;
 
 
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
@@ -615,6 +616,13 @@ class AmoTaskStatisticsService
         $managerFieldName = (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME);
         $pipelineId = (int) data_get($config, 'pipeline_id', 0);
         $pipelineName = data_get($config, 'pipeline_name');
+        $leadsPlanPerDay = (float) data_get($config, 'leads_plan_per_day', self::DEFAULT_LEADS_PLAN_PER_DAY);
+        // diffInDays() on Carbon 3 returns a precise float (e.g. 21.999999999988 for a
+        // period ending at 23:59:59), so compare calendar-day boundaries to get a clean int.
+        $daysInPeriod = ($from !== null && $to !== null)
+            ? (int) round($from->copy()->startOfDay()->diffInDays($to->copy()->startOfDay())) + 1
+            : null;
+        $planTotal = $daysInPeriod !== null ? round($daysInPeriod * $leadsPlanPerDay, 2) : null;
         $fieldQuery = CrmCustomFieldSnapshot::query()
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads');
@@ -654,6 +662,9 @@ class AmoTaskStatisticsService
             'total_leads_count' => 0,
             'assigned_leads_count' => 0,
             'transferred_to_manager_count' => 0,
+            'days_in_period' => $daysInPeriod,
+            'leads_plan_per_day' => $leadsPlanPerDay,
+            'plan_total' => $planTotal,
             'recruiters' => [],
         ];
 
@@ -757,6 +768,13 @@ class AmoTaskStatisticsService
             $enums[$enumId]['transferred_to_manager_count'] = count($leadIds);
         }
 
+        foreach ($enums as $enumId => $enum) {
+            $enums[$enumId]['plan_total'] = $planTotal;
+            $enums[$enumId]['plan_completion_percent'] = ($planTotal !== null && $planTotal > 0)
+                ? round($enum['leads_count'] / $planTotal * 100, 1)
+                : null;
+        }
+
         $rows = collect($enums)
             ->sortByDesc('leads_count')
             ->values()
@@ -780,6 +798,9 @@ class AmoTaskStatisticsService
                 ->flatMap(fn (array $ids): array => array_keys($ids))
                 ->unique()
                 ->count(),
+            'days_in_period' => $daysInPeriod,
+            'leads_plan_per_day' => $leadsPlanPerDay,
+            'plan_total' => $planTotal,
             'recruiters' => $rows,
             'missing_intake_dates' => [
                 'count' => $missingIntakeCount,
