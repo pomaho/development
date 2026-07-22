@@ -20,6 +20,8 @@ type RecruiterLeadRow = {
     name: string;
     leads_count: number;
     transferred_to_manager_count: number;
+    plan_total: number | null;
+    plan_completion_percent: number | null;
 };
 
 type RecruiterLeads = {
@@ -31,6 +33,9 @@ type RecruiterLeads = {
     total_leads_count: number;
     assigned_leads_count: number;
     transferred_to_manager_count: number;
+    days_in_period: number | null;
+    leads_plan_per_day: number;
+    plan_total: number | null;
     recruiters: RecruiterLeadRow[];
 };
 
@@ -491,6 +496,7 @@ function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { 
                             <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
                             <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Передано менеджеру</th>
                             <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Выполнение плана</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -514,11 +520,26 @@ function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { 
                                     <td className="px-4 py-3.5">
                                         <Progress value={rate} tone="brand" />
                                     </td>
+                                    <td className="px-4 py-3.5">
+                                        {recruiter.plan_completion_percent !== null ? (
+                                            <div className="flex flex-col gap-1">
+                                                <Progress
+                                                    value={Math.min(recruiter.plan_completion_percent, 100)}
+                                                    tone={recruiter.plan_completion_percent >= 100 ? 'brand' : recruiter.plan_completion_percent >= 70 ? 'warning' : 'danger'}
+                                                />
+                                                <span className="text-xs font-semibold text-slate-600">
+                                                    {recruiter.plan_completion_percent}% ({recruiter.leads_count} / {recruiter.plan_total})
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-400">—</span>
+                                        )}
+                                    </td>
                                 </tr>
                             );
                         }) : (
                             <tr>
-                                <td className="px-5 py-8" colSpan={4}>
+                                <td className="px-5 py-8" colSpan={5}>
                                     <EmptyState>
                                         {recruiterLeads.field_found
                                             ? 'В поле "Рекрутер" пока нет значений или нет сделок за выбранный период.'
