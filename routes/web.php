@@ -28,7 +28,7 @@ use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\LeadSyncScheduleController;
 use App\Http\Controllers\Webhook\AmoWebhookController;
-use App\Http\Controllers\Widget\AmoManagerTopupController;
+use App\Http\Controllers\Widget\Clients\Eurohome\AmoManagerTopupController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;

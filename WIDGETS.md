@@ -45,7 +45,24 @@ TSX Page                            → визуализация (React/Inertia)
 | `app/Http/Requests/UpdateWidgetSettingsRequest.php` | Валидация формы настроек |
 | `routes/web.php` | Маршруты виджетов |
 | `resources/js/Pages/Widgets/Amo/TaskOverdueDashboardV2.tsx` | TSX-страница V2 |
+| `resources/js/Pages/Widgets/Amo/_shared/uiKit.tsx` | Общие UI-примитивы (`ReportSection`, `AccentSummary`, `SectionSkeleton`, `SectionError`, `EmptyState`, `WidgetHeader`, `rub()`, `rubFull()`, `buildUrl()`, `LoadState<T>`) |
 | `resources/js/Pages/AmoAccounts/Widgets/Settings.tsx` | Страница настроек виджета |
+
+### Общий код vs код одного клиента
+
+Если виджет по-настоящему универсален (все параметры приходят через `config`, без хардкода конкретных ID полей/воронки клиента) — его PHP- и TSX-код лежит в общих папках (`app/Services/Amo/Analytics/`, `app/Http/Controllers/Widget/`, `resources/js/Pages/Widgets/Amo/`), как `AmoTaskStatisticsService`/`AmoTaskOverdueDashboardController`.
+
+Если виджет хардкодит ID полей/воронки конкретного клиента как **дефолт** (не только опционально через `config`) — значит по факту он написан под одного клиента, даже если технически конфигурируем. Такой код кладём в `Clients/{ИмяКлиента}/`:
+
+```
+app/Services/Amo/Analytics/Clients/Eurohome/
+app/Http/Controllers/Widget/Clients/Eurohome/
+resources/js/Pages/Widgets/Amo/Clients/Eurohome/
+```
+
+Пример: `AmoManagerTopupService`/`AmoProductGroupService` хардкодят ID полей Eurohome (845975, 845835, 845843, 871211 и т.д.) как дефолты и реально настроены только для account_id=3 — поэтому лежат в `Clients/Eurohome/`, а не в общей папке.
+
+Чисто презентационные примитивы без клиентской специфики (`ReportSection`, `WidgetHeader` и т.д.) — общие для всех, живут в `_shared/`.
 
 ---
 
@@ -118,9 +135,9 @@ TSX Page                            → визуализация (React/Inertia)
 > **Статус: активный.** Клиент: eurohomenew.amocrm.ru (аккаунт ID 3).
 
 - **URL:** `/widgets/amo/{publicKey}/manager-topup`
-- **TSX:** `resources/js/Pages/Widgets/Amo/ManagerTopupDashboard.tsx`
-- **Сервис:** `app/Services/Amo/Analytics/AmoManagerTopupService.php`
-- **Контроллер:** `app/Http/Controllers/Widget/AmoManagerTopupController.php`
+- **TSX:** `resources/js/Pages/Widgets/Amo/Clients/Eurohome/ManagerTopupDashboard.tsx` (экспортирует переиспользуемый `ManagerTopupContent`)
+- **Сервис:** `app/Services/Amo/Analytics/Clients/Eurohome/AmoManagerTopupService.php`
+- **Контроллер:** `app/Http/Controllers/Widget/Clients/Eurohome/AmoManagerTopupController.php`
 
 #### Что показывает
 

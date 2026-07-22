@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Services\Amo\Analytics;
+namespace App\Services\Amo\Analytics\Clients\Eurohome;
 
 use App\Models\AmoAccount;
 use App\Models\CrmEntitySnapshot;

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace App\Http\Controllers\Widget;
+namespace App\Http\Controllers\Widget\Clients\Eurohome;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccountDashboardWidget;
-use App\Services\Amo\Analytics\AmoManagerTopupService;
+use App\Services\Amo\Analytics\Clients\Eurohome\AmoManagerTopupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -21,7 +21,7 @@ class AmoManagerTopupController extends Controller
         $tz = $installation->account->timezone();
         [$from, $to, $periodMeta] = $this->period($request, $tz);
 
-        return Inertia::render('Widgets/Amo/ManagerTopupDashboard', [
+        return Inertia::render('Widgets/Amo/Clients/Eurohome/ManagerTopupDashboard', [
             'account' => [
                 'name' => $installation->account->name,
                 'base_domain' => $installation->account->base_domain,
