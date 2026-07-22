@@ -1,6 +1,10 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useState, type ReactNode } from 'react';
-import { CalendarDays, ExternalLink, Inbox, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ExternalLink, X } from 'lucide-react';
+import {
+    AccentSummary, buildUrl, EmptyState, type LoadState, ReportSection, rub, rubFull,
+    SectionError, SectionSkeleton, WidgetHeader,
+} from '../../_shared/uiKit';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,115 +67,12 @@ type DesignerLeadItem = {
     price: number;
 };
 
-type LoadState<T> =
-    | { status: 'loading' }
-    | { status: 'error'; message: string }
-    | { status: 'loaded'; data: T };
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function rub(value: number): string {
-    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace('.0', '')} млн ₽`;
-    if (value >= 1_000) return `${(value / 1_000).toFixed(0)} тыс ₽`;
-    return `${value.toLocaleString('ru-RU')} ₽`;
-}
-
-function rubFull(value: number): string {
-    return value.toLocaleString('ru-RU') + ' ₽';
-}
 
 function monthLabel(ym: string): string {
     const [y, m] = ym.split('-');
     const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
     return `${months[parseInt(m, 10) - 1]} ${y}`;
-}
-
-function buildUrl(base: string, params: Record<string, string | number | undefined>): string {
-    const url = new URL(base, window.location.origin);
-    for (const [k, v] of Object.entries(params)) {
-        if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
-    }
-    return url.toString();
-}
-
-// ─── Primitive UI components ──────────────────────────────────────────────────
-
-function ReportSection({ eyebrow, title, description, aside, children }: {
-    eyebrow: string; title: string; description?: string; aside?: ReactNode; children: ReactNode;
-}) {
-    return (
-        <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200/60">
-            <div className="grid gap-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5 lg:grid-cols-[1fr_auto] lg:items-center">
-                <div>
-                    <div className="bg-gradient-to-r from-violet-600 to-indigo-500 bg-clip-text text-xs font-bold uppercase tracking-wider text-transparent">
-                        {eyebrow}
-                    </div>
-                    <h2 className="mt-1.5 text-lg font-bold text-gray-900">{title}</h2>
-                    {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
-                </div>
-                {aside}
-            </div>
-            {children}
-        </section>
-    );
-}
-
-function AccentSummary({ label, value, note, tone }: {
-    label: string; value: ReactNode; note?: string; tone: 'brand' | 'warning' | 'success';
-}) {
-    const cls = tone === 'warning'
-        ? 'bg-gradient-to-br from-amber-400 to-orange-500 shadow-amber-200/60'
-        : tone === 'success'
-        ? 'bg-gradient-to-br from-emerald-400 to-green-600 shadow-emerald-200/60'
-        : 'bg-gradient-to-br from-violet-500 to-indigo-600 shadow-violet-200/60';
-    return (
-        <div className={`rounded-2xl px-5 py-4 text-right text-white shadow-lg ${cls}`}>
-            <div className="text-xs font-semibold uppercase tracking-wider text-white/70">{label}</div>
-            <div className="mt-1 text-4xl font-extrabold tabular-nums">{value}</div>
-            {note ? <div className="mt-1 text-xs text-white/70">{note}</div> : null}
-        </div>
-    );
-}
-
-function SectionSkeleton({ rows }: { rows: number }) {
-    return (
-        <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-slate-200/60">
-            <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-5">
-                <div className="h-3 w-24 animate-pulse rounded-full bg-slate-200" />
-                <div className="mt-3 h-5 w-64 animate-pulse rounded-full bg-slate-200" />
-                <div className="mt-2 h-3 w-96 animate-pulse rounded-full bg-slate-100" />
-            </div>
-            <div className="divide-y divide-slate-100">
-                {Array.from({ length: rows }).map((_, i) => (
-                    <div className="flex items-center gap-4 px-5 py-4" key={i}>
-                        <div className="h-4 flex-1 animate-pulse rounded-full bg-slate-100" style={{ animationDelay: `${i * 60}ms` }} />
-                        <div className="h-4 w-16 animate-pulse rounded-full bg-slate-100" style={{ animationDelay: `${i * 60 + 30}ms` }} />
-                        <div className="h-4 w-24 animate-pulse rounded-full bg-slate-100" style={{ animationDelay: `${i * 60 + 60}ms` }} />
-                    </div>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-function SectionError({ message }: { message: string }) {
-    return (
-        <section className="overflow-hidden rounded-2xl bg-white shadow-md ring-1 ring-red-200/60">
-            <div className="flex flex-col items-center gap-3 px-5 py-10 text-center text-sm text-slate-400">
-                <Inbox className="size-10 text-red-200" />
-                Ошибка загрузки данных: {message}
-            </div>
-        </section>
-    );
-}
-
-function EmptyState({ children }: { children: ReactNode }) {
-    return (
-        <div className="flex flex-col items-center gap-3 rounded-2xl bg-slate-50 p-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
-            <Inbox className="size-10 text-slate-300" />
-            {children}
-        </div>
-    );
 }
 
 // ─── Leads Modal ──────────────────────────────────────────────────────────────
@@ -595,209 +496,138 @@ function DesignerSummaryTable({ designers, onRowClick }: { designers: DesignerSu
     );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Content (reusable — no header, no own period state) ──────────────────────
 
-export default function ManagerTopupDashboard({ account, period, links }: Props) {
-    const [from, setFrom] = useState(period.from);
-    const [to, setTo] = useState(period.to);
+export function ManagerTopupContent({ account, from, to, links }: {
+    account: Account;
+    from: string;
+    to: string;
+    links: { data: string; leads: string; designers: string; designerLeads: string };
+}) {
     const [state, setState] = useState<LoadState<BreakdownData>>({ status: 'loading' });
     const [modal, setModal] = useState<{ manager: string } | null>(null);
     const [designerState, setDesignerState] = useState<LoadState<DesignerBreakdownData>>({ status: 'loading' });
     const [designerModal, setDesignerModal] = useState<{ key: string; label: string } | null>(null);
 
-    const loadData = (f: string, t: string) => {
+    useEffect(() => {
         setState({ status: 'loading' });
-        const url = buildUrl(links.data, { from: f, to: t });
+        const url = buildUrl(links.data, { from, to });
         fetch(url)
             .then((r) => r.json())
             .then((json) => setState({ status: 'loaded', data: json.data }))
             .catch((err) => setState({ status: 'error', message: String(err) }));
-    };
+    }, [links.data, from, to]);
 
-    const loadDesignerData = (f: string, t: string) => {
+    useEffect(() => {
         setDesignerState({ status: 'loading' });
-        const url = buildUrl(links.designers, { from: f, to: t });
+        const url = buildUrl(links.designers, { from, to });
         fetch(url)
             .then((r) => r.json())
             .then((json) => setDesignerState({ status: 'loaded', data: json.data }))
             .catch((err) => setDesignerState({ status: 'error', message: String(err) }));
-    };
-
-    useEffect(() => {
-        loadData(from, to);
-        loadDesignerData(from, to);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        loadData(from, to);
-        loadDesignerData(from, to);
-    };
+    }, [links.designers, from, to]);
 
     const data = state.status === 'loaded' ? state.data : null;
     const designerData = designerState.status === 'loaded' ? designerState.data : null;
-    const periodLabel = `${period.label}: ${period.from} — ${period.to}`;
 
     return (
-        <div className="min-h-screen bg-slate-100 px-3 py-5 text-gray-900 sm:px-5">
-            <div className="mx-auto max-w-7xl space-y-5">
+        <>
+            {state.status === 'loading' && (
+                <>
+                    <SectionSkeleton rows={4} />
+                    <SectionSkeleton rows={3} />
+                    <SectionSkeleton rows={5} />
+                </>
+            )}
 
-                {/* ── Header ─────────────────────────────────────────────── */}
-                <header className="overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 shadow-2xl ring-1 ring-white/10">
-                    <div className="grid gap-5 px-6 py-6 lg:grid-cols-[1fr_auto] lg:items-center">
-                        <div className="flex min-w-0 items-center gap-5">
-                            <div className="flex size-14 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20">
-                                <img className="size-9 object-contain" src="/assets/anyservice-logo.png" alt="AnyService" />
-                            </div>
-                            <div className="min-w-0">
-                                <div className="inline-flex items-center rounded-full bg-violet-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-violet-300 ring-1 ring-violet-400/30">
-                                    BI аналитика CRM
-                                </div>
-                                <h1 className="mt-2 text-2xl font-bold text-white">Доплаты по менеджерам</h1>
-                                <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-                                    <span>{account.name}</span>
-                                    <span className="size-1 rounded-full bg-slate-600" />
-                                    <span>{account.base_domain}</span>
-                                    <span className="size-1 rounded-full bg-slate-600" />
-                                    <span>{periodLabel}</span>
-                                </div>
-                            </div>
-                        </div>
+            {state.status === 'error' && <SectionError message={state.message} />}
 
-                        <form className="rounded-xl bg-white/5 p-4 ring-1 ring-white/10" onSubmit={handleSubmit}>
-                            <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                <CalendarDays className="size-3.5 text-violet-400" />
-                                Период
-                            </div>
-                            <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                                <input
-                                    className="h-10 rounded-lg border-white/10 bg-white/10 px-3 text-sm text-white focus:border-violet-400 focus:ring-violet-400/20"
-                                    type="date"
-                                    value={from}
-                                    onChange={(e) => setFrom(e.target.value)}
-                                />
-                                <input
-                                    className="h-10 rounded-lg border-white/10 bg-white/10 px-3 text-sm text-white focus:border-violet-400 focus:ring-violet-400/20"
-                                    type="date"
-                                    value={to}
-                                    onChange={(e) => setTo(e.target.value)}
-                                />
-                                <button
-                                    className="h-10 rounded-lg bg-gradient-to-r from-violet-600 to-indigo-600 px-4 text-sm font-semibold text-white shadow-lg shadow-violet-500/30 hover:from-violet-500 hover:to-indigo-500"
-                                    type="submit"
-                                >
-                                    Показать
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </header>
-
-                {/* ── Loading ─────────────────────────────────────────────── */}
-                {state.status === 'loading' && (
-                    <>
-                        <SectionSkeleton rows={4} />
-                        <SectionSkeleton rows={3} />
-                        <SectionSkeleton rows={5} />
-                    </>
-                )}
-
-                {/* ── Error ───────────────────────────────────────────────── */}
-                {state.status === 'error' && <SectionError message={state.message} />}
-
-                {/* ── Data ────────────────────────────────────────────────── */}
-                {data && (
-                    <>
-                        {/* Manager bar chart */}
-                        {data.managers.length > 0 ? (
-                            <ReportSection
-                                eyebrow="Доплаты по менеджерам"
-                                title="Рейтинг менеджеров по сумме доплат"
-                                description="Доплата = Бюджет сделки − Сумма предоплаты. Учитываются только сделки с положительной доплатой. Нажмите на сумму — откроется список сделок."
-                                aside={
-                                    <button type="button" onClick={() => setModal({ manager: '' })}>
-                                        <AccentSummary
-                                            label="Итого доплат"
-                                            value={rub(data.summary.topupTotal)}
-                                            note={`${data.summary.dealCount} сделок · ${data.summary.managerCount} менеджеров`}
-                                            tone="success"
-                                        />
-                                    </button>
-                                }
-                            >
-                                <ManagerBarChart managers={data.managers} onManagerClick={(name) => setModal({ manager: name })} />
-                            </ReportSection>
-                        ) : (
-                            <ReportSection
-                                eyebrow="Доплаты по менеджерам"
-                                title="Рейтинг менеджеров по сумме доплат"
-                            >
-                                <div className="px-5 py-8">
-                                    <EmptyState>Нет сделок с доплатой за выбранный период</EmptyState>
-                                </div>
-                            </ReportSection>
-                        )}
-
-                        {/* Monthly chart */}
-                        {data.monthlyBreakdown.length > 0 && (
-                            <ReportSection
-                                eyebrow="Динамика по месяцам"
-                                title="Доплаты по месяцам"
-                                description="Распределение суммарной доплаты по месяцу предполагаемой доплаты."
-                            >
-                                <MonthlyColumnChart monthly={data.monthlyBreakdown} />
-                            </ReportSection>
-                        )}
-
-                        {/* Summary table */}
-                        {data.managers.length > 0 && (
-                            <ReportSection
-                                eyebrow="Сводная таблица"
-                                title="Разбивка по менеджерам"
-                                description="Нажмите на сумму доплат — откроется детальный список сделок менеджера."
-                            >
-                                <ManagerSummaryTable managers={data.managers} onRowClick={(name) => setModal({ manager: name })} />
-                            </ReportSection>
-                        )}
-                    </>
-                )}
-
-                {/* ── Designers ───────────────────────────────────────────── */}
-                {designerState.status === 'loading' && <SectionSkeleton rows={4} />}
-                {designerState.status === 'error' && <SectionError message={designerState.message} />}
-                {designerData && (
-                    designerData.designers.length > 0 ? (
+            {data && (
+                <>
+                    {data.managers.length > 0 ? (
                         <ReportSection
-                            eyebrow="По дизайнерам"
-                            title="По дизайнерам (кто принёс больше денег за указанный период)"
-                            description="Дизайнер сделки — привязанный контакт, а при его отсутствии — привязанная компания. Учитываются только успешно реализованные сделки по дате закрытия. Сумма — бюджет сделки. Нажмите на сумму — откроется список сделок."
+                            eyebrow="Доплаты по менеджерам"
+                            title="Рейтинг менеджеров по сумме доплат"
+                            description="Доплата = Бюджет сделки − Сумма предоплаты. Учитываются только сделки с положительной доплатой. Нажмите на сумму — откроется список сделок."
                             aside={
-                                <AccentSummary
-                                    label="Итого"
-                                    value={rub(designerData.summary.budgetTotal)}
-                                    note={`${designerData.summary.dealCount} сделок · ${designerData.summary.designerCount} дизайнеров`}
-                                    tone="brand"
-                                />
+                                <button type="button" onClick={() => setModal({ manager: '' })}>
+                                    <AccentSummary
+                                        label="Итого доплат"
+                                        value={rub(data.summary.topupTotal)}
+                                        note={`${data.summary.dealCount} сделок · ${data.summary.managerCount} менеджеров`}
+                                        tone="success"
+                                    />
+                                </button>
                             }
                         >
-                            <DesignerSummaryTable
-                                designers={designerData.designers}
-                                onRowClick={(designer) => setDesignerModal({ key: designer.key, label: designer.name })}
-                            />
+                            <ManagerBarChart managers={data.managers} onManagerClick={(name) => setModal({ manager: name })} />
                         </ReportSection>
                     ) : (
                         <ReportSection
-                            eyebrow="По дизайнерам"
-                            title="По дизайнерам (кто принёс больше денег за указанный период)"
+                            eyebrow="Доплаты по менеджерам"
+                            title="Рейтинг менеджеров по сумме доплат"
                         >
                             <div className="px-5 py-8">
-                                <EmptyState>Нет успешно реализованных сделок с контактом или компанией за выбранный период</EmptyState>
+                                <EmptyState>Нет сделок с доплатой за выбранный период</EmptyState>
                             </div>
                         </ReportSection>
-                    )
-                )}
-            </div>
+                    )}
+
+                    {data.monthlyBreakdown.length > 0 && (
+                        <ReportSection
+                            eyebrow="Динамика по месяцам"
+                            title="Доплаты по месяцам"
+                            description="Распределение суммарной доплаты по месяцу предполагаемой доплаты."
+                        >
+                            <MonthlyColumnChart monthly={data.monthlyBreakdown} />
+                        </ReportSection>
+                    )}
+
+                    {data.managers.length > 0 && (
+                        <ReportSection
+                            eyebrow="Сводная таблица"
+                            title="Разбивка по менеджерам"
+                            description="Нажмите на сумму доплат — откроется детальный список сделок менеджера."
+                        >
+                            <ManagerSummaryTable managers={data.managers} onRowClick={(name) => setModal({ manager: name })} />
+                        </ReportSection>
+                    )}
+                </>
+            )}
+
+            {designerState.status === 'loading' && <SectionSkeleton rows={4} />}
+            {designerState.status === 'error' && <SectionError message={designerState.message} />}
+            {designerData && (
+                designerData.designers.length > 0 ? (
+                    <ReportSection
+                        eyebrow="По дизайнерам"
+                        title="По дизайнерам (кто принёс больше денег за указанный период)"
+                        description="Дизайнер сделки — привязанный контакт, а при его отсутствии — привязанная компания. Учитываются только успешно реализованные сделки по дате закрытия. Сумма — бюджет сделки. Нажмите на сумму — откроется список сделок."
+                        aside={
+                            <AccentSummary
+                                label="Итого"
+                                value={rub(designerData.summary.budgetTotal)}
+                                note={`${designerData.summary.dealCount} сделок · ${designerData.summary.designerCount} дизайнеров`}
+                                tone="brand"
+                            />
+                        }
+                    >
+                        <DesignerSummaryTable
+                            designers={designerData.designers}
+                            onRowClick={(designer) => setDesignerModal({ key: designer.key, label: designer.name })}
+                        />
+                    </ReportSection>
+                ) : (
+                    <ReportSection
+                        eyebrow="По дизайнерам"
+                        title="По дизайнерам (кто принёс больше денег за указанный период)"
+                    >
+                        <div className="px-5 py-8">
+                            <EmptyState>Нет успешно реализованных сделок с контактом или компанией за выбранный период</EmptyState>
+                        </div>
+                    </ReportSection>
+                )
+            )}
 
             {modal !== null && (
                 <LeadsModal
@@ -821,6 +651,40 @@ export default function ManagerTopupDashboard({ account, period, links }: Props)
                     onClose={() => setDesignerModal(null)}
                 />
             )}
+        </>
+    );
+}
+
+// ─── Standalone page ────────────────────────────────────────────────────────
+
+export default function ManagerTopupDashboard({ account, period, links }: Props) {
+    const [from, setFrom] = useState(period.from);
+    const [to, setTo] = useState(period.to);
+    const [appliedFrom, setAppliedFrom] = useState(period.from);
+    const [appliedTo, setAppliedTo] = useState(period.to);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        setAppliedFrom(from);
+        setAppliedTo(to);
+    };
+
+    return (
+        <div className="min-h-screen bg-slate-100 px-3 py-5 text-gray-900 sm:px-5">
+            <div className="mx-auto max-w-7xl space-y-5">
+                <WidgetHeader
+                    title="Доплаты по менеджерам"
+                    account={account}
+                    period={period}
+                    from={from}
+                    to={to}
+                    onFromChange={setFrom}
+                    onToChange={setTo}
+                    onSubmit={handleSubmit}
+                />
+
+                <ManagerTopupContent account={account} from={appliedFrom} to={appliedTo} links={links} />
+            </div>
         </div>
     );
 }
