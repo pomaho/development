@@ -22,6 +22,7 @@ class AmoTaskStatisticsService
     private const TRANSFER_DATE_FIELD_ID = 1435403;   // "Дата передачи менеджеру"
     private const MISSING_DATES_LEAD_LIMIT = 300;
     private const DEFAULT_LEADS_PLAN_PER_DAY = 8.5;
+    private const DEFAULT_MANAGER_PLAN_PERCENT = 25.0;
 
 
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
@@ -188,6 +189,15 @@ class AmoTaskStatisticsService
             $this->recruiterLeadDistributionCacheKey($account, $from, $to, $config, $timezone),
             now()->addMinutes(10),
             fn (): array => $this->buildRecruiterLeadDistribution($account, $from, $to, $config, $timezone),
+        );
+    }
+
+    public function managerLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
+    {
+        return Cache::remember(
+            $this->managerLeadDistributionCacheKey($account, $from, $to, $config, $timezone),
+            now()->addMinutes(10),
+            fn (): array => $this->buildManagerLeadDistribution($account, $from, $to, $config, $timezone),
         );
     }
 
@@ -387,6 +397,136 @@ class AmoTaskStatisticsService
             'limited' => $total > $limit,
             'limit' => $limit,
         ];
+    }
+
+    /**
+     * Lead list for the manager-leads report drill-down popup. $managerEnumId = 0 means
+     * the "Менеджер не указан" bucket (transferred per the transfer-date field, but the
+     * "Менеджер" field is currently empty) — mirrors the cohort logic in
+     * buildManagerLeadDistribution() exactly, so the counts always match.
+     */
+    public function managerLeads(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        array $config,
+        int $managerEnumId,
+        bool $scheduledOnly = false,
+        int $limit = 200,
+        string $timezone = 'UTC'
+    ): array {
+        $managerFieldId = (int) data_get($config, 'manager_field_id', 0);
+        $managerFieldName = (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME);
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $successStatusId = (int) data_get($config, 'success_status_id', 0);
+
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+
+        $managerField = $managerFieldId > 0
+            ? (clone $fieldQuery)->where('amo_field_id', $managerFieldId)->first()
+            : (clone $fieldQuery)->where('name', $managerFieldName)->first();
+
+        if ($managerField === null) {
+            return ['leads' => [], 'total' => 0, 'limited' => false, 'limit' => $limit];
+        }
+
+        $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
+        $managerFieldIdInt = (int) $managerField->amo_field_id;
+
+        $leads = [];
+        $total = 0;
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
+
+        if (!$useCustomDateFields) {
+            // The "Менеджер не указан" bucket only exists in dev mode (it relies on the
+            // transfer-date field being independent from the manager field); in prod mode
+            // a lead is only ever "transferred" when the manager field itself is filled.
+            if ($managerEnumId === 0) {
+                return ['leads' => [], 'total' => 0, 'limited' => false, 'limit' => $limit];
+            }
+
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'status_id', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $managerEnumId, $scheduledOnly, $successStatusId): void {
+                    foreach ($chunk as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $managerEnumIds = $this->recruiterEnumIds($customFields, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue);
+
+                        if (!in_array($managerEnumId, $managerEnumIds, true)) {
+                            continue;
+                        }
+
+                        if ($scheduledOnly && (int) $lead->status_id !== $successStatusId) {
+                            continue;
+                        }
+
+                        $total++;
+                        if (count($leads) < $limit) {
+                            $leads[] = [
+                                'id' => $lead->external_id,
+                                'name' => $lead->name ?: 'Без названия',
+                                'created_at' => $lead->entity_created_at?->toDateString(),
+                            ];
+                        }
+                    }
+                });
+
+            return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
+        }
+
+        $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'status_id', 'entity_created_at', 'custom_fields_values'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone, $managerEnumId, $scheduledOnly, $successStatusId): void {
+                foreach ($chunk as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
+                    $managerEnumIds = $this->recruiterEnumIds($customFields, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue);
+
+                    $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
+
+                    if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
+                        continue;
+                    }
+
+                    $matches = $managerEnumId === 0
+                        ? $managerEnumIds === []
+                        : in_array($managerEnumId, $managerEnumIds, true);
+
+                    if (!$matches) {
+                        continue;
+                    }
+
+                    if ($scheduledOnly && (int) $lead->status_id !== $successStatusId) {
+                        continue;
+                    }
+
+                    $total++;
+                    if (count($leads) < $limit) {
+                        $leads[] = [
+                            'id' => $lead->external_id,
+                            'name' => $lead->name ?: 'Без названия',
+                            'created_at' => $lead->entity_created_at?->toDateString(),
+                        ];
+                    }
+                }
+            });
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
 
     public function recruiterLeadDistributionDiagnostics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
@@ -807,6 +947,188 @@ class AmoTaskStatisticsService
                 'truncated' => $missingIntakeCount > count($missingIntakeLeads),
                 'leads' => $missingIntakeLeads,
             ],
+        ];
+    }
+
+    private function buildManagerLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
+    {
+        $managerFieldId = (int) data_get($config, 'manager_field_id', 0);
+        $managerFieldName = (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME);
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $pipelineName = data_get($config, 'pipeline_name');
+        $successStatusId = (int) data_get($config, 'success_status_id', 0);
+        $successStatusName = (string) (data_get($config, 'success_status_name') ?: 'Встал в график');
+        $managerPlanPercent = (float) data_get($config, 'manager_plan_percent', self::DEFAULT_MANAGER_PLAN_PERCENT);
+
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+
+        $managerField = $managerFieldId > 0
+            ? (clone $fieldQuery)->where('amo_field_id', $managerFieldId)->first()
+            : (clone $fieldQuery)->where('name', $managerFieldName)->first();
+
+        $emptyResult = [
+            'manager_field_name' => $managerFieldName,
+            'manager_field_id' => null,
+            'manager_field_found' => false,
+            'success_status_id' => $successStatusId ?: null,
+            'success_status_name' => $successStatusName,
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
+            'manager_plan_percent' => $managerPlanPercent,
+            'total_received_count' => 0,
+            'total_scheduled_count' => 0,
+            'managers' => [],
+        ];
+
+        if ($managerField === null) {
+            return $emptyResult;
+        }
+
+        $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
+        $managerNames = $this->enumNamesById($managerField);
+        $managerFieldIdInt = (int) $managerField->amo_field_id;
+
+        $receivedLeadIdsByEnum = [];
+        $scheduledLeadIdsByEnum = [];
+        // Leads whose "Дата передачи менеджеру" is filled (so they were transferred),
+        // but the "Менеджер" field is currently empty — e.g. the manager was later
+        // unassigned. Tracked separately as an explicit "Менеджер не указан" row instead
+        // of being silently dropped, so the total matches the recruiter report's
+        // "передано менеджеру" count.
+        $unassignedLeadIds = [];
+        $unassignedScheduledLeadIds = [];
+
+        $useCustomDateFields = (bool) data_get($config, 'use_custom_date_fields', false);
+
+        if (!$useCustomDateFields) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'status_id', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$receivedLeadIdsByEnum, &$scheduledLeadIdsByEnum, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $successStatusId): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $leadId = (string) $lead->external_id;
+                        $managerEnumIds = $this->recruiterEnumIds($customFields, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue);
+
+                        if ($managerEnumIds === []) {
+                            continue;
+                        }
+
+                        foreach ($managerEnumIds as $enumId) {
+                            $receivedLeadIdsByEnum[$enumId][$leadId] = true;
+
+                            if ($successStatusId > 0 && (int) $lead->status_id === $successStatusId) {
+                                $scheduledLeadIdsByEnum[$enumId][$leadId] = true;
+                            }
+                        }
+                    }
+                });
+        } else {
+            $transferDateFieldId = (int) data_get($config, 'transfer_date_field_id', self::TRANSFER_DATE_FIELD_ID);
+            $fromDate = $from?->toDateString();
+            $toDate = $to?->toDateString();
+
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'status_id', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$receivedLeadIdsByEnum, &$scheduledLeadIdsByEnum, &$unassignedLeadIds, &$unassignedScheduledLeadIds, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone, $successStatusId): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $leadId = (string) $lead->external_id;
+                        $managerEnumIds = $this->recruiterEnumIds($customFields, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue);
+
+                        $transferDate = $this->transferEffectiveDate($customFields, $transferDateFieldId, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $lead->entity_created_at, $timezone);
+
+                        if (!$this->dateInPeriod($transferDate, $fromDate, $toDate)) {
+                            continue;
+                        }
+
+                        $isScheduled = $successStatusId > 0 && (int) $lead->status_id === $successStatusId;
+
+                        if ($managerEnumIds === []) {
+                            $unassignedLeadIds[$leadId] = true;
+                            if ($isScheduled) {
+                                $unassignedScheduledLeadIds[$leadId] = true;
+                            }
+                            continue;
+                        }
+
+                        foreach ($managerEnumIds as $enumId) {
+                            $receivedLeadIdsByEnum[$enumId][$leadId] = true;
+
+                            if ($isScheduled) {
+                                $scheduledLeadIdsByEnum[$enumId][$leadId] = true;
+                            }
+                        }
+                    }
+                });
+        }
+
+        // Managers with zero deals received during the period are intentionally omitted from the report.
+        $managers = [];
+
+        foreach ($receivedLeadIdsByEnum as $enumId => $leadIds) {
+            $receivedCount = count($leadIds);
+            $scheduledCount = count($scheduledLeadIdsByEnum[$enumId] ?? []);
+            $planTotal = round($receivedCount * $managerPlanPercent / 100, 2);
+
+            $managers[$enumId] = [
+                'enum_id' => $enumId,
+                'name' => $managerNames[$enumId] ?? "Менеджер {$enumId}",
+                'received_count' => $receivedCount,
+                'scheduled_count' => $scheduledCount,
+                'plan_total' => $planTotal,
+                'plan_completion_percent' => $planTotal > 0 ? round($scheduledCount / $planTotal * 100, 1) : null,
+            ];
+        }
+
+        $rows = collect($managers)
+            ->sortByDesc('received_count')
+            ->values()
+            ->all();
+
+        if ($unassignedLeadIds !== []) {
+            // No accountable person for this bucket, so it carries no plan expectation.
+            $rows[] = [
+                'enum_id' => 0,
+                'name' => 'Менеджер не указан',
+                'received_count' => count($unassignedLeadIds),
+                'scheduled_count' => count($unassignedScheduledLeadIds),
+                'plan_total' => null,
+                'plan_completion_percent' => null,
+            ];
+        }
+
+        return [
+            'manager_field_name' => $managerField->name,
+            'manager_field_id' => $managerFieldIdInt,
+            'manager_field_found' => true,
+            'success_status_id' => $successStatusId ?: null,
+            'success_status_name' => $successStatusName,
+            'pipeline_id' => $pipelineId ?: null,
+            'pipeline_name' => $pipelineName,
+            'manager_plan_percent' => $managerPlanPercent,
+            'total_received_count' => collect($receivedLeadIdsByEnum)
+                ->flatMap(fn (array $ids): array => array_keys($ids))
+                ->merge(array_keys($unassignedLeadIds))
+                ->unique()
+                ->count(),
+            'total_scheduled_count' => collect($scheduledLeadIdsByEnum)
+                ->flatMap(fn (array $ids): array => array_keys($ids))
+                ->merge(array_keys($unassignedScheduledLeadIds))
+                ->unique()
+                ->count(),
+            'managers' => $rows,
         ];
     }
 
@@ -1307,6 +1629,25 @@ class AmoTaskStatisticsService
             data_get($config, 'pipeline_id') ?: 'all',
             data_get($config, 'success_status_id') ?: 'none',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
+            data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
+        ]);
+    }
+
+    private function managerLeadDistributionCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone = 'UTC'): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_manager_lead_distribution',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+            $timezone,
+            data_get($config, 'pipeline_id') ?: 'all',
+            data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
+            data_get($config, 'success_status_id') ?: 'none',
+            data_get($config, 'manager_plan_percent') ?: self::DEFAULT_MANAGER_PLAN_PERCENT,
             data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
         ]);
     }

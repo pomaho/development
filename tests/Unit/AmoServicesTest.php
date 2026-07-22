@@ -1100,6 +1100,82 @@ class AmoServicesTest extends TestCase
         $this->assertSame(25.0, $distribution['recruiters'][0]['plan_completion_percent']);
     }
 
+    public function test_manager_lead_distribution_counts_received_and_scheduled_leads_and_omits_managers_without_leads(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client3.amocrm.ru']);
+        CrmCustomFieldSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'amo_field_id' => 778,
+            'name' => 'Менеджер',
+            'field_type' => 'select',
+            'enums' => [
+                ['id' => 2001, 'value' => 'Первый менеджер'],
+                ['id' => 2002, 'value' => 'Второй менеджер'],
+                ['id' => 2003, 'value' => 'Третий менеджер'],
+            ],
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+
+        foreach ([
+            ['id' => '701', 'manager' => 2001, 'status_id' => 142, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '702', 'manager' => 2001, 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '703', 'manager' => 2001, 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '704', 'manager' => 2001, 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subYear()],
+            ['id' => '705', 'manager' => 2002, 'status_id' => 142, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '706', 'manager' => null, 'status_id' => 111, 'pipeline_id' => 10, 'created_at' => now()->subDay()],
+            ['id' => '707', 'manager' => 2002, 'status_id' => 142, 'pipeline_id' => 20, 'created_at' => now()->subDay()],
+        ] as $lead) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => $lead['pipeline_id'],
+                'status_id' => $lead['status_id'],
+                'entity_created_at' => $lead['created_at'],
+                'custom_fields_values' => [[
+                    'field_id' => 778,
+                    'field_name' => 'Менеджер',
+                    'values' => $lead['manager'] === null ? [] : [['enum_id' => $lead['manager']]],
+                ]],
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $distribution = (new AmoTaskStatisticsService())
+            ->managerLeadDistribution($account, now()->subDays(7), now(), [
+                'pipeline_id' => 10,
+                'pipeline_name' => 'Массовый подбор',
+                'manager_field_id' => 778,
+                'manager_field_name' => 'Менеджер',
+                'success_status_id' => 142,
+                'success_status_name' => 'Встал в график',
+            ]);
+
+        $this->assertTrue($distribution['manager_field_found']);
+        $this->assertSame(25.0, $distribution['manager_plan_percent']);
+        $this->assertSame(4, $distribution['total_received_count']);
+        $this->assertSame(2, $distribution['total_scheduled_count']);
+
+        $this->assertCount(2, $distribution['managers']);
+        $this->assertSame('Первый менеджер', $distribution['managers'][0]['name']);
+        $this->assertSame(3, $distribution['managers'][0]['received_count']);
+        $this->assertSame(1, $distribution['managers'][0]['scheduled_count']);
+        $this->assertSame(0.75, $distribution['managers'][0]['plan_total']);
+        $this->assertSame(133.3, $distribution['managers'][0]['plan_completion_percent']);
+
+        $this->assertSame('Второй менеджер', $distribution['managers'][1]['name']);
+        $this->assertSame(1, $distribution['managers'][1]['received_count']);
+        $this->assertSame(1, $distribution['managers'][1]['scheduled_count']);
+        $this->assertSame(0.25, $distribution['managers'][1]['plan_total']);
+        $this->assertSame(400.0, $distribution['managers'][1]['plan_completion_percent']);
+    }
+
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
