@@ -67,6 +67,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 'projectCityVacancy' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy', $publicKey),
                 'projectCityVacancyLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.project-city-vacancy-leads', $publicKey),
                 'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule', $publicKey),
+                'managerLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.manager-leads', $publicKey),
+                'managerLeadsList' => route('api.widgets.amo.task-overdue-dashboard-v2.manager-leads-list', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2.export', $publicKey),
             ],
         ]);
@@ -149,6 +151,37 @@ class AmoTaskOverdueDashboardController extends Controller
 
         return response()->json([
             'data' => $statisticsService->recruiterScheduleBreakdown($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function managerLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->managerLeadDistribution($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function managerLeadsList(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->managerLeads(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                (int) $request->query('manager_enum_id', 0),
+                $request->query('scheduled_only', '0') === '1',
+                200,
+                $tz,
+            ),
         ]);
     }
 

@@ -86,6 +86,28 @@ type RecruiterScheduleBreakdown = {
     recruiters: RecruiterScheduleRow[];
 };
 
+type ManagerLeadRow = {
+    enum_id: number;
+    name: string;
+    received_count: number;
+    scheduled_count: number;
+    plan_total: number | null;
+    plan_completion_percent: number | null;
+};
+
+type ManagerLeadDistribution = {
+    manager_field_name: string;
+    manager_field_found: boolean;
+    success_status_id: number | null;
+    success_status_name: string;
+    pipeline_id: number | null;
+    pipeline_name: string | null;
+    manager_plan_percent: number;
+    total_received_count: number;
+    total_scheduled_count: number;
+    managers: ManagerLeadRow[];
+};
+
 type OverdueTask = {
     text: string | null;
     complete_till: string;
@@ -178,6 +200,8 @@ type Props = {
         projectCityVacancy: string;
         projectCityVacancyLeads: string;
         recruiterSchedule: string;
+        managerLeads: string;
+        managerLeadsList: string;
         export: string;
     };
 };
@@ -301,6 +325,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
     const taskStatsState = useApiData<TaskStatisticsGroup[]>(links.taskStatistics, periodParams);
     const projectCityVacancyState = useApiData<ProjectCityVacancyBreakdown>(links.projectCityVacancy, periodParams);
     const scheduleState = useApiData<RecruiterScheduleBreakdown>(links.recruiterSchedule, periodParams);
+    const managerLeadsState = useApiData<ManagerLeadDistribution>(links.managerLeads, periodParams);
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') return;
@@ -373,6 +398,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
                 {debugIframe ? <DebugPanel iframeMessages={iframeMessages} /> : null}
 
                 <RecruiterLeadsSection state={recruiterLeadsState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
+
+                <ManagerLeadsSection state={managerLeadsState} leadsUrl={links.managerLeadsList} periodParams={periodParams} baseDomain={account.base_domain} />
 
                 <RecruiterScheduleSection state={scheduleState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
@@ -559,6 +586,190 @@ function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { 
     );
 }
 
+type ManagerLeadsFilter = {
+    managerEnumId: number;
+    scheduledOnly: boolean;
+    label: string;
+};
+
+function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { state: LoadState<ManagerLeadDistribution>; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
+    const [leadsFilter, setLeadsFilter] = useState<ManagerLeadsFilter | null>(null);
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    return (
+        <>
+        <ReportSection
+            eyebrow="Отчет по сделкам"
+            title={`Поле "${data.manager_field_name}"`}
+            description={`Принятые в обработку сделки и достижение плана (${data.manager_plan_percent}% сделок должны дойти до этапа «${data.success_status_name}»). Воронка: ${data.pipeline_name || (data.pipeline_id ? `ID ${data.pipeline_id}` : 'все воронки')}.`}
+            aside={<AccentSummary label="Принято в обработку" value={data.total_received_count} note={`Вышло на смену: ${data.total_scheduled_count}`} tone="brand" />}
+        >
+            <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                    <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                        <tr>
+                            <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Менеджер</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Принято в обработку</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Вывел на смену</th>
+                            <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Достижение плана</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {data.managers.length > 0 ? data.managers.map((manager) => {
+                            const isUnassigned = manager.enum_id === 0;
+                            return (
+                                <tr className={`transition-colors hover:bg-violet-50/50 ${isUnassigned ? 'bg-slate-50/60' : ''}`} key={manager.enum_id}>
+                                    <td className={`px-5 py-3.5 font-semibold ${isUnassigned ? 'italic text-slate-400' : 'text-gray-900'}`}>{manager.name}</td>
+                                    <td className="px-4 py-3.5">
+                                        <CountButton
+                                            value={manager.received_count}
+                                            onClick={() => setLeadsFilter({ managerEnumId: manager.enum_id, scheduledOnly: false, label: `${manager.name} — принято в обработку` })}
+                                        />
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                        <CountButton
+                                            value={manager.scheduled_count}
+                                            onClick={() => setLeadsFilter({ managerEnumId: manager.enum_id, scheduledOnly: true, label: `${manager.name} — вывел на смену` })}
+                                        />
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                        {manager.plan_completion_percent !== null ? (
+                                            <div className="flex flex-col gap-1">
+                                                <Progress
+                                                    value={Math.min(manager.plan_completion_percent, 100)}
+                                                    tone={manager.plan_completion_percent >= 100 ? 'brand' : manager.plan_completion_percent >= 70 ? 'warning' : 'danger'}
+                                                />
+                                                <span className="text-xs font-semibold text-slate-600">
+                                                    {manager.plan_completion_percent}% ({manager.scheduled_count} / {manager.plan_total})
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-400">—</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            );
+                        }) : (
+                            <tr>
+                                <td className="px-5 py-8" colSpan={4}>
+                                    <EmptyState>
+                                        {data.manager_field_found
+                                            ? 'Нет сделок, принятых менеджерами за выбранный период.'
+                                            : `Поле сделки "${data.manager_field_name}" не найдено. Запустите синхронизацию структуры CRM.`}
+                                    </EmptyState>
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+            <p className="border-t border-slate-100 px-5 py-3 text-xs text-slate-400">
+                Строка «Менеджер не указан» — сделки, у которых заполнена «Дата передачи менеджеру», но поле «Менеджер» сейчас пустое
+                (например, менеджер был снят со сделки после её передачи). Поэтому сумма «Принято в обработку» может отличаться от
+                «Передано менеджеру» в отчете по полю «Рекрутер», где такие сделки тоже учитываются.
+            </p>
+        </ReportSection>
+        {leadsFilter !== null && (
+            <ManagerLeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
+        )}
+        </>
+    );
+}
+
+function ManagerLeadsModal({
+    filter,
+    leadsUrl,
+    periodParams,
+    baseDomain,
+    onClose,
+}: {
+    filter: ManagerLeadsFilter;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+    onClose: () => void;
+}) {
+    const params = { ...periodParams, manager_enum_id: String(filter.managerEnumId), scheduled_only: filter.scheduledOnly ? '1' : '0' };
+    const leadsState = useApiData<LeadsResult>(leadsUrl, params);
+
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Сделки</p>
+                        <h2 className="mt-0.5 font-bold text-gray-900">{filter.label}</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Закрыть">
+                        <X className="size-5" />
+                    </button>
+                </div>
+                {leadsState.status === 'loading' && (
+                    <div className="flex items-center justify-center py-16 text-slate-400">
+                        <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                        Загрузка...
+                    </div>
+                )}
+                {leadsState.status === 'error' && (
+                    <div className="px-6 py-8 text-center text-sm text-red-500">Ошибка загрузки: {leadsState.message}</div>
+                )}
+                {leadsState.status === 'ok' && (
+                    <>
+                        {leadsState.data.limited && (
+                            <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs text-amber-700">
+                                Показаны первые {leadsState.data.limit} из {leadsState.data.total} сделок
+                            </div>
+                        )}
+                        <div className="overflow-y-auto">
+                            {leadsState.data.leads.length === 0 ? (
+                                <div className="px-6 py-8 text-center text-sm text-slate-400">Нет сделок</div>
+                            ) : (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-slate-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата создания</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {leadsState.data.leads.map((lead) => (
+                                            <tr key={lead.id} className="transition-colors hover:bg-violet-50/50">
+                                                <td className="px-6 py-3">
+                                                    <a
+                                                        href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-medium text-violet-700 hover:underline"
+                                                    >
+                                                        {lead.name}
+                                                    </a>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">{lead.created_at ?? '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="border-t border-slate-100 px-6 py-3 text-right text-xs text-slate-400">
+                            Итого: {leadsState.data.total} сделок
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>,
+        document.body,
+    );
+}
 
 function RecruiterBreakdownSections({ state, leadsUrl, periodParams, baseDomain }: {
     state: LoadState<RecruiterTeamCityBreakdown>;

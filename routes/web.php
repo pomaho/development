@@ -81,6 +81,12 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/project-city-
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/recruiter-schedule', [AmoTaskOverdueDashboardController::class, 'recruiterScheduleBreakdown'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/manager-leads', [AmoTaskOverdueDashboardController::class, 'managerLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.manager-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/manager-leads-list', [AmoTaskOverdueDashboardController::class, 'managerLeadsList'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.manager-leads-list');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/export', [AmoTaskOverdueDashboardController::class, 'exportV2'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.export');
