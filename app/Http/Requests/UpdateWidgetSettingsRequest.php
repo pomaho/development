@@ -27,6 +27,7 @@ class UpdateWidgetSettingsRequest extends FormRequest
             'success_status_id' => ['nullable', 'integer', 'min:1'],
             'prepayment_field_id' => ['nullable', 'integer', 'min:1'],
             'topup_date_field_id' => ['nullable', 'integer', 'min:1'],
+            'product_group_field_id' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

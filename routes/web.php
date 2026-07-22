@@ -28,7 +28,9 @@ use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\LeadSyncScheduleController;
 use App\Http\Controllers\Webhook\AmoWebhookController;
+use App\Http\Controllers\Widget\Clients\Eurohome\AmoClientDashboardController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoManagerTopupController;
+use App\Http\Controllers\Widget\Clients\Eurohome\AmoProductGroupController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -128,6 +130,23 @@ Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers', [AmoManagerTo
 Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers/leads', [AmoManagerTopupController::class, 'designerLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-topup.designers-leads');
+
+// Product Group Dashboard
+Route::get('/widgets/amo/{publicKey}/product-group', [AmoProductGroupController::class, 'show'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('widgets.amo.product-group.show');
+Route::get('/api/widgets/amo/{publicKey}/product-group/data', [AmoProductGroupController::class, 'data'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.product-group.data');
+Route::get('/api/widgets/amo/{publicKey}/product-group/leads', [AmoProductGroupController::class, 'leads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.product-group.leads');
+
+// Eurohome — combined dashboard (manager-topup + product-group on one page)
+Route::get('/widgets/amo/{publicKey}/eurohome-dashboard', [AmoClientDashboardController::class, 'show'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('widgets.amo.eurohome-dashboard.show');
+
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->middleware('throttle:webhook')

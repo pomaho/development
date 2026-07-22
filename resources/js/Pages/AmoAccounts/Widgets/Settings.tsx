@@ -47,10 +47,15 @@ type TopupConfig = {
     topup_date_field_id?: number | string | null;
 };
 
+type ProductGroupConfig = {
+    pipeline_id?: number | string | null;
+    product_group_field_id?: number | string | null;
+};
+
 type Props = {
     account: Account;
     widget: Widget;
-    config: RecruiterConfig & TopupConfig;
+    config: RecruiterConfig & TopupConfig & ProductGroupConfig;
     diagnostics: Diagnostics | null;
     pipelines: Pipeline[];
     pipelineStatuses: PipelineStatus[];
@@ -214,6 +219,27 @@ function TopupSettingsForm({ config, pipelines, leadFields }: {
     );
 }
 
+function ProductGroupSettingsForm({ config, pipelines, leadFields }: {
+    config: ProductGroupConfig;
+    pipelines: Pipeline[];
+    leadFields: LeadField[];
+}) {
+    return (
+        <>
+            <PipelineSelect pipelines={pipelines} value={config.pipeline_id} />
+
+            <FieldSelect
+                label='Поле «Товарная группа»'
+                name="product_group_field_id"
+                value={config.product_group_field_id}
+                leadFields={leadFields}
+                placeholder="Выберите поле..."
+                hint="Поле-список (в т.ч. с множественным выбором). По его значениям строится разбивка бюджета активных сделок."
+            />
+        </>
+    );
+}
+
 function DiagnosticsSection({ diagnostics }: { diagnostics: Diagnostics }) {
     const metrics = [
         ['Поле найдено', diagnostics.field_found ? 'да' : 'нет'],
@@ -311,6 +337,7 @@ function DiagnosticsSection({ diagnostics }: { diagnostics: Diagnostics }) {
 export default function WidgetSettings({ account, widget, config, diagnostics, pipelines, pipelineStatuses, leadFields, links }: Props) {
     const csrf = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '';
     const isTopup = widget.code === 'manager_topup_dashboard';
+    const isProductGroup = widget.code === 'product_group_dashboard';
 
     return (
         <AuthenticatedLayout
@@ -340,6 +367,8 @@ export default function WidgetSettings({ account, widget, config, diagnostics, p
 
                     {isTopup ? (
                         <TopupSettingsForm config={config} pipelines={pipelines} leadFields={leadFields} />
+                    ) : isProductGroup ? (
+                        <ProductGroupSettingsForm config={config} pipelines={pipelines} leadFields={leadFields} />
                     ) : (
                         <RecruiterSettingsForm config={config} pipelines={pipelines} pipelineStatuses={pipelineStatuses} leadFields={leadFields} />
                     )}

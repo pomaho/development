@@ -55,6 +55,8 @@ class AmoAccountWidgetsController extends Controller
                                 'task_overdue_dashboard_v2' => route('widgets.amo.task-overdue-dashboard-v2.show', $installation->public_key),
                                 'task_overdue_dashboard_v2_dev' => route('widgets.amo.task-overdue-dashboard-v2-dev.show', $installation->public_key),
                                 'manager_topup_dashboard' => route('widgets.amo.manager-topup.show', $installation->public_key),
+                                'product_group_dashboard' => route('widgets.amo.product-group.show', $installation->public_key),
+                                'eurohome_client_dashboard' => route('widgets.amo.eurohome-dashboard.show', $installation->public_key),
                                 default => null,
                             },
                             'api_url' => in_array($widget->code, ['task_overdue_dashboard', 'task_overdue_dashboard_v2'])
@@ -84,9 +86,15 @@ class AmoAccountWidgetsController extends Controller
         ]);
     }
 
-    public function settings(AmoAccount $amoAccount, DashboardWidget $dashboardWidget, AmoTaskStatisticsService $statisticsService): Response
+    public function settings(AmoAccount $amoAccount, DashboardWidget $dashboardWidget, AmoTaskStatisticsService $statisticsService): Response|RedirectResponse
     {
         $this->authorize('update', $amoAccount);
+
+        if ($dashboardWidget->code === 'eurohome_client_dashboard') {
+            return redirect()
+                ->route('amo-accounts.widgets', $amoAccount)
+                ->with('status', 'У этого блока нет своих настроек — он собирает данные из уже настроенных виджетов «Доплаты по менеджерам» и «Товарные группы».');
+        }
 
         $installation = $this->installation($amoAccount, $dashboardWidget);
         $rawConfig = $installation->config ?? [];
@@ -115,6 +123,7 @@ class AmoAccountWidgetsController extends Controller
             ]);
 
         $isTopupWidget = $dashboardWidget->code === 'manager_topup_dashboard';
+        $isProductGroupWidget = $dashboardWidget->code === 'product_group_dashboard';
 
         if ($isTopupWidget) {
             $config = [
@@ -122,6 +131,28 @@ class AmoAccountWidgetsController extends Controller
                 'manager_field_id' => data_get($rawConfig, 'manager_field_id'),
                 'prepayment_field_id' => data_get($rawConfig, 'prepayment_field_id'),
                 'topup_date_field_id' => data_get($rawConfig, 'topup_date_field_id'),
+            ];
+
+            return Inertia::render('AmoAccounts/Widgets/Settings', [
+                'account' => ['id' => $amoAccount->id, 'name' => $amoAccount->name, 'base_domain' => $amoAccount->base_domain],
+                'widget' => ['id' => $dashboardWidget->id, 'code' => $dashboardWidget->code, 'name' => $dashboardWidget->name],
+                'config' => $config,
+                'diagnostics' => null,
+                'pipelineStatuses' => [],
+                'pipelines' => $pipelines,
+                'leadFields' => $leadFields,
+                'links' => $this->links($amoAccount) + [
+                    'widgets' => route('amo-accounts.widgets', $amoAccount),
+                    'save' => route('amo-accounts.widgets.settings.update', [$amoAccount, $dashboardWidget]),
+                    'crm_fields' => route('amo-accounts.crm-audit.fields', $amoAccount),
+                ],
+            ]);
+        }
+
+        if ($isProductGroupWidget) {
+            $config = [
+                'pipeline_id' => data_get($rawConfig, 'pipeline_id'),
+                'product_group_field_id' => data_get($rawConfig, 'product_group_field_id'),
             ];
 
             return Inertia::render('AmoAccounts/Widgets/Settings', [
@@ -211,6 +242,10 @@ class AmoAccountWidgetsController extends Controller
             $installation->forceFill([
                 'config' => $this->buildTopupConfig($amoAccount, $data, $pipeline),
             ])->save();
+        } elseif ($dashboardWidget->code === 'product_group_dashboard') {
+            $installation->forceFill([
+                'config' => $this->buildProductGroupConfig($amoAccount, $data, $pipeline),
+            ])->save();
         } else {
             $installation->forceFill([
                 'config' => $this->buildRecruiterConfig($amoAccount, $data, $pipeline),
@@ -237,6 +272,18 @@ class AmoAccountWidgetsController extends Controller
             'prepayment_field_name' => $prepaymentField?->name,
             'topup_date_field_id' => $topupDateField?->amo_field_id,
             'topup_date_field_name' => $topupDateField?->name,
+        ];
+    }
+
+    private function buildProductGroupConfig(AmoAccount $amoAccount, array $data, ?CrmPipelineSnapshot $pipeline): array
+    {
+        $productGroupField = $this->resolveLeadField($amoAccount, $data['product_group_field_id'] ?? null, 'product_group_field_id');
+
+        return [
+            'pipeline_id' => $pipeline?->amo_pipeline_id,
+            'pipeline_name' => $pipeline?->name,
+            'product_group_field_id' => $productGroupField?->amo_field_id,
+            'product_group_field_name' => $productGroupField?->name,
         ];
     }
 

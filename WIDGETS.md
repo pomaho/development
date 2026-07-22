@@ -187,6 +187,80 @@ resources/js/Pages/Widgets/Amo/Clients/Eurohome/
 
 ---
 
+### 4. `product_group_dashboard` — Товарные группы
+
+> **Статус: активный.** Клиент: eurohomenew.amocrm.ru (аккаунт ID 3).
+
+- **URL:** `/widgets/amo/{publicKey}/product-group`
+- **TSX:** `resources/js/Pages/Widgets/Amo/Clients/Eurohome/ProductGroupDashboard.tsx` (экспортирует переиспользуемый `ProductGroupContent`)
+- **Сервис:** `app/Services/Amo/Analytics/Clients/Eurohome/AmoProductGroupService.php`
+- **Контроллер:** `app/Http/Controllers/Widget/Clients/Eurohome/AmoProductGroupController.php`
+
+#### Что показывает
+
+| Секция | Описание |
+|--------|----------|
+| **Карточки** | Количество товарных групп, сделок и суммарный бюджет активных сделок |
+| **Бар-чарт** | Горизонтальные полосы по каждой товарной группе с суммой бюджета |
+| **Таблица** | Сводка по товарным группам: сделок и бюджет |
+| **Попап** | Список сделок с детализацией: товарные группы, дата создания, бюджет, ссылка в amoCRM |
+
+#### Что считается "активной" сделкой
+
+Автоматически исключаются из `crm_pipeline_status_snapshots`:
+- amo_status_id 142 (Успешно реализовано)
+- amo_status_id 143 (Закрыто и не реализовано)
+- Имена этапов, содержащие «отлож» или «заморожен»
+
+#### Фильтрация по периоду
+
+По дате создания сделки (`entity_created_at`).
+
+#### Товарная группа — multiselect-поле
+
+Поле «Товарная группа» (ID 871211 для eurohomenew) — список с множественным выбором. Сделка,
+у которой выбрано несколько товарных групп, учитывается в бюджете каждой из них — поэтому сумма
+по всем группам может превышать общий бюджет активных сделок. Сделки без значения попадают
+в группу «Без группы».
+
+#### Конфигурация
+
+| Ключ конфига | Что задаёт | Значение для eurohomenew |
+|-------------|-----------|------------------------|
+| `pipeline_id` | Воронка | 10904262 |
+| `pipeline_name` | Название воронки | Массовый подбор |
+| `product_group_field_id` | Поле «Товарная группа» | 871211 |
+
+#### API-эндпоинты
+
+| Маршрут | Метод | Назначение |
+|---------|-------|-----------|
+| `/widgets/amo/{key}/product-group` | GET | Страница виджета |
+| `/api/.../product-group/data` | GET | Агрегация: бюджет и кол-во сделок по группам |
+| `/api/.../product-group/leads` | GET | Список сделок для попапа (опц. фильтр `group`) |
+
+---
+
+### 5. `eurohome_client_dashboard` — Отчёты Eurohome (общая страница)
+
+> **Статус: активный.** Клиент: eurohomenew.amocrm.ru (аккаунт ID 3). Композиционный виджет — не имеет
+> своих данных/бизнес-логики, просто собирает секции `manager_topup_dashboard` и `product_group_dashboard`
+> на одной странице с общим хедером и одним периодом на обе секции.
+
+- **URL:** `/widgets/amo/{publicKey}/eurohome-dashboard`
+- **TSX:** `resources/js/Pages/Widgets/Amo/Clients/Eurohome/ClientDashboard.tsx` — рендерит `WidgetHeader` +
+  `<ManagerTopupContent/>` + `<ProductGroupContent/>` (импортированные из соответствующих файлов)
+- **Контроллер:** `app/Http/Controllers/Widget/Clients/Eurohome/AmoClientDashboardController.php` — только
+  `show()`, без своих `data()`/`leads()`. Резолвит sibling-инсталляции `manager_topup_dashboard` и
+  `product_group_dashboard` этого же аккаунта и строит на их `public_key` ссылки на уже существующие
+  API-роуты `manager-topup`/`product-group` — бизнес-логика нигде не дублируется.
+- **Конфиг:** нет своих настраиваемых полей (страница «Настройки» в админке для этого виджета редиректит
+  назад с пояснением) — все параметры берутся из настроек `manager_topup_dashboard`/`product_group_dashboard`.
+- Если для аккаунта не настроен (нет `config`) один из sibling-виджетов — соответствующая секция на странице
+  просто не отображается, а не падает с ошибкой.
+
+---
+
 ## Как добавить новый виджет
 
 ### Для разработчика (с Claude или самостоятельно)
