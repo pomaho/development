@@ -25,6 +25,27 @@ class AmoTaskStatisticsService
     private const DEFAULT_MANAGER_PLAN_PERCENT = 25.0;
 
 
+    /**
+     * Hardcoded РП → команда hierarchy for account_id=2 (anyservice), keyed by amo_user_id.
+     * amoCRM's own "group" field does not reliably reflect real team leadership (several
+     * distinct РП share one amoCRM group), so this mapping was compiled manually from the
+     * list provided by the client on 2026-07-23 and matched against amo_users_snapshots.
+     */
+    private function managerHierarchy(AmoAccount $account): array
+    {
+        if ($account->id !== 2) {
+            return [];
+        }
+
+        return [
+            12981002 => ['label' => 'Жукова Гаян', 'members' => [13848434, 13886858, 12950366, 13073270, 12982050]],
+            13004058 => ['label' => 'Александр Ли', 'members' => [13115030, 13001706, 13001902]],
+            12950278 => ['label' => 'Маджидов Тохир', 'members' => [12979762, 14056542, 11721374]],
+            11781154 => ['label' => 'Слуцкий Даниил', 'members' => [11762974, 12980990, 13248546]],
+            14056554 => ['label' => 'Беканов Азиз', 'members' => [14056558, 14056566, 14056574, 14056582]],
+        ];
+    }
+
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
         $users = AmoUsersSnapshot::query()
@@ -97,14 +118,42 @@ class AmoTaskStatisticsService
             })
             ->all();
 
+        $hierarchy = $this->managerHierarchy($account);
+        $memberToRp = [];
+
+        foreach ($hierarchy as $rpId => $team) {
+            foreach ($team['members'] as $memberId) {
+                $memberToRp[$memberId] = $rpId;
+            }
+        }
+
         $groups = [];
 
         foreach ($userRows as $responsibleId => $row) {
+            if (isset($hierarchy[$responsibleId])) {
+                // РП сам не выводится отдельной строкой — только агрегат по его команде.
+                continue;
+            }
+
+            if (isset($memberToRp[$responsibleId])) {
+                $rpId = $memberToRp[$responsibleId];
+                $groupKey = 'rp_'.$rpId;
+                $groups[$groupKey] ??= [
+                    'group_id' => $rpId,
+                    'group_name' => $hierarchy[$rpId]['label'].' — РП',
+                    'is_rp_team' => true,
+                    'users' => [],
+                ];
+                $groups[$groupKey]['users'][] = $row;
+                continue;
+            }
+
             $user = $users->get($responsibleId);
             $groupId = $user?->group_id ? (int) $user->group_id : 0;
             $groups[$groupId] ??= [
                 'group_id' => $groupId ?: null,
                 'group_name' => $user ? $this->groupName($user) : 'Без группы',
+                'is_rp_team' => false,
                 'users' => [],
             ];
             $groups[$groupId]['users'][] = $row;
@@ -118,10 +167,13 @@ class AmoTaskStatisticsService
                     ->all();
                 $group['completed_count'] = collect($group['users'])->sum('completed_count');
                 $group['completed_overdue_count'] = collect($group['users'])->sum('completed_overdue_count');
+                $group['overdue_rate'] = $group['completed_count'] > 0
+                    ? round($group['completed_overdue_count'] / $group['completed_count'] * 100, 1)
+                    : 0.0;
 
                 return $group;
             })
-            ->sortBy('group_name')
+            ->sortBy(fn (array $group): string => ($group['is_rp_team'] ? '0_' : '1_').$group['group_name'])
             ->values()
             ->all();
     }

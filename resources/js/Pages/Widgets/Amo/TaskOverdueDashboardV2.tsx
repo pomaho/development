@@ -130,8 +130,10 @@ type TaskStatisticsRow = {
 type TaskStatisticsGroup = {
     group_id: number | null;
     group_name: string;
+    is_rp_team: boolean;
     completed_count: number;
     completed_overdue_count: number;
+    overdue_rate: number;
     users: TaskStatisticsRow[];
 };
 
@@ -1316,11 +1318,14 @@ function TaskStatisticsSection({ state, period, userOverdueTasksUrl }: { state: 
                         {hasAny ? rows.map((group) => (
                             group.users.length === 0 ? null : (
                                 <>
-                                    <tr className="bg-slate-50" key={`group-${group.group_id ?? 'none'}`}>
-                                        <td className="px-5 py-2.5" colSpan={2}>
+                                    <tr className={group.is_rp_team ? 'bg-violet-50' : 'bg-slate-50'} key={`group-${group.group_id ?? 'none'}`}>
+                                        <td className="px-5 py-2.5">
                                             <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
                                                 {group.group_name}
                                             </span>
+                                        </td>
+                                        <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold tabular-nums text-slate-500">
+                                            {group.completed_count}
                                         </td>
                                         <td className="px-4 py-2.5 text-right">
                                             {group.completed_overdue_count > 0 ? (
@@ -1329,8 +1334,8 @@ function TaskStatisticsSection({ state, period, userOverdueTasksUrl }: { state: 
                                                 </span>
                                             ) : null}
                                         </td>
-                                        <td className="px-4 py-2.5 text-xs tabular-nums text-slate-400">
-                                            итого: {group.completed_count}
+                                        <td className="px-4 py-2.5">
+                                            <Progress value={group.overdue_rate} tone={group.overdue_rate >= 50 ? 'danger' : group.overdue_rate >= 20 ? 'warning' : 'brand'} />
                                         </td>
                                     </tr>
                                     {group.users.map((row) => (

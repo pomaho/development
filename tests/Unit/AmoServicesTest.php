@@ -913,6 +913,59 @@ class AmoServicesTest extends TestCase
         $this->assertSame(100.0, $groups[0]['users'][0]['overdue_rate']);
     }
 
+    public function test_statistics_groups_named_managers_under_their_rp_for_account_two(): void
+    {
+        $account = AmoAccount::query()->forceCreate([
+            'id' => 2,
+            'name' => 'Anyservice',
+            'base_domain' => 'anyservice.amocrm.ru',
+        ]);
+
+        foreach ([
+            12981002 => 'Жукова Гаян',
+            12950366 => 'Хабарова Анна',
+            99999999 => 'Посторонний Менеджер',
+        ] as $userId => $name) {
+            AmoUsersSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'amo_user_id' => $userId,
+                'name' => $name,
+                'rights' => [],
+                'group_id' => 1,
+                'is_admin' => false,
+                'is_active' => true,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        foreach ([12981002, 12950366, 99999999] as $userId) {
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'tasks',
+                'external_id' => 'task-'.$userId,
+                'name' => 'Task',
+                'responsible_user_id' => $userId,
+                'entity_created_at' => now()->subDay(),
+                'entity_updated_at' => now(),
+                'raw' => ['is_completed' => true, 'complete_till' => now()->addDay()->timestamp],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $groups = (new AmoTaskStatisticsService())->statistics($account, now()->subWeek(), now());
+
+        $rpGroup = collect($groups)->firstWhere('is_rp_team', true);
+        $this->assertNotNull($rpGroup);
+        $this->assertSame('Жукова Гаян — РП', $rpGroup['group_name']);
+        $this->assertCount(1, $rpGroup['users']);
+        $this->assertSame('Хабарова Анна', $rpGroup['users'][0]['responsible_name']);
+
+        $allUserIds = collect($groups)->flatMap(fn (array $g): array => collect($g['users'])->pluck('responsible_user_id')->all())->all();
+        $this->assertNotContains(12981002, $allUserIds); // РП сам не выводится отдельной строкой
+        $this->assertContains(99999999, $allUserIds); // ненайденный в иерархии остаётся в старой группировке
+    }
+
     public function test_task_dashboard_cache_refreshes_by_version(): void
     {
         Cache::flush();
