@@ -28,9 +28,12 @@ use App\Http\Controllers\Web\CrmAuditController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\LeadSyncScheduleController;
 use App\Http\Controllers\Webhook\AmoWebhookController;
+use App\Http\Controllers\Widget\Clients\Eurohome\AmoBudgetSegmentController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoClientDashboardController;
+use App\Http\Controllers\Widget\Clients\Eurohome\AmoDesignerCategoryController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoManagerTopupController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoProductGroupController;
+use App\Http\Controllers\Widget\Clients\Eurohome\AmoSupplierController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -127,9 +130,6 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/export', 
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.export');
 
 // Manager Topup Dashboard
-Route::get('/widgets/amo/{publicKey}/manager-topup', [AmoManagerTopupController::class, 'show'])
-    ->middleware('amo-widget-frame-policy')
-    ->name('widgets.amo.manager-topup.show');
 Route::get('/api/widgets/amo/{publicKey}/manager-topup/data', [AmoManagerTopupController::class, 'data'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-topup.data');
@@ -144,9 +144,6 @@ Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers/leads', [AmoMan
     ->name('api.widgets.amo.manager-topup.designers-leads');
 
 // Product Group Dashboard
-Route::get('/widgets/amo/{publicKey}/product-group', [AmoProductGroupController::class, 'show'])
-    ->middleware('amo-widget-frame-policy')
-    ->name('widgets.amo.product-group.show');
 Route::get('/api/widgets/amo/{publicKey}/product-group/data', [AmoProductGroupController::class, 'data'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.product-group.data');
@@ -154,7 +151,31 @@ Route::get('/api/widgets/amo/{publicKey}/product-group/leads', [AmoProductGroupC
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.product-group.leads');
 
-// Eurohome — combined dashboard (manager-topup + product-group on one page)
+// Supplier Dashboard
+Route::get('/api/widgets/amo/{publicKey}/supplier/data', [AmoSupplierController::class, 'data'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.supplier.data');
+Route::get('/api/widgets/amo/{publicKey}/supplier/leads', [AmoSupplierController::class, 'leads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.supplier.leads');
+
+// Designer Category Dashboard
+Route::get('/api/widgets/amo/{publicKey}/designer-category/data', [AmoDesignerCategoryController::class, 'data'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.designer-category.data');
+Route::get('/api/widgets/amo/{publicKey}/designer-category/leads', [AmoDesignerCategoryController::class, 'leads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.designer-category.leads');
+
+// Budget Segment Dashboard
+Route::get('/api/widgets/amo/{publicKey}/budget-segment/data', [AmoBudgetSegmentController::class, 'data'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.budget-segment.data');
+Route::get('/api/widgets/amo/{publicKey}/budget-segment/leads', [AmoBudgetSegmentController::class, 'leads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.budget-segment.leads');
+
+// Eurohome — combined dashboard (manager-topup + product-group + supplier + designer-category + budget-segment on one page)
 Route::get('/widgets/amo/{publicKey}/eurohome-dashboard', [AmoClientDashboardController::class, 'show'])
     ->middleware('amo-widget-frame-policy')
     ->name('widgets.amo.eurohome-dashboard.show');

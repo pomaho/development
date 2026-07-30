@@ -3,20 +3,12 @@ import { useEffect, useState } from 'react';
 import { ExternalLink, X } from 'lucide-react';
 import {
     AccentSummary, buildUrl, EmptyState, type LoadState, ReportSection, rub, rubFull,
-    SectionError, SectionSkeleton, WidgetHeader,
+    SectionError, SectionSkeleton,
 } from '../../_shared/uiKit';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Account = { name: string; base_domain: string };
-
-type Period = { from: string; to: string; label: string };
-
-type Props = {
-    account: Account;
-    period: Period;
-    links: { self: string; data: string; leads: string; designers: string; designerLeads: string };
-};
 
 type ManagerSummary = {
     name: string;
@@ -322,40 +314,6 @@ function DesignerLeadsModal({ leadsUrl, from, to, designerKey, designerLabel, ba
 
 // ─── Section components ───────────────────────────────────────────────────────
 
-function ManagerBarChart({ managers, onManagerClick }: { managers: ManagerSummary[]; onManagerClick: (name: string) => void }) {
-    const max = Math.max(...managers.map((m) => m.topupTotal), 1);
-    return (
-        <div className="divide-y divide-slate-100 pb-5">
-            {managers.map((m, i) => {
-                const pct = Math.round((m.topupTotal / max) * 100);
-                return (
-                    <div className="flex items-center gap-4 px-5 py-3.5" key={m.name}>
-                        <div className="w-6 shrink-0 text-right text-xs font-bold text-slate-400 tabular-nums">{i + 1}</div>
-                        <div className="min-w-0 flex-1">
-                            <div className="mb-1.5 flex items-center justify-between gap-3">
-                                <span className="truncate font-semibold text-gray-900">{m.name}</span>
-                                <button
-                                    type="button"
-                                    className="shrink-0 rounded-full bg-emerald-500 px-3 py-0.5 text-xs font-bold tabular-nums text-white transition-colors hover:bg-emerald-600"
-                                    onClick={() => onManagerClick(m.name)}
-                                >
-                                    {rub(m.topupTotal)}
-                                </button>
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-emerald-50">
-                                <div
-                                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-green-500 transition-all duration-500"
-                                    style={{ width: `${pct}%` }}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-}
-
 function MonthlyColumnChart({ monthly }: { monthly: MonthlyTotal[] }) {
     const max = Math.max(...monthly.map((m) => m.total), 1);
     return (
@@ -398,7 +356,15 @@ function ManagerSummaryTable({ managers, onRowClick }: { managers: ManagerSummar
                         return (
                             <tr key={m.name} className="transition-colors hover:bg-violet-50/50">
                                 <td className="px-5 py-3.5 font-semibold text-gray-900">{m.name}</td>
-                                <td className="px-4 py-3.5 text-right tabular-nums text-slate-600">{m.dealCount}</td>
+                                <td className="px-4 py-3.5 text-right">
+                                    <button
+                                        type="button"
+                                        className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
+                                        onClick={() => onRowClick(m.name)}
+                                    >
+                                        {m.dealCount}
+                                    </button>
+                                </td>
                                 <td className="px-4 py-3.5 text-right">
                                     <button
                                         type="button"
@@ -457,7 +423,15 @@ function DesignerSummaryTable({ designers, onRowClick }: { designers: DesignerSu
                             <tr key={d.key} className="transition-colors hover:bg-violet-50/50">
                                 <td className="px-5 py-3.5 font-semibold text-gray-900">{d.name}</td>
                                 <td className="px-4 py-3.5 text-slate-600">{d.category}</td>
-                                <td className="px-4 py-3.5 text-right tabular-nums text-slate-600">{d.dealCount}</td>
+                                <td className="px-4 py-3.5 text-right">
+                                    <button
+                                        type="button"
+                                        className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
+                                        onClick={() => onRowClick(d)}
+                                    >
+                                        {d.dealCount}
+                                    </button>
+                                </td>
                                 <td className="px-4 py-3.5 text-right">
                                     <button
                                         type="button"
@@ -547,8 +521,8 @@ export function ManagerTopupContent({ account, from, to, links }: {
                     {data.managers.length > 0 ? (
                         <ReportSection
                             eyebrow="Доплаты по менеджерам"
-                            title="Рейтинг менеджеров по сумме доплат"
-                            description="Доплата = Бюджет сделки − Сумма предоплаты. Учитываются только сделки с положительной доплатой. Нажмите на сумму — откроется список сделок."
+                            title="Разбивка по менеджерам"
+                            description="Доплата = Бюджет сделки − Сумма предоплаты. Учитываются только сделки с положительной доплатой. Нажмите на количество сделок или на сумму — откроется список сделок."
                             aside={
                                 <button type="button" onClick={() => setModal({ manager: '' })}>
                                     <AccentSummary
@@ -560,12 +534,12 @@ export function ManagerTopupContent({ account, from, to, links }: {
                                 </button>
                             }
                         >
-                            <ManagerBarChart managers={data.managers} onManagerClick={(name) => setModal({ manager: name })} />
+                            <ManagerSummaryTable managers={data.managers} onRowClick={(name) => setModal({ manager: name })} />
                         </ReportSection>
                     ) : (
                         <ReportSection
                             eyebrow="Доплаты по менеджерам"
-                            title="Рейтинг менеджеров по сумме доплат"
+                            title="Разбивка по менеджерам"
                         >
                             <div className="px-5 py-8">
                                 <EmptyState>Нет сделок с доплатой за выбранный период</EmptyState>
@@ -582,16 +556,6 @@ export function ManagerTopupContent({ account, from, to, links }: {
                             <MonthlyColumnChart monthly={data.monthlyBreakdown} />
                         </ReportSection>
                     )}
-
-                    {data.managers.length > 0 && (
-                        <ReportSection
-                            eyebrow="Сводная таблица"
-                            title="Разбивка по менеджерам"
-                            description="Нажмите на сумму доплат — откроется детальный список сделок менеджера."
-                        >
-                            <ManagerSummaryTable managers={data.managers} onRowClick={(name) => setModal({ manager: name })} />
-                        </ReportSection>
-                    )}
                 </>
             )}
 
@@ -602,7 +566,7 @@ export function ManagerTopupContent({ account, from, to, links }: {
                     <ReportSection
                         eyebrow="По дизайнерам"
                         title="По дизайнерам (кто принёс больше денег за указанный период)"
-                        description="Дизайнер сделки — привязанный контакт, а при его отсутствии — привязанная компания. Учитываются только успешно реализованные сделки по дате закрытия. Сумма — бюджет сделки. Нажмите на сумму — откроется список сделок."
+                        description="Дизайнер сделки — привязанный контакт, а при его отсутствии — привязанная компания. Учитываются только успешно реализованные сделки по дате закрытия. Сумма — бюджет сделки. Нажмите на количество сделок или на сумму — откроется список сделок."
                         aside={
                             <AccentSummary
                                 label="Итого"
@@ -652,39 +616,5 @@ export function ManagerTopupContent({ account, from, to, links }: {
                 />
             )}
         </>
-    );
-}
-
-// ─── Standalone page ────────────────────────────────────────────────────────
-
-export default function ManagerTopupDashboard({ account, period, links }: Props) {
-    const [from, setFrom] = useState(period.from);
-    const [to, setTo] = useState(period.to);
-    const [appliedFrom, setAppliedFrom] = useState(period.from);
-    const [appliedTo, setAppliedTo] = useState(period.to);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setAppliedFrom(from);
-        setAppliedTo(to);
-    };
-
-    return (
-        <div className="min-h-screen bg-slate-100 px-3 py-5 text-gray-900 sm:px-5">
-            <div className="mx-auto max-w-7xl space-y-5">
-                <WidgetHeader
-                    title="Доплаты по менеджерам"
-                    account={account}
-                    period={period}
-                    from={from}
-                    to={to}
-                    onFromChange={setFrom}
-                    onToChange={setTo}
-                    onSubmit={handleSubmit}
-                />
-
-                <ManagerTopupContent account={account} from={appliedFrom} to={appliedTo} links={links} />
-            </div>
-        </div>
     );
 }

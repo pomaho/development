@@ -11,9 +11,9 @@ use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
-// Composition-only widget: aggregates the already-existing manager-topup and
-// product-group widgets on one page. Reuses their own routes/services as-is —
-// no duplicated business logic, no new data/leads endpoints.
+// Composition-only widget: aggregates the already-existing manager-topup, product-group,
+// supplier, designer-category and budget-segment widgets on one page. Reuses their own
+// routes/services as-is — no duplicated business logic, no new data/leads endpoints.
 class AmoClientDashboardController extends Controller
 {
     public function show(Request $request, string $publicKey): Response
@@ -25,6 +25,9 @@ class AmoClientDashboardController extends Controller
 
         $managerTopup = $this->siblingInstallation($account->id, 'manager_topup_dashboard');
         $productGroup = $this->siblingInstallation($account->id, 'product_group_dashboard');
+        $supplier = $this->siblingInstallation($account->id, 'supplier_dashboard');
+        $designerCategory = $this->siblingInstallation($account->id, 'designer_category_dashboard');
+        $budgetSegment = $this->siblingInstallation($account->id, 'budget_segment_dashboard');
 
         return Inertia::render('Widgets/Amo/Clients/Eurohome/ClientDashboard', [
             'account' => [
@@ -50,6 +53,24 @@ class AmoClientDashboardController extends Controller
                     'links' => [
                         'data' => route('api.widgets.amo.product-group.data', $productGroup->public_key),
                         'leads' => route('api.widgets.amo.product-group.leads', $productGroup->public_key),
+                    ],
+                ],
+                'supplier' => $supplier === null ? null : [
+                    'links' => [
+                        'data' => route('api.widgets.amo.supplier.data', $supplier->public_key),
+                        'leads' => route('api.widgets.amo.supplier.leads', $supplier->public_key),
+                    ],
+                ],
+                'designerCategory' => $designerCategory === null ? null : [
+                    'links' => [
+                        'data' => route('api.widgets.amo.designer-category.data', $designerCategory->public_key),
+                        'leads' => route('api.widgets.amo.designer-category.leads', $designerCategory->public_key),
+                    ],
+                ],
+                'budgetSegment' => $budgetSegment === null ? null : [
+                    'links' => [
+                        'data' => route('api.widgets.amo.budget-segment.data', $budgetSegment->public_key),
+                        'leads' => route('api.widgets.amo.budget-segment.leads', $budgetSegment->public_key),
                     ],
                 ],
             ],

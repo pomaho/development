@@ -54,9 +54,7 @@ class AmoAccountWidgetsController extends Controller
                                 'task_overdue_dashboard' => route('widgets.amo.task-overdue-dashboard.show', $installation->public_key),
                                 'task_overdue_dashboard_v2' => route('widgets.amo.task-overdue-dashboard-v2.show', $installation->public_key),
                                 'task_overdue_dashboard_v2_dev' => route('widgets.amo.task-overdue-dashboard-v2-dev.show', $installation->public_key),
-                                'manager_topup_dashboard' => route('widgets.amo.manager-topup.show', $installation->public_key),
-                                'product_group_dashboard' => route('widgets.amo.product-group.show', $installation->public_key),
-                                'eurohome_client_dashboard' => route('widgets.amo.eurohome-dashboard.show', $installation->public_key),
+                                'manager_topup_dashboard', 'product_group_dashboard', 'supplier_dashboard', 'designer_category_dashboard', 'budget_segment_dashboard', 'eurohome_client_dashboard' => $this->eurohomeDashboardUrl($amoAccount),
                                 default => null,
                             },
                             'api_url' => in_array($widget->code, ['task_overdue_dashboard', 'task_overdue_dashboard_v2'])
@@ -86,6 +84,16 @@ class AmoAccountWidgetsController extends Controller
         ]);
     }
 
+    private function eurohomeDashboardUrl(AmoAccount $amoAccount): ?string
+    {
+        $installation = AmoAccountDashboardWidget::query()
+            ->where('amo_account_id', $amoAccount->id)
+            ->whereHas('widget', fn ($q) => $q->where('code', 'eurohome_client_dashboard'))
+            ->first();
+
+        return $installation === null ? null : route('widgets.amo.eurohome-dashboard.show', $installation->public_key);
+    }
+
     public function settings(AmoAccount $amoAccount, DashboardWidget $dashboardWidget, AmoTaskStatisticsService $statisticsService): Response|RedirectResponse
     {
         $this->authorize('update', $amoAccount);
@@ -93,7 +101,7 @@ class AmoAccountWidgetsController extends Controller
         if ($dashboardWidget->code === 'eurohome_client_dashboard') {
             return redirect()
                 ->route('amo-accounts.widgets', $amoAccount)
-                ->with('status', 'У этого блока нет своих настроек — он собирает данные из уже настроенных виджетов «Доплаты по менеджерам» и «Товарные группы».');
+                ->with('status', 'У этого блока нет своих настроек — он собирает данные из уже настроенных виджетов «Доплаты по менеджерам», «Товарные группы», «Поставщики», «Сделки по категориям дизайнеров» и «Сегментация по бюджетам».');
         }
 
         $installation = $this->installation($amoAccount, $dashboardWidget);

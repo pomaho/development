@@ -6,14 +6,14 @@ namespace App\Http\Controllers\Widget\Clients\Eurohome;
 
 use App\Http\Controllers\Controller;
 use App\Models\AmoAccountDashboardWidget;
-use App\Services\Amo\Analytics\Clients\Eurohome\AmoProductGroupService;
+use App\Services\Amo\Analytics\Clients\Eurohome\AmoSupplierService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
-class AmoProductGroupController extends Controller
+class AmoSupplierController extends Controller
 {
-    public function data(Request $request, string $publicKey, AmoProductGroupService $service): JsonResponse
+    public function data(Request $request, string $publicKey, AmoSupplierService $service): JsonResponse
     {
         $installation = $this->installation($publicKey);
         $tz = $installation->account->timezone();
@@ -30,7 +30,7 @@ class AmoProductGroupController extends Controller
         ]);
     }
 
-    public function leads(Request $request, string $publicKey, AmoProductGroupService $service): JsonResponse
+    public function leads(Request $request, string $publicKey, AmoSupplierService $service): JsonResponse
     {
         $installation = $this->installation($publicKey);
         $tz = $installation->account->timezone();
@@ -42,7 +42,7 @@ class AmoProductGroupController extends Controller
                 $from,
                 $to,
                 $installation->config ?? [],
-                (string) $request->query('group', ''),
+                (string) $request->query('supplier', ''),
                 300,
                 $tz,
             ),
@@ -56,7 +56,7 @@ class AmoProductGroupController extends Controller
             ->where('public_key', $publicKey)
             ->where('is_enabled', true)
             ->whereHas('widget', fn ($q) => $q
-                ->where('code', 'product_group_dashboard')
+                ->where('code', 'supplier_dashboard')
                 ->where('is_enabled', true))
             ->firstOrFail();
     }

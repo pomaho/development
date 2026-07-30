@@ -10,38 +10,9 @@ use App\Services\Amo\Analytics\Clients\Eurohome\AmoManagerTopupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
-use Inertia\Inertia;
-use Inertia\Response;
 
 class AmoManagerTopupController extends Controller
 {
-    public function show(Request $request, string $publicKey): Response
-    {
-        $installation = $this->installation($publicKey);
-        $tz = $installation->account->timezone();
-        [$from, $to, $periodMeta] = $this->period($request, $tz);
-
-        return Inertia::render('Widgets/Amo/Clients/Eurohome/ManagerTopupDashboard', [
-            'account' => [
-                'name' => $installation->account->name,
-                'base_domain' => $installation->account->base_domain,
-                'timezone' => $tz,
-            ],
-            'period' => [
-                'from' => $from->toDateString(),
-                'to' => $to->toDateString(),
-                ...$periodMeta,
-            ],
-            'links' => [
-                'self' => route('widgets.amo.manager-topup.show', $publicKey),
-                'data' => route('api.widgets.amo.manager-topup.data', $publicKey),
-                'leads' => route('api.widgets.amo.manager-topup.leads', $publicKey),
-                'designers' => route('api.widgets.amo.manager-topup.designers', $publicKey),
-                'designerLeads' => route('api.widgets.amo.manager-topup.designers-leads', $publicKey),
-            ],
-        ]);
-    }
-
     public function data(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
     {
         $installation = $this->installation($publicKey);

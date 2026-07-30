@@ -10,44 +10,44 @@ import {
 
 type Account = { name: string; base_domain: string };
 
-type GroupSummary = {
+type SupplierSummary = {
     name: string;
     budgetTotal: number;
     dealCount: number;
 };
 
 type BreakdownData = {
-    summary: { groupCount: number; dealCount: number; budgetTotal: number };
-    groups: GroupSummary[];
+    summary: { supplierCount: number; dealCount: number; budgetTotal: number };
+    suppliers: SupplierSummary[];
 };
 
 type LeadItem = {
     id: string | number;
     name: string;
-    groups: string[];
+    suppliers: string[];
     created_date: string | null;
     price: number;
 };
 
 // ─── Leads Modal ──────────────────────────────────────────────────────────────
 
-function LeadsModal({ leadsUrl, from, to, group, baseDomain, onClose }: {
+function LeadsModal({ leadsUrl, from, to, supplier, baseDomain, onClose }: {
     leadsUrl: string;
     from: string;
     to: string;
-    group: string;
+    supplier: string;
     baseDomain: string;
     onClose: () => void;
 }) {
     const [state, setState] = useState<LoadState<{ leads: LeadItem[]; total: number; limited: boolean; limit: number }>>({ status: 'loading' });
 
     useEffect(() => {
-        const url = buildUrl(leadsUrl, { from, to, group });
+        const url = buildUrl(leadsUrl, { from, to, supplier });
         fetch(url)
             .then((r) => r.json())
             .then((json) => setState({ status: 'loaded', data: json.data }))
             .catch(() => setState({ status: 'error', message: 'Ошибка загрузки' }));
-    }, [leadsUrl, from, to, group]);
+    }, [leadsUrl, from, to, supplier]);
 
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -55,21 +55,21 @@ function LeadsModal({ leadsUrl, from, to, group, baseDomain, onClose }: {
         return () => document.removeEventListener('keydown', handleKey);
     }, [onClose]);
 
-    const title = group ? `Сделки: ${group}` : 'Все сделки';
+    const title = supplier ? `Сделки: ${supplier}` : 'Все сделки';
 
     return createPortal(
         <div
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="product-group-modal-title"
+            aria-labelledby="supplier-modal-title"
         >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
             <div className="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
                 <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Товарные группы</p>
-                        <h3 id="product-group-modal-title" className="mt-0.5 font-bold text-gray-900">{title}</h3>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Поставщики</p>
+                        <h3 id="supplier-modal-title" className="mt-0.5 font-bold text-gray-900">{title}</h3>
                     </div>
                     <button
                         type="button"
@@ -104,7 +104,7 @@ function LeadsModal({ leadsUrl, from, to, group, baseDomain, onClose }: {
                                 <thead className="sticky top-0 bg-slate-50">
                                     <tr>
                                         <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
-                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Товарные группы</th>
+                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Поставщики</th>
                                         <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Создана</th>
                                         <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Бюджет</th>
                                         <th className="px-4 py-3" />
@@ -114,7 +114,7 @@ function LeadsModal({ leadsUrl, from, to, group, baseDomain, onClose }: {
                                     {state.data.leads.length > 0 ? state.data.leads.map((lead) => (
                                         <tr className="transition-colors hover:bg-violet-50/50" key={lead.id}>
                                             <td className="px-5 py-3.5 font-semibold text-gray-900">{lead.name}</td>
-                                            <td className="px-4 py-3.5 text-slate-600">{lead.groups.join(', ')}</td>
+                                            <td className="px-4 py-3.5 text-slate-600">{lead.suppliers.join(', ')}</td>
                                             <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-slate-500">{lead.created_date ?? '—'}</td>
                                             <td className="px-4 py-3.5 text-right font-bold tabular-nums text-emerald-700">{rubFull(lead.price)}</td>
                                             <td className="px-4 py-3.5">
@@ -153,41 +153,41 @@ function LeadsModal({ leadsUrl, from, to, group, baseDomain, onClose }: {
 
 // ─── Section components ───────────────────────────────────────────────────────
 
-function GroupSummaryTable({ groups, onRowClick }: { groups: GroupSummary[]; onRowClick: (name: string) => void }) {
-    const grandTotal = groups.reduce((s, g) => s + g.budgetTotal, 0);
+function SupplierSummaryTable({ suppliers, onRowClick }: { suppliers: SupplierSummary[]; onRowClick: (name: string) => void }) {
+    const grandTotal = suppliers.reduce((s, sup) => s + sup.budgetTotal, 0);
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
                 <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
                     <tr>
-                        <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Товарная группа</th>
+                        <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Поставщик</th>
                         <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
                         <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Бюджет</th>
                         <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                    {groups.map((g) => {
-                        const share = grandTotal > 0 ? Math.round((g.budgetTotal / grandTotal) * 100) : 0;
+                    {suppliers.map((s) => {
+                        const share = grandTotal > 0 ? Math.round((s.budgetTotal / grandTotal) * 100) : 0;
                         return (
-                            <tr key={g.name} className="transition-colors hover:bg-violet-50/50">
-                                <td className="px-5 py-3.5 font-semibold text-gray-900">{g.name}</td>
+                            <tr key={s.name} className="transition-colors hover:bg-violet-50/50">
+                                <td className="px-5 py-3.5 font-semibold text-gray-900">{s.name}</td>
                                 <td className="px-4 py-3.5 text-right">
                                     <button
                                         type="button"
                                         className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
-                                        onClick={() => onRowClick(g.name)}
+                                        onClick={() => onRowClick(s.name)}
                                     >
-                                        {g.dealCount}
+                                        {s.dealCount}
                                     </button>
                                 </td>
                                 <td className="px-4 py-3.5 text-right">
                                     <button
                                         type="button"
                                         className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
-                                        onClick={() => onRowClick(g.name)}
+                                        onClick={() => onRowClick(s.name)}
                                     >
-                                        {rubFull(g.budgetTotal)}
+                                        {rubFull(s.budgetTotal)}
                                     </button>
                                 </td>
                                 <td className="px-4 py-3.5">
@@ -212,14 +212,14 @@ function GroupSummaryTable({ groups, onRowClick }: { groups: GroupSummary[]; onR
 
 // ─── Content (reusable — no header, no own period state) ──────────────────────
 
-export function ProductGroupContent({ account, from, to, links }: {
+export function SupplierContent({ account, from, to, links }: {
     account: Account;
     from: string;
     to: string;
     links: { data: string; leads: string };
 }) {
     const [state, setState] = useState<LoadState<BreakdownData>>({ status: 'loading' });
-    const [modal, setModal] = useState<{ group: string } | null>(null);
+    const [modal, setModal] = useState<{ supplier: string } | null>(null);
 
     useEffect(() => {
         setState({ status: 'loading' });
@@ -244,28 +244,28 @@ export function ProductGroupContent({ account, from, to, links }: {
             {state.status === 'error' && <SectionError message={state.message} />}
 
             {data && (
-                data.groups.length > 0 ? (
+                data.suppliers.length > 0 ? (
                     <ReportSection
-                        eyebrow="Товарные группы"
-                        title="Бюджет активных сделок по товарным группам"
-                        description="Активные сделки — без учёта успешно реализованных, закрытых нереализованных и отложенных/замороженных. Период — по дате создания сделки. Сделка с несколькими товарными группами учитывается в каждой из них, поэтому сумма по группам может превышать общий бюджет. Нажмите на количество сделок или на сумму — откроется список сделок."
+                        eyebrow="Поставщики"
+                        title="Бюджет активных сделок по поставщикам"
+                        description="Активные сделки — без учёта успешно реализованных, закрытых нереализованных и отложенных/замороженных. Период — по дате создания сделки. Сделка с несколькими поставщиками учитывается у каждого из них, поэтому сумма по поставщикам может превышать общий бюджет. Нажмите на количество сделок или на сумму — откроется список сделок."
                         aside={
-                            <button type="button" onClick={() => setModal({ group: '' })}>
+                            <button type="button" onClick={() => setModal({ supplier: '' })}>
                                 <AccentSummary
                                     label="Бюджет активных сделок"
                                     value={rub(data.summary.budgetTotal)}
-                                    note={`${data.summary.dealCount} сделок · ${data.summary.groupCount} групп`}
+                                    note={`${data.summary.dealCount} сделок · ${data.summary.supplierCount} поставщиков`}
                                     tone="brand"
                                 />
                             </button>
                         }
                     >
-                        <GroupSummaryTable groups={data.groups} onRowClick={(name) => setModal({ group: name })} />
+                        <SupplierSummaryTable suppliers={data.suppliers} onRowClick={(name) => setModal({ supplier: name })} />
                     </ReportSection>
                 ) : (
                     <ReportSection
-                        eyebrow="Товарные группы"
-                        title="Бюджет активных сделок по товарным группам"
+                        eyebrow="Поставщики"
+                        title="Бюджет активных сделок по поставщикам"
                     >
                         <div className="px-5 py-8">
                             <EmptyState>Нет активных сделок за выбранный период</EmptyState>
@@ -279,7 +279,7 @@ export function ProductGroupContent({ account, from, to, links }: {
                     leadsUrl={links.leads}
                     from={from}
                     to={to}
-                    group={modal.group}
+                    supplier={modal.supplier}
                     baseDomain={account.base_domain}
                     onClose={() => setModal(null)}
                 />
