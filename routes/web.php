@@ -142,6 +142,12 @@ Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers', [AmoManagerTo
 Route::get('/api/widgets/amo/{publicKey}/manager-topup/designers/leads', [AmoManagerTopupController::class, 'designerLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-topup.designers-leads');
+Route::get('/api/widgets/amo/{publicKey}/manager-topup/prepayments', [AmoManagerTopupController::class, 'prepayments'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-topup.prepayments');
+Route::get('/api/widgets/amo/{publicKey}/manager-topup/prepayments/leads', [AmoManagerTopupController::class, 'prepaymentLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-topup.prepayments-leads');
 
 // Product Group Dashboard
 Route::get('/api/widgets/amo/{publicKey}/product-group/data', [AmoProductGroupController::class, 'data'])

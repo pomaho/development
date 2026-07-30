@@ -15,6 +15,7 @@ class AmoManagerTopupService
     private const DEFAULT_PREPAYMENT_FIELD_ID = 845975;
     private const DEFAULT_MANAGER_FIELD_ID = 845835;
     private const DEFAULT_TOPUP_DATE_FIELD_ID = 845843;
+    private const DEFAULT_PREPAYMENT_DATE_FIELD_ID = 845841;
     private const DEFAULT_CATEGORY_FIELD_ID = 845859;
     // amoCRM reserves status_id 142 ("Успешно реализовано") as a fixed system id on every pipeline —
     // the status `type` field is NOT populated with 142/143 in practice, so it can't be used to detect this stage.
@@ -113,6 +114,96 @@ class AmoManagerTopupService
             });
 
         usort($leads, fn ($a, $b) => $b['topup'] <=> $a['topup']);
+
+        return [
+            'leads' => $leads,
+            'total' => $total,
+            'limited' => $total > $limit,
+            'limit' => $limit,
+        ];
+    }
+
+    public function prepaymentBreakdown(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        array $config,
+        string $timezone = 'UTC'
+    ): array {
+        return Cache::remember(
+            $this->prepaymentCacheKey($account, $from, $to, $config, $timezone),
+            now()->addMinutes(10),
+            fn (): array => $this->buildPrepaymentBreakdown($account, $from, $to, $config, $timezone),
+        );
+    }
+
+    public function prepaymentLeads(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        array $config,
+        string $managerFilter = '',
+        int $limit = 300,
+        string $timezone = 'UTC'
+    ): array {
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $prepaymentFieldId = (int) data_get($config, 'prepayment_field_id', self::DEFAULT_PREPAYMENT_FIELD_ID);
+        $managerFieldId = (int) data_get($config, 'manager_field_id', self::DEFAULT_MANAGER_FIELD_ID);
+        $prepaymentDateFieldId = (int) data_get($config, 'prepayment_date_field_id', self::DEFAULT_PREPAYMENT_DATE_FIELD_ID);
+        $excludedStatusIds = $this->excludedStatusIds($account, $pipelineId);
+
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
+
+        $leads = [];
+        $total = 0;
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values', 'raw'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+            ->when($excludedStatusIds !== [], fn ($q) => $q->whereNotIn('status_id', $excludedStatusIds))
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $fromDate, $toDate, $timezone, $prepaymentFieldId, $managerFieldId, $prepaymentDateFieldId, $managerFilter): void {
+                foreach ($chunk as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
+                    $raw = $lead->raw ?? [];
+
+                    $prepaymentDate = $this->dateFieldValue($customFields, $prepaymentDateFieldId, $timezone);
+                    if (!$this->dateInRange($prepaymentDate, $fromDate, $toDate)) {
+                        continue;
+                    }
+
+                    $managerName = $this->textFieldValue($customFields, $managerFieldId);
+                    if (empty($managerName)) {
+                        continue;
+                    }
+
+                    if ($managerFilter !== '' && $managerName !== $managerFilter) {
+                        continue;
+                    }
+
+                    $prepayment = $this->numericFieldValue($customFields, $prepaymentFieldId);
+                    if ($prepayment === null || $prepayment <= 0) {
+                        continue;
+                    }
+
+                    $total++;
+                    if (count($leads) < $limit) {
+                        $leads[] = [
+                            'id' => $lead->external_id,
+                            'name' => $lead->name ?: 'Без названия',
+                            'manager' => $managerName,
+                            'prepayment_date' => $prepaymentDate?->toDateString(),
+                            'price' => (float) ($raw['price'] ?? 0),
+                            'prepayment' => $prepayment,
+                        ];
+                    }
+                }
+            });
+
+        usort($leads, fn ($a, $b) => $b['prepayment'] <=> $a['prepayment']);
 
         return [
             'leads' => $leads,
@@ -315,6 +406,81 @@ class AmoManagerTopupService
             'allManagerNames' => array_keys($allManagerNames),
             'managers' => $managerList,
             'monthlyBreakdown' => $monthlyList,
+        ];
+    }
+
+    private function buildPrepaymentBreakdown(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        array $config,
+        string $timezone
+    ): array {
+        $pipelineId = (int) data_get($config, 'pipeline_id', 0);
+        $prepaymentFieldId = (int) data_get($config, 'prepayment_field_id', self::DEFAULT_PREPAYMENT_FIELD_ID);
+        $managerFieldId = (int) data_get($config, 'manager_field_id', self::DEFAULT_MANAGER_FIELD_ID);
+        $prepaymentDateFieldId = (int) data_get($config, 'prepayment_date_field_id', self::DEFAULT_PREPAYMENT_DATE_FIELD_ID);
+        $excludedStatusIds = $this->excludedStatusIds($account, $pipelineId);
+
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
+
+        $managers = [];
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'entity_created_at', 'custom_fields_values', 'raw'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
+            ->when($excludedStatusIds !== [], fn ($q) => $q->whereNotIn('status_id', $excludedStatusIds))
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$managers, $fromDate, $toDate, $timezone, $prepaymentFieldId, $managerFieldId, $prepaymentDateFieldId): void {
+                foreach ($chunk as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
+
+                    $prepaymentDate = $this->dateFieldValue($customFields, $prepaymentDateFieldId, $timezone);
+                    if (!$this->dateInRange($prepaymentDate, $fromDate, $toDate)) {
+                        continue;
+                    }
+
+                    $managerName = $this->textFieldValue($customFields, $managerFieldId);
+                    if (empty($managerName)) {
+                        continue;
+                    }
+
+                    $prepayment = $this->numericFieldValue($customFields, $prepaymentFieldId);
+                    if ($prepayment === null || $prepayment <= 0) {
+                        continue;
+                    }
+
+                    $managers[$managerName] ??= ['prepaymentTotal' => 0.0, 'dealCount' => 0];
+                    $managers[$managerName]['prepaymentTotal'] += $prepayment;
+                    $managers[$managerName]['dealCount']++;
+                }
+            });
+
+        arsort($managers);
+
+        $managerList = array_map(
+            fn (string $name, array $data): array => [
+                'name' => $name,
+                'prepaymentTotal' => round($data['prepaymentTotal']),
+                'dealCount' => $data['dealCount'],
+            ],
+            array_keys($managers),
+            array_values($managers),
+        );
+
+        $grandTotal = array_sum(array_column($managerList, 'prepaymentTotal'));
+        $dealCount = array_sum(array_column($managerList, 'dealCount'));
+
+        return [
+            'summary' => [
+                'managerCount' => count($managerList),
+                'dealCount' => $dealCount,
+                'prepaymentTotal' => round($grandTotal),
+            ],
+            'managers' => $managerList,
         ];
     }
 
@@ -583,6 +749,18 @@ class AmoManagerTopupService
             $to?->toDateString() ?? 'null',
             data_get($config, 'pipeline_id') ?: 'all',
             implode(',', $selectedManagers),
+            $timezone,
+        ]);
+    }
+
+    private function prepaymentCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone): string
+    {
+        return implode(':', [
+            'amo_manager_prepayment_breakdown',
+            $account->id,
+            $from?->toDateString() ?? 'null',
+            $to?->toDateString() ?? 'null',
+            data_get($config, 'pipeline_id') ?: 'all',
             $timezone,
         ]);
     }

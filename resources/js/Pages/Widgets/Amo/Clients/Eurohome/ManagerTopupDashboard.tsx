@@ -59,6 +59,26 @@ type DesignerLeadItem = {
     price: number;
 };
 
+type PrepaymentManagerSummary = {
+    name: string;
+    prepaymentTotal: number;
+    dealCount: number;
+};
+
+type PrepaymentBreakdownData = {
+    summary: { managerCount: number; dealCount: number; prepaymentTotal: number };
+    managers: PrepaymentManagerSummary[];
+};
+
+type PrepaymentLeadItem = {
+    id: string | number;
+    name: string;
+    manager: string;
+    prepayment_date: string | null;
+    price: number;
+    prepayment: number;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function monthLabel(ym: string): string {
@@ -312,6 +332,128 @@ function DesignerLeadsModal({ leadsUrl, from, to, designerKey, designerLabel, ba
     );
 }
 
+function PrepaymentLeadsModal({ leadsUrl, from, to, manager, baseDomain, onClose }: {
+    leadsUrl: string;
+    from: string;
+    to: string;
+    manager: string;
+    baseDomain: string;
+    onClose: () => void;
+}) {
+    const [state, setState] = useState<LoadState<{ leads: PrepaymentLeadItem[]; total: number; limited: boolean; limit: number }>>({ status: 'loading' });
+
+    useEffect(() => {
+        const url = buildUrl(leadsUrl, { from, to, manager });
+        fetch(url)
+            .then((r) => r.json())
+            .then((json) => setState({ status: 'loaded', data: json.data }))
+            .catch(() => setState({ status: 'error', message: 'Ошибка загрузки' }));
+    }, [leadsUrl, from, to, manager]);
+
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    const title = manager ? `Сделки: ${manager}` : 'Все сделки';
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="prepayment-modal-title"
+        >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Предоплаты по менеджерам</p>
+                        <h3 id="prepayment-modal-title" className="mt-0.5 font-bold text-gray-900">{title}</h3>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                        aria-label="Закрыть"
+                    >
+                        <X className="size-5" />
+                    </button>
+                </div>
+                <div className="overflow-y-auto">
+                    {state.status === 'loading' && (
+                        <div className="flex items-center justify-center gap-2 py-16 text-slate-400">
+                            <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                            </svg>
+                            Загрузка...
+                        </div>
+                    )}
+                    {state.status === 'error' && (
+                        <div className="px-6 py-10 text-center text-sm text-red-500">{state.message}</div>
+                    )}
+                    {state.status === 'loaded' && (
+                        <>
+                            {state.data.limited && (
+                                <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs text-amber-700">
+                                    Показаны {state.data.limit} из {state.data.total} сделок — отсортированы по сумме предоплаты
+                                </div>
+                            )}
+                            <table className="w-full text-left text-sm">
+                                <thead className="sticky top-0 bg-slate-50">
+                                    <tr>
+                                        <th className="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Менеджер</th>
+                                        <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Бюджет</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Предоплата</th>
+                                        <th className="px-4 py-3" />
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {state.data.leads.length > 0 ? state.data.leads.map((lead) => (
+                                        <tr className="transition-colors hover:bg-violet-50/50" key={lead.id}>
+                                            <td className="px-5 py-3.5 font-semibold text-gray-900">{lead.name}</td>
+                                            <td className="px-4 py-3.5 text-slate-600">{lead.manager}</td>
+                                            <td className="px-4 py-3.5 whitespace-nowrap tabular-nums text-slate-500">{lead.prepayment_date ?? '—'}</td>
+                                            <td className="px-4 py-3.5 text-right tabular-nums text-slate-600">{rubFull(lead.price)}</td>
+                                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-emerald-700">{rubFull(lead.prepayment)}</td>
+                                            <td className="px-4 py-3.5">
+                                                <a
+                                                    href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-slate-400 transition-colors hover:text-indigo-500"
+                                                >
+                                                    <ExternalLink className="size-4" />
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    )) : (
+                                        <tr>
+                                            <td className="px-5 py-8 text-center text-slate-400" colSpan={6}>
+                                                Нет сделок за выбранный период
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </>
+                    )}
+                </div>
+                {state.status === 'loaded' && (
+                    <div className="border-t border-slate-100 px-6 py-3 text-xs text-slate-400">
+                        {state.data.total} сделок · отсортировано по убыванию предоплаты
+                    </div>
+                )}
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
 // ─── Section components ───────────────────────────────────────────────────────
 
 function MonthlyColumnChart({ monthly }: { monthly: MonthlyTotal[] }) {
@@ -372,6 +514,71 @@ function ManagerSummaryTable({ managers, onRowClick }: { managers: ManagerSummar
                                         onClick={() => onRowClick(m.name)}
                                     >
                                         {rubFull(m.topupTotal)}
+                                    </button>
+                                </td>
+                                <td className="px-4 py-3.5">
+                                    <div className="flex min-w-40 items-center gap-2.5">
+                                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                            <div
+                                                className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600"
+                                                style={{ width: `${share}%` }}
+                                            />
+                                        </div>
+                                        <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-600">{share}%</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                    {managers.length > 1 && (
+                        <tr className="bg-slate-50">
+                            <td className="px-5 py-3.5 font-bold text-gray-900">Итого</td>
+                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{managers.reduce((s, m) => s + m.dealCount, 0)}</td>
+                            <td className="px-4 py-3.5 text-right font-bold tabular-nums text-gray-900">{rubFull(grandTotal)}</td>
+                            <td className="px-4 py-3.5 text-xs text-slate-400">100%</td>
+                        </tr>
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function PrepaymentSummaryTable({ managers, onRowClick }: { managers: PrepaymentManagerSummary[]; onRowClick: (name: string) => void }) {
+    const grandTotal = managers.reduce((s, m) => s + m.prepaymentTotal, 0);
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                    <tr>
+                        <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Менеджер</th>
+                        <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                        <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сумма предоплат</th>
+                        <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {managers.map((m) => {
+                        const share = grandTotal > 0 ? Math.round((m.prepaymentTotal / grandTotal) * 100) : 0;
+                        return (
+                            <tr key={m.name} className="transition-colors hover:bg-violet-50/50">
+                                <td className="px-5 py-3.5 font-semibold text-gray-900">{m.name}</td>
+                                <td className="px-4 py-3.5 text-right">
+                                    <button
+                                        type="button"
+                                        className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
+                                        onClick={() => onRowClick(m.name)}
+                                    >
+                                        {m.dealCount}
+                                    </button>
+                                </td>
+                                <td className="px-4 py-3.5 text-right">
+                                    <button
+                                        type="button"
+                                        className="font-mono font-semibold tabular-nums text-indigo-700 underline-offset-2 hover:underline"
+                                        onClick={() => onRowClick(m.name)}
+                                    >
+                                        {rubFull(m.prepaymentTotal)}
                                     </button>
                                 </td>
                                 <td className="px-4 py-3.5">
@@ -476,12 +683,14 @@ export function ManagerTopupContent({ account, from, to, links }: {
     account: Account;
     from: string;
     to: string;
-    links: { data: string; leads: string; designers: string; designerLeads: string };
+    links: { data: string; leads: string; designers: string; designerLeads: string; prepayments: string; prepaymentLeads: string };
 }) {
     const [state, setState] = useState<LoadState<BreakdownData>>({ status: 'loading' });
     const [modal, setModal] = useState<{ manager: string } | null>(null);
     const [designerState, setDesignerState] = useState<LoadState<DesignerBreakdownData>>({ status: 'loading' });
     const [designerModal, setDesignerModal] = useState<{ key: string; label: string } | null>(null);
+    const [prepaymentState, setPrepaymentState] = useState<LoadState<PrepaymentBreakdownData>>({ status: 'loading' });
+    const [prepaymentModal, setPrepaymentModal] = useState<{ manager: string } | null>(null);
 
     useEffect(() => {
         setState({ status: 'loading' });
@@ -501,8 +710,18 @@ export function ManagerTopupContent({ account, from, to, links }: {
             .catch((err) => setDesignerState({ status: 'error', message: String(err) }));
     }, [links.designers, from, to]);
 
+    useEffect(() => {
+        setPrepaymentState({ status: 'loading' });
+        const url = buildUrl(links.prepayments, { from, to });
+        fetch(url)
+            .then((r) => r.json())
+            .then((json) => setPrepaymentState({ status: 'loaded', data: json.data }))
+            .catch((err) => setPrepaymentState({ status: 'error', message: String(err) }));
+    }, [links.prepayments, from, to]);
+
     const data = state.status === 'loaded' ? state.data : null;
     const designerData = designerState.status === 'loaded' ? designerState.data : null;
+    const prepaymentData = prepaymentState.status === 'loaded' ? prepaymentState.data : null;
 
     return (
         <>
@@ -559,6 +778,39 @@ export function ManagerTopupContent({ account, from, to, links }: {
                 </>
             )}
 
+            {prepaymentState.status === 'loading' && <SectionSkeleton rows={4} />}
+            {prepaymentState.status === 'error' && <SectionError message={prepaymentState.message} />}
+            {prepaymentData && (
+                prepaymentData.managers.length > 0 ? (
+                    <ReportSection
+                        eyebrow="Предоплаты по менеджерам"
+                        title="Разбивка по менеджерам"
+                        description="Сумма предоплаты по сделке, сгруппированная по менеджеру. Период — по месяцу предполагаемой оплаты. Учитываются только сделки с положительной предоплатой. Нажмите на количество сделок или на сумму — откроется список сделок."
+                        aside={
+                            <button type="button" onClick={() => setPrepaymentModal({ manager: '' })}>
+                                <AccentSummary
+                                    label="Итого предоплат"
+                                    value={rub(prepaymentData.summary.prepaymentTotal)}
+                                    note={`${prepaymentData.summary.dealCount} сделок · ${prepaymentData.summary.managerCount} менеджеров`}
+                                    tone="brand"
+                                />
+                            </button>
+                        }
+                    >
+                        <PrepaymentSummaryTable managers={prepaymentData.managers} onRowClick={(name) => setPrepaymentModal({ manager: name })} />
+                    </ReportSection>
+                ) : (
+                    <ReportSection
+                        eyebrow="Предоплаты по менеджерам"
+                        title="Разбивка по менеджерам"
+                    >
+                        <div className="px-5 py-8">
+                            <EmptyState>Нет сделок с предоплатой за выбранный период</EmptyState>
+                        </div>
+                    </ReportSection>
+                )
+            )}
+
             {designerState.status === 'loading' && <SectionSkeleton rows={4} />}
             {designerState.status === 'error' && <SectionError message={designerState.message} />}
             {designerData && (
@@ -613,6 +865,17 @@ export function ManagerTopupContent({ account, from, to, links }: {
                     designerLabel={designerModal.label}
                     baseDomain={account.base_domain}
                     onClose={() => setDesignerModal(null)}
+                />
+            )}
+
+            {prepaymentModal !== null && (
+                <PrepaymentLeadsModal
+                    leadsUrl={links.prepaymentLeads}
+                    from={from}
+                    to={to}
+                    manager={prepaymentModal.manager}
+                    baseDomain={account.base_domain}
+                    onClose={() => setPrepaymentModal(null)}
                 />
             )}
         </>

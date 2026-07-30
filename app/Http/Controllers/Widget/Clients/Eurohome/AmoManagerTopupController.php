@@ -55,6 +55,42 @@ class AmoManagerTopupController extends Controller
         ]);
     }
 
+    public function prepayments(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        $tz = $installation->account->timezone();
+        [$from, $to] = $this->period($request, $tz);
+
+        return response()->json([
+            'data' => $service->prepaymentBreakdown(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                $tz,
+            ),
+        ]);
+    }
+
+    public function prepaymentLeads(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        $tz = $installation->account->timezone();
+        [$from, $to] = $this->period($request, $tz);
+
+        return response()->json([
+            'data' => $service->prepaymentLeads(
+                $installation->account,
+                $from,
+                $to,
+                $installation->config ?? [],
+                (string) $request->query('manager', ''),
+                300,
+                $tz,
+            ),
+        ]);
+    }
+
     public function designers(Request $request, string $publicKey, AmoManagerTopupService $service): JsonResponse
     {
         $installation = $this->installation($publicKey);

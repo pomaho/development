@@ -10,7 +10,7 @@ type Account = { name: string; base_domain: string };
 
 type Period = { from: string; to: string; label: string };
 
-type ManagerTopupLinks = { data: string; leads: string; designers: string; designerLeads: string };
+type ManagerTopupLinks = { data: string; leads: string; designers: string; designerLeads: string; prepayments: string; prepaymentLeads: string };
 type ProductGroupLinks = { data: string; leads: string };
 type SupplierLinks = { data: string; leads: string };
 type DesignerCategoryLinks = { data: string; leads: string };

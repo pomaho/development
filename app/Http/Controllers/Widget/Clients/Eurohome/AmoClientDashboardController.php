@@ -47,6 +47,8 @@ class AmoClientDashboardController extends Controller
                         'leads' => route('api.widgets.amo.manager-topup.leads', $managerTopup->public_key),
                         'designers' => route('api.widgets.amo.manager-topup.designers', $managerTopup->public_key),
                         'designerLeads' => route('api.widgets.amo.manager-topup.designers-leads', $managerTopup->public_key),
+                        'prepayments' => route('api.widgets.amo.manager-topup.prepayments', $managerTopup->public_key),
+                        'prepaymentLeads' => route('api.widgets.amo.manager-topup.prepayments-leads', $managerTopup->public_key),
                     ],
                 ],
                 'productGroup' => $productGroup === null ? null : [
