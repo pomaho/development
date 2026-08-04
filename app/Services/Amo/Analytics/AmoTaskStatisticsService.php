@@ -48,6 +48,15 @@ class AmoTaskStatisticsService
 
     public function statistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
     {
+        return Cache::remember(
+            $this->statisticsCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildStatistics($account, $from, $to),
+        );
+    }
+
+    private function buildStatistics(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
         $users = AmoUsersSnapshot::query()
             ->where('amo_account_id', $account->id)
             ->where('is_active', true)
@@ -70,6 +79,7 @@ class AmoTaskStatisticsService
 
         CrmEntitySnapshot::query()
             ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
+            ->forceIndex('ces_account_type_id')
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->orderBy('id')
@@ -179,6 +189,15 @@ class AmoTaskStatisticsService
     }
 
     public function userOverdueTasks(AmoAccount $account, int $userId, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->userOverdueTasksCacheKey($account, $userId, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildUserOverdueTasks($account, $userId, $from, $to),
+        );
+    }
+
+    private function buildUserOverdueTasks(AmoAccount $account, int $userId, ?Carbon $from = null, ?Carbon $to = null): array
     {
         $tasks = [];
 
@@ -1907,6 +1926,8 @@ class AmoTaskStatisticsService
         $rows = [];
 
         CrmEntitySnapshot::query()
+            ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
+            ->forceIndex('ces_account_type_id')
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->orderBy('id')
@@ -1971,6 +1992,33 @@ class AmoTaskStatisticsService
             ->sortBy('group_name')
             ->values()
             ->all();
+    }
+
+    private function statisticsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_task_statistics',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
+    private function userOverdueTasksCacheKey(AmoAccount $account, int $userId, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_task_user_overdue_tasks',
+            $account->id,
+            $userId,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
     }
 
     private function dashboardCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
