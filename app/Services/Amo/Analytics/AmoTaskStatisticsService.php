@@ -183,7 +183,7 @@ class AmoTaskStatisticsService
         $tasks = [];
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'entity_created_at', 'raw', 'name'])
+            ->select(['id', 'entity_created_at', 'raw', 'name', 'embedded'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->where('responsible_user_id', $userId)
@@ -207,11 +207,17 @@ class AmoTaskStatisticsService
                         continue;
                     }
 
+                    $embedded = $task->embedded ?? [];
+                    $leadId = ($embedded['entity_type'] ?? null) === 'leads'
+                        ? (int) ($embedded['entity_id'] ?? 0) ?: null
+                        : null;
+
                     $tasks[] = [
                         'text' => $raw['text'] ?? $task->name,
                         'complete_till' => $completeTill->format('d.m.Y'),
                         'completed_at' => $completedAt->format('d.m.Y'),
                         'days_overdue' => (int) $completedAt->diffInDays($completeTill),
+                        'lead_id' => $leadId,
                     ];
                 }
             });

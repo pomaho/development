@@ -126,6 +126,7 @@ type OverdueTask = {
     complete_till: string;
     completed_at: string;
     days_overdue: number;
+    lead_id: number | null;
 };
 
 type TaskStatisticsRow = {
@@ -439,7 +440,7 @@ export default function TaskOverdueDashboardV2Dev({ account, period, links }: Pr
 
                 <RecruiterDetailSection state={breakdownState} leadsUrl={links.projectCityVacancyLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
-                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} />
+                <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} baseDomain={account.base_domain} />
 
             </div>
         </div>
@@ -1291,7 +1292,7 @@ function SectionError({ message }: { message: string }) {
     );
 }
 
-function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tasks: OverdueTask[] | null; onClose: () => void }) {
+function OverdueTasksModal({ userName, tasks, baseDomain, onClose }: { userName: string; tasks: OverdueTask[] | null; baseDomain: string; onClose: () => void }) {
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', handleKey);
@@ -1326,6 +1327,7 @@ function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tas
                                         <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Дедлайн</th>
                                         <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Закрыта</th>
                                         <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Просрочка</th>
+                                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -1340,6 +1342,20 @@ function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tas
                                                 <span className="inline-flex items-center justify-center rounded-full bg-red-50 px-2 py-0.5 text-xs font-semibold tabular-nums text-red-700 ring-1 ring-red-200">
                                                     +{task.days_overdue} дн.
                                                 </span>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                {task.lead_id !== null ? (
+                                                    <a
+                                                        href={`https://${baseDomain}/leads/detail/${task.lead_id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-medium text-violet-700 hover:underline"
+                                                    >
+                                                        Открыть сделку
+                                                    </a>
+                                                ) : (
+                                                    <span className="text-slate-300">—</span>
+                                                )}
                                             </td>
                                         </tr>
                                     ))}
@@ -1357,7 +1373,7 @@ function OverdueTasksModal({ userName, tasks, onClose }: { userName: string; tas
     );
 }
 
-function TaskStatisticsSection({ state, period, userOverdueTasksUrl }: { state: LoadState<TaskStatisticsGroup[]>; period: { from: string; to: string }; userOverdueTasksUrl: string }) {
+function TaskStatisticsSection({ state, period, userOverdueTasksUrl, baseDomain }: { state: LoadState<TaskStatisticsGroup[]>; period: { from: string; to: string }; userOverdueTasksUrl: string; baseDomain: string }) {
     const [overdueModal, setOverdueModal] = useState<{ userName: string; userId: number; tasks: OverdueTask[] | null } | null>(null);
 
     const handleOverdueClick = async (userName: string, userId: number) => {
@@ -1467,6 +1483,7 @@ function TaskStatisticsSection({ state, period, userOverdueTasksUrl }: { state: 
             <OverdueTasksModal
                 userName={overdueModal.userName}
                 tasks={overdueModal.tasks}
+                baseDomain={baseDomain}
                 onClose={() => setOverdueModal(null)}
             />
         )}
