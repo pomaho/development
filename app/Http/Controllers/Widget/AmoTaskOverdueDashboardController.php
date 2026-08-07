@@ -69,6 +69,9 @@ class AmoTaskOverdueDashboardController extends Controller
                 'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2.recruiter-schedule', $publicKey),
                 'managerLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.manager-leads', $publicKey),
                 'managerLeadsList' => route('api.widgets.amo.task-overdue-dashboard-v2.manager-leads-list', $publicKey),
+                'avitoCabinetBreakdown' => route('api.widgets.amo.task-overdue-dashboard-v2.avito-cabinet-breakdown', $publicKey),
+                'avitoCabinetLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.avito-cabinet-leads', $publicKey),
+                'shiftDateLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.shift-date-leads', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2.export', $publicKey),
             ],
         ]);
@@ -185,6 +188,44 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function avitoCabinetBreakdown(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->avitoCabinetBreakdown($installation->account, $from, $to),
+        ]);
+    }
+
+    public function avitoCabinetLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->avitoCabinetLeads(
+                $installation->account,
+                $from,
+                $to,
+                (string) $request->query('cabinet', ''),
+                $request->query('success', '0') === '1',
+                200,
+            ),
+        ]);
+    }
+
+    public function shiftDateLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->shiftDateLeads($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
     public function userOverdueTasks(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
@@ -246,6 +287,9 @@ class AmoTaskOverdueDashboardController extends Controller
                 'recruiterSchedule' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.recruiter-schedule', $publicKey),
                 'managerLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.manager-leads', $publicKey),
                 'managerLeadsList' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.manager-leads-list', $publicKey),
+                'avitoCabinetBreakdown' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.avito-cabinet-breakdown', $publicKey),
+                'avitoCabinetLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.avito-cabinet-leads', $publicKey),
+                'shiftDateLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.shift-date-leads', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.export', $publicKey),
             ],
         ]);
@@ -358,6 +402,44 @@ class AmoTaskOverdueDashboardController extends Controller
                 $request->query('scheduled_only', '0') === '1',
                 200,
                 $tz,
+            ),
+        ]);
+    }
+
+    public function avitoCabinetBreakdownDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->avitoCabinetBreakdown($installation->account, $from, $to),
+        ]);
+    }
+
+    public function shiftDateLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+        $tz = $installation->account->timezone();
+
+        return response()->json([
+            'data' => $statisticsService->shiftDateLeads($installation->account, $from, $to, $installation->config ?? [], $tz),
+        ]);
+    }
+
+    public function avitoCabinetLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->avitoCabinetLeads(
+                $installation->account,
+                $from,
+                $to,
+                (string) $request->query('cabinet', ''),
+                $request->query('success', '0') === '1',
+                200,
             ),
         ]);
     }

@@ -6,6 +6,7 @@ use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
+use App\Models\CrmPipelineStatusSnapshot;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
 
@@ -23,6 +24,8 @@ class AmoTaskStatisticsService
     private const MISSING_DATES_LEAD_LIMIT = 300;
     private const DEFAULT_LEADS_PLAN_PER_DAY = 8.5;
     private const DEFAULT_MANAGER_PLAN_PERCENT = 25.0;
+    private const AVITO_CABINET_TAGS = ['Берем Всех', 'СуперПрофи', 'ПартнерСервис', 'Твой Доход', 'Твоя Работа'];
+    private const SHIFT_DATE_FIELD_NAME = 'Дата смены';
 
 
     /**
@@ -303,6 +306,71 @@ class AmoTaskStatisticsService
             now()->addMinutes(10),
             fn (): array => $this->buildRecruiterScheduleBreakdown($account, $from, $to, $config, $timezone),
         );
+    }
+
+    public function avitoCabinetBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->avitoCabinetBreakdownCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildAvitoCabinetBreakdown($account, $from, $to),
+        );
+    }
+
+    public function shiftDateLeads(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
+    {
+        return Cache::remember(
+            $this->shiftDateLeadsCacheKey($account, $from, $to, $config, $timezone),
+            now()->addMinutes(10),
+            fn (): array => $this->buildShiftDateLeads($account, $from, $to, $config, $timezone),
+        );
+    }
+
+    public function avitoCabinetLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, string $cabinetName, bool $successOnly = false, int $limit = 200): array
+    {
+        $successPairs = CrmPipelineStatusSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereRaw('LOWER(name) LIKE ?', ['%встал в график%'])
+            ->get(['amo_pipeline_id', 'amo_status_id'])
+            ->map(fn ($status): string => "{$status->amo_pipeline_id}:{$status->amo_status_id}")
+            ->flip()
+            ->all();
+
+        $normalisedCabinet = mb_strtolower(trim($cabinetName));
+        $leads = [];
+        $total = 0;
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'pipeline_id', 'status_id', 'entity_created_at', 'embedded'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $normalisedCabinet, $successOnly, $successPairs): void {
+                foreach ($chunk as $lead) {
+                    $tags = collect($lead->embedded['tags'] ?? [])->pluck('name');
+                    $matchesCabinet = $tags->contains(fn ($tagName): bool => mb_strtolower(trim((string) $tagName)) === $normalisedCabinet);
+                    if (!$matchesCabinet) {
+                        continue;
+                    }
+
+                    if ($successOnly && !isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"])) {
+                        continue;
+                    }
+
+                    $total++;
+                    if (count($leads) < $limit) {
+                        $leads[] = [
+                            'id' => $lead->external_id,
+                            'name' => $lead->name ?: 'Без названия',
+                            'created_at' => $lead->entity_created_at?->toDateString(),
+                        ];
+                    }
+                }
+            });
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
 
     public function projectCityVacancyLeads(
@@ -823,6 +891,123 @@ class AmoTaskStatisticsService
             'total_count' => $totalCount,
             'recruiters' => $recruiters,
         ];
+    }
+
+    private function buildShiftDateLeads(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
+    {
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+
+        $shiftDateField = $this->leadField($fieldQuery, (int) data_get($config, 'shift_date_field_id', 0), (string) (data_get($config, 'shift_date_field_name') ?: self::SHIFT_DATE_FIELD_NAME));
+
+        if ($shiftDateField === null) {
+            return ['field_found' => false, 'field_name' => self::SHIFT_DATE_FIELD_NAME, 'leads' => []];
+        }
+
+        $cityField = $this->leadField($fieldQuery, 0, self::CITY_FIELD_NAME);
+        $teamField = $this->leadField($fieldQuery, 0, self::TEAM_FIELD_NAME);
+        $managerField = $this->leadField($fieldQuery, 0, self::MANAGER_FIELD_NAME);
+        $recruiterField = $this->leadField($fieldQuery, 0, self::RECRUITER_FIELD_NAME);
+
+        $shiftDateFieldId = (int) $shiftDateField->amo_field_id;
+        $cityFieldId = (int) ($cityField?->amo_field_id ?? 0);
+        $teamFieldId = (int) ($teamField?->amo_field_id ?? 0);
+        $managerFieldId = (int) ($managerField?->amo_field_id ?? 0);
+        $recruiterFieldId = (int) ($recruiterField?->amo_field_id ?? 0);
+
+        $fromDate = $from?->toDateString();
+        $toDate = $to?->toDateString();
+        $leads = [];
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->orderBy('id')
+            ->chunkById(500, function ($chunk) use (&$leads, $shiftDateFieldId, $cityFieldId, $teamFieldId, $managerFieldId, $recruiterFieldId, $fromDate, $toDate, $timezone): void {
+                foreach ($chunk as $lead) {
+                    $customFields = $lead->custom_fields_values ?? [];
+                    $shiftDate = $this->customDateFieldValue($customFields, $shiftDateFieldId, $timezone);
+
+                    if ($shiftDate === null || !$this->dateInPeriod($shiftDate, $fromDate, $toDate)) {
+                        continue;
+                    }
+
+                    $leads[] = [
+                        'id' => $lead->external_id,
+                        'name' => $lead->name ?: 'Без названия',
+                        'shift_date' => $shiftDate->toDateString(),
+                        'city' => implode(', ', $this->fieldValueLabels($customFields, $cityFieldId, self::CITY_FIELD_NAME, [])) ?: null,
+                        'team' => implode(', ', $this->fieldValueLabels($customFields, $teamFieldId, self::TEAM_FIELD_NAME, [])) ?: null,
+                        'manager' => implode(', ', $this->fieldValueLabels($customFields, $managerFieldId, self::MANAGER_FIELD_NAME, [])) ?: null,
+                        'recruiter' => implode(', ', $this->fieldValueLabels($customFields, $recruiterFieldId, self::RECRUITER_FIELD_NAME, [])) ?: null,
+                    ];
+                }
+            });
+
+        usort($leads, fn (array $a, array $b): int => $b['shift_date'] <=> $a['shift_date']);
+
+        return [
+            'field_found' => true,
+            'field_name' => $shiftDateField->name,
+            'leads' => $leads,
+        ];
+    }
+
+    private function buildAvitoCabinetBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $successPairs = CrmPipelineStatusSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereRaw('LOWER(name) LIKE ?', ['%встал в график%'])
+            ->get(['amo_pipeline_id', 'amo_status_id'])
+            ->map(fn ($status): string => "{$status->amo_pipeline_id}:{$status->amo_status_id}")
+            ->flip()
+            ->all();
+
+        $counts = [];
+        foreach (self::AVITO_CABINET_TAGS as $cabinetName) {
+            $counts[$cabinetName] = ['total' => 0, 'success' => 0];
+        }
+        $normalisedCabinets = collect(self::AVITO_CABINET_TAGS)
+            ->mapWithKeys(fn (string $name): array => [mb_strtolower(trim($name)) => $name])
+            ->all();
+
+        CrmEntitySnapshot::query()
+            ->select(['id', 'pipeline_id', 'status_id', 'entity_created_at', 'embedded'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$counts, $normalisedCabinets, $successPairs): void {
+                foreach ($leads as $lead) {
+                    $tags = collect($lead->embedded['tags'] ?? [])->pluck('name');
+                    $isSuccess = isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"]);
+
+                    foreach ($tags as $tagName) {
+                        $cabinetName = $normalisedCabinets[mb_strtolower(trim((string) $tagName))] ?? null;
+                        if ($cabinetName === null) {
+                            continue;
+                        }
+                        $counts[$cabinetName]['total']++;
+                        if ($isSuccess) {
+                            $counts[$cabinetName]['success']++;
+                        }
+                    }
+                }
+            });
+
+        $cabinets = [];
+        foreach (self::AVITO_CABINET_TAGS as $cabinetName) {
+            $cabinets[] = [
+                'name' => $cabinetName,
+                'total_count' => $counts[$cabinetName]['total'],
+                'success_count' => $counts[$cabinetName]['success'],
+            ];
+        }
+
+        return ['cabinets' => $cabinets];
     }
 
     private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
@@ -1707,6 +1892,34 @@ class AmoTaskStatisticsService
             data_get($config, 'success_status_id') ?: 'none',
             data_get($config, 'recruiter_field_id') ?: data_get($config, 'recruiter_field_name', self::RECRUITER_FIELD_NAME),
             data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
+        ]);
+    }
+
+    private function shiftDateLeadsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config, string $timezone = 'UTC'): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_shift_date_leads',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+            $timezone,
+            data_get($config, 'shift_date_field_id') ?: data_get($config, 'shift_date_field_name', self::SHIFT_DATE_FIELD_NAME),
+        ]);
+    }
+
+    private function avitoCabinetBreakdownCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_avito_cabinet_breakdown',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
         ]);
     }
 

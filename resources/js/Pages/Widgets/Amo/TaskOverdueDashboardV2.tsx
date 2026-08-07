@@ -108,6 +108,32 @@ type ManagerLeadDistribution = {
     managers: ManagerLeadRow[];
 };
 
+type AvitoCabinetRow = {
+    name: string;
+    total_count: number;
+    success_count: number;
+};
+
+type AvitoCabinetBreakdown = {
+    cabinets: AvitoCabinetRow[];
+};
+
+type ShiftDateLead = {
+    id: number;
+    name: string;
+    shift_date: string;
+    city: string | null;
+    team: string | null;
+    manager: string | null;
+    recruiter: string | null;
+};
+
+type ShiftDateLeadsData = {
+    field_found: boolean;
+    field_name: string;
+    leads: ShiftDateLead[];
+};
+
 type OverdueTask = {
     text: string | null;
     complete_till: string;
@@ -205,6 +231,9 @@ type Props = {
         recruiterSchedule: string;
         managerLeads: string;
         managerLeadsList: string;
+        avitoCabinetBreakdown: string;
+        avitoCabinetLeads: string;
+        shiftDateLeads: string;
         export: string;
     };
 };
@@ -329,6 +358,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
     const projectCityVacancyState = useApiData<ProjectCityVacancyBreakdown>(links.projectCityVacancy, periodParams);
     const scheduleState = useApiData<RecruiterScheduleBreakdown>(links.recruiterSchedule, periodParams);
     const managerLeadsState = useApiData<ManagerLeadDistribution>(links.managerLeads, periodParams);
+    const avitoCabinetState = useApiData<AvitoCabinetBreakdown>(links.avitoCabinetBreakdown, periodParams);
+    const shiftDateLeadsState = useApiData<ShiftDateLeadsData>(links.shiftDateLeads, periodParams);
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') return;
@@ -424,8 +455,231 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
 
                 <TaskStatisticsSection state={taskStatsState} period={period} userOverdueTasksUrl={links.userOverdueTasks} baseDomain={account.base_domain} />
 
+                <AvitoCabinetSection state={avitoCabinetState} leadsUrl={links.avitoCabinetLeads} periodParams={periodParams} baseDomain={account.base_domain} />
+
+                <ShiftDateLeadsSection state={shiftDateLeadsState} baseDomain={account.base_domain} />
+
             </div>
         </div>
+    );
+}
+
+function ShiftDateLeadsSection({ state, baseDomain }: { state: LoadState<ShiftDateLeadsData>; baseDomain: string }) {
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    return (
+        <ReportSection
+            eyebrow="Смены"
+            title={`Сделки с заполненным полем "${data.field_name}"`}
+            description="Сделки, у которых заполнена дата смены, попадающая в выбранный период."
+            aside={<AccentSummary label="Сделок" value={data.leads.length} note="с датой смены в периоде" tone="brand" />}
+        >
+            {!data.field_found ? (
+                <div className="px-5 py-8">
+                    <EmptyState>Поле «{data.field_name}» не найдено. Запустите синхронизацию структуры CRM.</EmptyState>
+                </div>
+            ) : data.leads.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                            <tr>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата смены</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Город</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Команда</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Менеджер</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Рекрутер</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {data.leads.map((lead) => (
+                                <tr key={lead.id} className="transition-colors hover:bg-violet-50/50">
+                                    <td className="px-5 py-3.5">
+                                        <a
+                                            href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-medium text-violet-700 hover:underline"
+                                        >
+                                            {lead.name}
+                                        </a>
+                                    </td>
+                                    <td className="px-4 py-3.5 tabular-nums text-slate-700">{lead.shift_date}</td>
+                                    <td className="px-4 py-3.5 text-slate-700">{lead.city ?? '—'}</td>
+                                    <td className="px-4 py-3.5 text-slate-700">{lead.team ?? '—'}</td>
+                                    <td className="px-4 py-3.5 text-slate-700">{lead.manager ?? '—'}</td>
+                                    <td className="px-4 py-3.5 text-slate-700">{lead.recruiter ?? '—'}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
+                    <Inbox className="size-8" />
+                    <p className="text-sm">Нет сделок с датой смены в выбранном периоде</p>
+                </div>
+            )}
+        </ReportSection>
+    );
+}
+
+type AvitoCabinetLeadsFilter = {
+    cabinet: string;
+    successOnly: boolean;
+    label: string;
+};
+
+function AvitoCabinetSection({ state, leadsUrl, periodParams, baseDomain }: { state: LoadState<AvitoCabinetBreakdown>; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
+    const [leadsFilter, setLeadsFilter] = useState<AvitoCabinetLeadsFilter | null>(null);
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const cabinets = state.data.cabinets;
+
+    return (
+        <>
+        <ReportSection
+            eyebrow="Авито"
+            title="Лиды по кабинетам Авито"
+            description="Количество лидов за выбранный период по каждому кабинету Авито (определяется по тегу лида) и сколько из них дошло до этапа «Встал в график». Нажмите на число — откроется список сделок."
+        >
+            {cabinets.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="bg-gradient-to-r from-slate-50 to-white text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                                <th className="px-5 py-3">Кабинет Авито</th>
+                                <th className="px-5 py-3 text-right">Лидов</th>
+                                <th className="px-5 py-3 text-right">Встал в график</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {cabinets.map((cabinet) => (
+                                <tr key={cabinet.name}>
+                                    <td className="px-5 py-3 font-semibold text-gray-900">{cabinet.name}</td>
+                                    <td className="px-5 py-3 text-right">
+                                        <CountButton
+                                            value={cabinet.total_count}
+                                            onClick={() => setLeadsFilter({ cabinet: cabinet.name, successOnly: false, label: `${cabinet.name} — все лиды` })}
+                                        />
+                                    </td>
+                                    <td className="px-5 py-3 text-right font-bold text-emerald-600">
+                                        <CountButton
+                                            value={cabinet.success_count}
+                                            onClick={() => setLeadsFilter({ cabinet: cabinet.name, successOnly: true, label: `${cabinet.name} — встал в график` })}
+                                        />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-slate-400">
+                    <Inbox className="size-8" />
+                    <p className="text-sm">Нет данных по кабинетам Авито за выбранный период</p>
+                </div>
+            )}
+        </ReportSection>
+        {leadsFilter !== null && (
+            <AvitoCabinetLeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
+        )}
+        </>
+    );
+}
+
+function AvitoCabinetLeadsModal({
+    filter,
+    leadsUrl,
+    periodParams,
+    baseDomain,
+    onClose,
+}: {
+    filter: AvitoCabinetLeadsFilter;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+    onClose: () => void;
+}) {
+    const params = { ...periodParams, cabinet: filter.cabinet, success: filter.successOnly ? '1' : '0' };
+    const leadsState = useApiData<LeadsResult>(leadsUrl, params);
+
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Сделки</p>
+                        <h2 className="mt-0.5 font-bold text-gray-900">{filter.label}</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Закрыть">
+                        <X className="size-5" />
+                    </button>
+                </div>
+                {leadsState.status === 'loading' && (
+                    <div className="flex items-center justify-center py-16 text-slate-400">
+                        <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                        Загрузка...
+                    </div>
+                )}
+                {leadsState.status === 'error' && (
+                    <div className="px-6 py-8 text-center text-sm text-red-500">Ошибка загрузки: {leadsState.message}</div>
+                )}
+                {leadsState.status === 'ok' && (
+                    <>
+                        {leadsState.data.limited && (
+                            <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs text-amber-700">
+                                Показаны первые {leadsState.data.limit} из {leadsState.data.total} сделок
+                            </div>
+                        )}
+                        <div className="overflow-y-auto">
+                            {leadsState.data.leads.length === 0 ? (
+                                <div className="px-6 py-8 text-center text-sm text-slate-400">Нет сделок</div>
+                            ) : (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-slate-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата создания</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {leadsState.data.leads.map((lead) => (
+                                            <tr key={lead.id} className="transition-colors hover:bg-violet-50/50">
+                                                <td className="px-6 py-3">
+                                                    <a
+                                                        href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-medium text-violet-700 hover:underline"
+                                                    >
+                                                        {lead.name}
+                                                    </a>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">{lead.created_at ?? '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="border-t border-slate-100 px-6 py-3 text-right text-xs text-slate-400">
+                            Итого: {leadsState.data.total} сделок
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>,
+        document.body,
     );
 }
 

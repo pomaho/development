@@ -90,6 +90,15 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/manager-leads
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/manager-leads-list', [AmoTaskOverdueDashboardController::class, 'managerLeadsList'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.manager-leads-list');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/avito-cabinet-breakdown', [AmoTaskOverdueDashboardController::class, 'avitoCabinetBreakdown'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.avito-cabinet-breakdown');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/avito-cabinet-leads', [AmoTaskOverdueDashboardController::class, 'avitoCabinetLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.avito-cabinet-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/shift-date-leads', [AmoTaskOverdueDashboardController::class, 'shiftDateLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.shift-date-leads');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/export', [AmoTaskOverdueDashboardController::class, 'exportV2'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.export');
@@ -125,6 +134,15 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/manager-l
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/manager-leads-list', [AmoTaskOverdueDashboardController::class, 'managerLeadsListDev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.manager-leads-list');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/avito-cabinet-breakdown', [AmoTaskOverdueDashboardController::class, 'avitoCabinetBreakdownDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.avito-cabinet-breakdown');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/avito-cabinet-leads', [AmoTaskOverdueDashboardController::class, 'avitoCabinetLeadsDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.avito-cabinet-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/shift-date-leads', [AmoTaskOverdueDashboardController::class, 'shiftDateLeadsDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.shift-date-leads');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/export', [AmoTaskOverdueDashboardController::class, 'exportV2Dev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.export');
