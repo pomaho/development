@@ -6,6 +6,7 @@ use App\Models\AmoAccount;
 use App\Models\AmoUsersSnapshot;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
+use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Carbon;
@@ -26,6 +27,7 @@ class AmoTaskStatisticsService
     private const DEFAULT_MANAGER_PLAN_PERCENT = 25.0;
     private const AVITO_CABINET_TAGS = ['Берем Всех', 'СуперПрофи', 'ПартнерСервис', 'Твой Доход', 'Твоя Работа'];
     private const SHIFT_DATE_FIELD_NAME = 'Дата смены';
+    private const SHIFT_DATE_PIPELINE_NAME = 'Массовый подбор';
 
 
     /**
@@ -920,17 +922,35 @@ class AmoTaskStatisticsService
         $toDate = $to?->toDateString();
         $leads = [];
 
+        $successPipelineIds = CrmPipelineSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(self::SHIFT_DATE_PIPELINE_NAME) . '%'])
+            ->pluck('amo_pipeline_id');
+
+        $successPairs = CrmPipelineStatusSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereIn('amo_pipeline_id', $successPipelineIds)
+            ->whereRaw('LOWER(name) LIKE ?', ['%встал в график%'])
+            ->get(['amo_pipeline_id', 'amo_status_id'])
+            ->map(fn ($status): string => "{$status->amo_pipeline_id}:{$status->amo_status_id}")
+            ->flip()
+            ->all();
+
         CrmEntitySnapshot::query()
-            ->select(['id', 'external_id', 'name', 'custom_fields_values'])
+            ->select(['id', 'external_id', 'name', 'pipeline_id', 'status_id', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, $shiftDateFieldId, $cityFieldId, $teamFieldId, $managerFieldId, $recruiterFieldId, $fromDate, $toDate, $timezone): void {
+            ->chunkById(500, function ($chunk) use (&$leads, $shiftDateFieldId, $cityFieldId, $teamFieldId, $managerFieldId, $recruiterFieldId, $fromDate, $toDate, $timezone, $successPairs): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
                     $shiftDate = $this->customDateFieldValue($customFields, $shiftDateFieldId, $timezone);
 
                     if ($shiftDate === null || !$this->dateInPeriod($shiftDate, $fromDate, $toDate)) {
+                        continue;
+                    }
+
+                    if (!isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"])) {
                         continue;
                     }
 
