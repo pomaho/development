@@ -24,6 +24,8 @@ class WidgetExcelExportService
         array $breakdown,
         array $projectCityVacancy,
         array $taskStatistics,
+        ?array $avitoCabinetBreakdown = null,
+        ?array $shiftDateLeads = null,
     ): StreamedResponse {
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
@@ -33,6 +35,14 @@ class WidgetExcelExportService
         $this->teamCitySheet($spreadsheet, $breakdown);
         $this->projectCityVacancySheet($spreadsheet, $projectCityVacancy);
         $this->taskStatisticsSheet($spreadsheet, $taskStatistics);
+
+        if ($avitoCabinetBreakdown !== null) {
+            $this->avitoCabinetSheet($spreadsheet, $avitoCabinetBreakdown);
+        }
+
+        if ($shiftDateLeads !== null) {
+            $this->shiftDateLeadsSheet($spreadsheet, $shiftDateLeads);
+        }
 
         $spreadsheet->setActiveSheetIndex(0);
 
@@ -215,6 +225,58 @@ class WidgetExcelExportService
                 }
                 $row++;
             }
+        }
+
+        $this->autoWidth($sheet, count($headers));
+    }
+
+    private function avitoCabinetSheet(Spreadsheet $spreadsheet, array $data): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Кабинеты Авито');
+
+        $headers = ['Кабинет Авито', 'Лидов', 'Встал в график'];
+        $this->writeHeader($sheet, $headers, 1);
+
+        $row = 2;
+        $totalCount = 0;
+        $totalSuccess = 0;
+        foreach ($data['cabinets'] ?? [] as $cabinet) {
+            $sheet->setCellValue("A{$row}", $cabinet['name']);
+            $sheet->setCellValue("B{$row}", $cabinet['total_count']);
+            $sheet->setCellValue("C{$row}", $cabinet['success_count']);
+            $totalCount += $cabinet['total_count'];
+            $totalSuccess += $cabinet['success_count'];
+            if ($row % 2 === 0) {
+                $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
+            }
+            $row++;
+        }
+
+        $this->writeTotalRow($sheet, $row, ['Итого', $totalCount, $totalSuccess]);
+        $this->autoWidth($sheet, count($headers));
+    }
+
+    private function shiftDateLeadsSheet(Spreadsheet $spreadsheet, array $data): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Вышедшие в смену');
+
+        $headers = ['Сделка', 'Дата смены', 'Город', 'Команда', 'Менеджер', 'Рекрутер'];
+        $this->writeHeader($sheet, $headers, 1);
+
+        $row = 2;
+        foreach ($data['leads'] ?? [] as $lead) {
+            $sheet->setCellValue("A{$row}", $lead['name']);
+            $sheet->setCellValue("B{$row}", $lead['shift_date']);
+            $sheet->setCellValue("C{$row}", $lead['city']);
+            $sheet->setCellValue("D{$row}", $lead['team']);
+            $sheet->setCellValue("E{$row}", $lead['manager']);
+            $sheet->setCellValue("F{$row}", $lead['recruiter']);
+            if ($row % 2 === 0) {
+                $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
+            }
+            $row++;
         }
 
         $this->autoWidth($sheet, count($headers));
