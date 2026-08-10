@@ -18,14 +18,20 @@ class WidgetExcelExportService
     private const TOTAL_BG  = 'FFE2E8F0';
     private const ALT_BG    = 'FFF8FAFC';
 
+    /**
+     * @param array<int, array{title: string, columns: array<string, string>, rows: array, totals?: bool}> $flatReports
+     *   Additional simple (flat, non-nested) reports to append as sheets, e.g.:
+     *   ['title' => 'Кабинеты Авито', 'columns' => ['name' => 'Кабинет', 'total_count' => 'Лидов'], 'rows' => [...], 'totals' => true]
+     *   Each entry becomes one sheet with no code changes needed in this service —
+     *   register a new flat report by adding an entry to this array at the call site.
+     */
     public function export(
         string $filename,
         array $recruiterLeads,
         array $breakdown,
         array $projectCityVacancy,
         array $taskStatistics,
-        ?array $avitoCabinetBreakdown = null,
-        ?array $shiftDateLeads = null,
+        array $flatReports = [],
     ): StreamedResponse {
         $spreadsheet = new Spreadsheet();
         $spreadsheet->removeSheetByIndex(0);
@@ -36,12 +42,8 @@ class WidgetExcelExportService
         $this->projectCityVacancySheet($spreadsheet, $projectCityVacancy);
         $this->taskStatisticsSheet($spreadsheet, $taskStatistics);
 
-        if ($avitoCabinetBreakdown !== null) {
-            $this->avitoCabinetSheet($spreadsheet, $avitoCabinetBreakdown);
-        }
-
-        if ($shiftDateLeads !== null) {
-            $this->shiftDateLeadsSheet($spreadsheet, $shiftDateLeads);
+        foreach ($flatReports as $report) {
+            $this->flatReportSheet($spreadsheet, $report);
         }
 
         $spreadsheet->setActiveSheetIndex(0);
@@ -230,53 +232,44 @@ class WidgetExcelExportService
         $this->autoWidth($sheet, count($headers));
     }
 
-    private function avitoCabinetSheet(Spreadsheet $spreadsheet, array $data): void
+    /**
+     * Generic sheet builder for flat (non-nested) reports: a list of associative
+     * rows plus a column-key => header-label map. Used for any report registered
+     * via the $flatReports argument of export() — see its docblock.
+     */
+    private function flatReportSheet(Spreadsheet $spreadsheet, array $report): void
     {
         $sheet = $spreadsheet->createSheet();
-        $sheet->setTitle('Кабинеты Авито');
+        $sheet->setTitle($report['title']);
 
-        $headers = ['Кабинет Авито', 'Лидов', 'Встал в график'];
+        $columns = $report['columns'];
+        $keys = array_keys($columns);
+        $headers = array_values($columns);
         $this->writeHeader($sheet, $headers, 1);
 
         $row = 2;
-        $totalCount = 0;
-        $totalSuccess = 0;
-        foreach ($data['cabinets'] ?? [] as $cabinet) {
-            $sheet->setCellValue("A{$row}", $cabinet['name']);
-            $sheet->setCellValue("B{$row}", $cabinet['total_count']);
-            $sheet->setCellValue("C{$row}", $cabinet['success_count']);
-            $totalCount += $cabinet['total_count'];
-            $totalSuccess += $cabinet['success_count'];
+        $totals = array_fill(0, count($keys), 0);
+        foreach ($report['rows'] as $item) {
+            foreach ($keys as $i => $key) {
+                $col = $this->colLetter($i);
+                $value = $item[$key] ?? null;
+                $sheet->setCellValue("{$col}{$row}", $value);
+                if (is_int($value) || is_float($value)) {
+                    $totals[$i] += $value;
+                }
+            }
             if ($row % 2 === 0) {
                 $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
             }
             $row++;
         }
 
-        $this->writeTotalRow($sheet, $row, ['Итого', $totalCount, $totalSuccess]);
-        $this->autoWidth($sheet, count($headers));
-    }
-
-    private function shiftDateLeadsSheet(Spreadsheet $spreadsheet, array $data): void
-    {
-        $sheet = $spreadsheet->createSheet();
-        $sheet->setTitle('Вышедшие в смену');
-
-        $headers = ['Сделка', 'Дата смены', 'Город', 'Команда', 'Менеджер', 'Рекрутер'];
-        $this->writeHeader($sheet, $headers, 1);
-
-        $row = 2;
-        foreach ($data['leads'] ?? [] as $lead) {
-            $sheet->setCellValue("A{$row}", $lead['name']);
-            $sheet->setCellValue("B{$row}", $lead['shift_date']);
-            $sheet->setCellValue("C{$row}", $lead['city']);
-            $sheet->setCellValue("D{$row}", $lead['team']);
-            $sheet->setCellValue("E{$row}", $lead['manager']);
-            $sheet->setCellValue("F{$row}", $lead['recruiter']);
-            if ($row % 2 === 0) {
-                $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
+        if ($report['totals'] ?? false) {
+            $totalRow = ['Итого'];
+            for ($i = 1; $i < count($keys); $i++) {
+                $totalRow[] = $totals[$i];
             }
-            $row++;
+            $this->writeTotalRow($sheet, $row, $totalRow);
         }
 
         $this->autoWidth($sheet, count($headers));

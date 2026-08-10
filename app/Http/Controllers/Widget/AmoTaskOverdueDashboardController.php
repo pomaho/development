@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Widget;
 
 use App\Http\Controllers\Controller;
+use App\Models\AmoAccount;
 use App\Models\AmoAccountDashboardWidget;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use App\Services\Exports\WidgetExcelExportService;
@@ -468,8 +469,7 @@ class AmoTaskOverdueDashboardController extends Controller
             $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->statistics($installation->account, $from, $to),
-            $statisticsService->avitoCabinetBreakdown($installation->account, $from, $to),
-            $statisticsService->shiftDateLeads($installation->account, $from, $to, $config, $tz),
+            $this->flatReportsForExport($statisticsService, $installation->account, $from, $to, $config, $tz),
         );
     }
 
@@ -486,9 +486,44 @@ class AmoTaskOverdueDashboardController extends Controller
             $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->statistics($installation->account, $from, $to),
-            $statisticsService->avitoCabinetBreakdown($installation->account, $from, $to),
-            $statisticsService->shiftDateLeads($installation->account, $from, $to, $config, $tz),
+            $this->flatReportsForExport($statisticsService, $installation->account, $from, $to, $config, $tz),
         );
+    }
+
+    /**
+     * Simple (flat, non-nested) reports included in the Excel export, shared by
+     * exportV2() and exportV2Dev(). To add a new flat report to the export, add
+     * an entry here — no changes needed in WidgetExcelExportService.
+     *
+     * @return array<int, array{title: string, columns: array<string, string>, rows: array, totals?: bool}>
+     */
+    private function flatReportsForExport(AmoTaskStatisticsService $statisticsService, AmoAccount $account, Carbon $from, Carbon $to, array $config, string $tz): array
+    {
+        return [
+            [
+                'title' => 'Кабинеты Авито',
+                'columns' => [
+                    'name' => 'Кабинет Авито',
+                    'total_count' => 'Лидов',
+                    'success_count' => 'Встал в график',
+                ],
+                'rows' => $statisticsService->avitoCabinetBreakdown($account, $from, $to)['cabinets'] ?? [],
+                'totals' => true,
+            ],
+            [
+                'title' => 'Вышедшие в смену',
+                'columns' => [
+                    'name' => 'Сделка',
+                    'shift_date' => 'Дата смены',
+                    'city' => 'Город',
+                    'team' => 'Команда',
+                    'manager' => 'Менеджер',
+                    'recruiter' => 'Рекрутер',
+                ],
+                'rows' => $statisticsService->shiftDateLeads($account, $from, $to, $config, $tz)['leads'] ?? [],
+                'totals' => false,
+            ],
+        ];
     }
 
     private function installation(string $publicKey, string $widgetCode = 'task_overdue_dashboard'): AmoAccountDashboardWidget
