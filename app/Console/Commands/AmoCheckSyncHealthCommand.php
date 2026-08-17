@@ -134,13 +134,31 @@ class AmoCheckSyncHealthCommand extends Command
             }
 
             if ($ours['disabled'] ?? false) {
-                $notifier->sendThrottled(
-                    "webhook_disabled:{$account->id}",
-                    "🔴 Вебхук отключён в amoCRM\n\n".
-                    "Аккаунт: {$domain}\n".
-                    'amoCRM отключает подписку после серии сбоев доставки. Переподключить: раздел вебхуков в настройках интеграции amoCRM.',
-                    minutes: 360,
-                );
+                try {
+                    $webhooksService->unsubscribe($account, $ours['destination']);
+                    $webhooksService->register($account, $ours['destination'], $ours['settings'] ?? []);
+
+                    $notifier->sendThrottled(
+                        "webhook_disabled:{$account->id}",
+                        "🔄 Вебхук был отключён в amoCRM — автоматически переподключил\n\n".
+                        "Аккаунт: {$domain}\n".
+                        'amoCRM отключает подписку после серии сбоев доставки. Если это повторяется часто — стоит разобраться в причине сбоев доставки на нашей стороне.',
+                        minutes: 360,
+                    );
+                } catch (Throwable $exception) {
+                    Log::error('Failed to auto-reconnect a disabled webhook.', [
+                        'amo_account_id' => $account->id,
+                        'exception' => $exception,
+                    ]);
+
+                    $notifier->sendThrottled(
+                        "webhook_reconnect_failed:{$account->id}",
+                        "🔴 Вебхук отключён в amoCRM, автопереподключение не удалось\n\n".
+                        "Аккаунт: {$domain}\n".
+                        'Переподключить вручную: раздел вебхуков в настройках интеграции amoCRM.',
+                        minutes: 360,
+                    );
+                }
             }
         }
     }
