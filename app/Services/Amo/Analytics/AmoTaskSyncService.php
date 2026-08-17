@@ -6,7 +6,9 @@ use App\Models\AmoAccount;
 use App\Models\CrmEntitySnapshot;
 use App\Models\TaskStatisticsSyncRun;
 use App\Services\Amo\Client\AmoFallbackHttpClient;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 class AmoTaskSyncService
 {
@@ -29,9 +31,11 @@ class AmoTaskSyncService
             ...$this->updatedAtQuery($from, $to),
         ], $syncedAt, $run, 'completed');
         $completionEvents = $this->syncCompletionEvents($account, $from, $to, $run, $syncedAt);
+        $openIds = [];
         $open = $this->syncTaskQuery($account, [
             'filter[is_completed]' => 0,
-        ], $syncedAt, $run, 'open');
+        ], $syncedAt, $run, 'open', $openIds);
+        $this->reconcileMissingOpenTasks($account, $openIds);
         $events = $this->syncEvents($account, $from, $to, $syncedAt);
 
         $run?->forceFill([
@@ -48,18 +52,19 @@ class AmoTaskSyncService
         ];
     }
 
-    private function syncTaskQuery(AmoAccount $account, array $query, Carbon $syncedAt, ?TaskStatisticsSyncRun $run, string $type): int
+    private function syncTaskQuery(AmoAccount $account, array $query, Carbon $syncedAt, ?TaskStatisticsSyncRun $run, string $type, array &$collectedIds = []): int
     {
         $page = 1;
         $total = 0;
 
         do {
-            $payload = $this->http->get($account, '/api/v4/tasks', [...$query, 'page' => $page, 'limit' => 250]);
+            $payload = $this->getWithRetry($account, '/api/v4/tasks', [...$query, 'page' => $page, 'limit' => 250]);
             $tasks = $payload['_embedded']['tasks'] ?? [];
             $tasks = is_array($tasks) ? $tasks : [];
 
             foreach ($tasks as $task) {
                 $this->saveTask($account, $task, $syncedAt);
+                $collectedIds[] = (string) $task['id'];
             }
 
             $count = count($tasks);
@@ -79,6 +84,33 @@ class AmoTaskSyncService
         return $total;
     }
 
+    /**
+     * The open-tasks fetch above has no date filter, so it's always the complete,
+     * authoritative list of currently-open task ids. Any task still marked open
+     * in our snapshot but absent from that list is gone in amoCRM — completed
+     * without a matching completion event, or deleted outright (this app has no
+     * webhook coverage for every possible cause of disappearance) — so it no
+     * longer belongs in "open"/"overdue" counts. Delete it, matching how
+     * AmoWebhookService::process() already handles explicit *.delete webhooks.
+     */
+    private function reconcileMissingOpenTasks(AmoAccount $account, array $openIds): void
+    {
+        if ($openIds === []) {
+            Log::warning('Skipping task reconciliation: open-tasks fetch returned zero ids.', [
+                'amo_account_id' => $account->id,
+            ]);
+
+            return;
+        }
+
+        CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'tasks')
+            ->whereRaw("JSON_EXTRACT(raw, '$.is_completed') = false")
+            ->whereNotIn('external_id', $openIds)
+            ->delete();
+    }
+
     private function syncCompletionEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, ?TaskStatisticsSyncRun $run, Carbon $syncedAt): int
     {
         $page = 1;
@@ -91,7 +123,7 @@ class AmoTaskSyncService
         ];
 
         do {
-            $payload = $this->http->get($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
+            $payload = $this->getWithRetry($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
             $events = $payload['_embedded']['events'] ?? [];
             $events = is_array($events) ? $events : [];
 
@@ -138,7 +170,7 @@ class AmoTaskSyncService
                 continue;
             }
 
-            $payload = $this->http->get($account, '/api/v4/tasks', [
+            $payload = $this->getWithRetry($account, '/api/v4/tasks', [
                 'filter[id]' => array_keys($statsChunk),
                 'page' => 1,
                 'limit' => 250,
@@ -167,7 +199,7 @@ class AmoTaskSyncService
         $query = $this->createdAtQuery($from, $to);
 
         do {
-            $payload = $this->http->get($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
+            $payload = $this->getWithRetry($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
             $events = $payload['_embedded']['events'] ?? [];
             $events = is_array($events) ? $events : [];
 
@@ -189,6 +221,36 @@ class AmoTaskSyncService
         } while (($pageCount > 0 && $currentPage < $pageCount) || ($pageCount === 0 && $hasNext));
 
         return $total;
+    }
+
+    /**
+     * Wraps a single page fetch with a few retries on transient connection
+     * timeouts. Full syncs page through thousands of requests (events in
+     * particular — a busy account can have 1000+ pages for a wide date
+     * range), so an occasional network blip shouldn't abort the whole run
+     * and lose all prior progress.
+     */
+    private function getWithRetry(AmoAccount $account, string $path, array $query, int $attempts = 3): array
+    {
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                return $this->http->get($account, $path, $query);
+            } catch (ConnectionException $exception) {
+                if ($attempt >= $attempts) {
+                    throw $exception;
+                }
+
+                Log::warning('Retrying amoCRM API call after connection timeout.', [
+                    'amo_account_id' => $account->id,
+                    'path' => $path,
+                    'attempt' => $attempt,
+                ]);
+
+                usleep(1_000_000 * $attempt);
+            }
+        }
+
+        return [];
     }
 
     private function saveTask(AmoAccount $account, array $task, Carbon $syncedAt): void

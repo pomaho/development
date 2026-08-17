@@ -268,9 +268,9 @@ class CrmAuditService
     ): int {
         $count = 0;
 
-        foreach ($this->fetchPaginated($account, $path, $embeddedKey, $query) as $entity) {
+        $this->eachPaginated($account, $path, $embeddedKey, $query, function (array $entity) use ($account, $entityType, $syncedAt, $filter, &$count): void {
             if ($filter !== null && ! $filter($entity)) {
-                continue;
+                return;
             }
 
             CrmEntitySnapshot::query()->updateOrCreate(
@@ -290,9 +290,43 @@ class CrmAuditService
                 ]
             );
             $count++;
-        }
+        });
 
         return $count;
+    }
+
+    /**
+     * Like fetchPaginated(), but invokes $onItem per page instead of
+     * accumulating every matched entity into one array before returning.
+     * syncSimpleEntity() covers leads/contacts/tasks/etc., where a wide
+     * date range can match thousands of records with embedded payloads —
+     * holding them all in memory at once is what actually exhausts PHP's
+     * memory_limit on large backfills, not any single page.
+     */
+    private function eachPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query, callable $onItem): void
+    {
+        $page = 1;
+
+        do {
+            $payload = $this->http->get($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
+            $items = $payload['_embedded'][$embeddedKey] ?? [];
+            $items = is_array($items) ? $items : [];
+
+            foreach ($items as $item) {
+                $onItem($item);
+            }
+
+            $currentPage = (int) ($payload['_page'] ?? $page);
+            $pageCount = (int) ($payload['_page_count'] ?? $currentPage);
+            $hasNext = isset($payload['_links']['next']);
+            $page++;
+
+            unset($payload, $items);
+
+            if ($hasNext) {
+                usleep(160000);
+            }
+        } while ($hasNext || $currentPage < $pageCount);
     }
 
     private function periodQuery(?Carbon $from, ?Carbon $to): array
