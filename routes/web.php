@@ -34,6 +34,7 @@ use App\Http\Controllers\Widget\Clients\Eurohome\AmoDesignerCategoryController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoManagerTopupController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoProductGroupController;
 use App\Http\Controllers\Widget\Clients\Eurohome\AmoSupplierController;
+use App\Http\Controllers\Widget\AmoManagerPipelineDashboardController;
 use App\Http\Controllers\Widget\AmoTaskOverdueDashboardController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
@@ -146,6 +147,26 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/shift-dat
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/export', [AmoTaskOverdueDashboardController::class, 'exportV2Dev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.export');
+
+// Manager Pipeline Dashboard (anyservice — воронка "Менеджеры подбор")
+Route::get('/widgets/amo/{publicKey}/manager-pipeline-dashboard', [AmoManagerPipelineDashboardController::class, 'show'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('widgets.amo.manager-pipeline-dashboard.show');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/overview', [AmoManagerPipelineDashboardController::class, 'overview'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.overview');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/overview-leads', [AmoManagerPipelineDashboardController::class, 'overviewLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.overview-leads');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/shift-breakdown', [AmoManagerPipelineDashboardController::class, 'shiftBreakdown'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.shift-breakdown');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/shift-leads', [AmoManagerPipelineDashboardController::class, 'shiftLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.shift-leads');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/export', [AmoManagerPipelineDashboardController::class, 'export'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.export');
 
 // Manager Topup Dashboard
 Route::get('/api/widgets/amo/{publicKey}/manager-topup/data', [AmoManagerTopupController::class, 'data'])

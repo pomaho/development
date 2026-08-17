@@ -28,6 +28,8 @@ class AmoTaskStatisticsService
     private const AVITO_CABINET_TAGS = ['Берем Всех', 'СуперПрофи', 'ПартнерСервис', 'Твой Доход', 'Твоя Работа'];
     private const SHIFT_DATE_FIELD_NAME = 'Дата смены';
     private const SHIFT_DATE_PIPELINE_NAME = 'Массовый подбор';
+    private const MANAGER_PIPELINE_NAME = 'Менеджеры подбор';
+    private const FIFTH_SHIFT_FIELD_NAME = 'Вышел на 5 смену';
 
 
     /**
@@ -371,6 +373,113 @@ class AmoTaskStatisticsService
                     }
                 }
             });
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
+    }
+
+    public function managerPipelineOverview(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $stats = $this->managerPipelineStats($account, $from, $to);
+
+        $rows = collect($stats['managers'])
+            ->map(fn (array $m): array => [
+                'name' => $m['name'],
+                'total_count' => $m['total_count'],
+                'success_count' => $m['success_count'],
+                'conversion_rate' => $m['total_count'] > 0 ? round($m['success_count'] / $m['total_count'] * 100, 1) : 0.0,
+            ])
+            ->sortByDesc('total_count')
+            ->values()
+            ->all();
+
+        return [
+            'pipeline_found' => $stats['pipeline_found'],
+            'pipeline_name' => $stats['pipeline_name'],
+            'manager_field_found' => $stats['manager_field_found'],
+            'manager_field_name' => self::MANAGER_FIELD_NAME,
+            'success_status_name' => $stats['success_status_name'],
+            'total_count' => (int) collect($rows)->sum('total_count'),
+            'success_count' => (int) collect($rows)->sum('success_count'),
+            'rows' => $rows,
+        ];
+    }
+
+    public function managerPipelineShiftBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        $stats = $this->managerPipelineStats($account, $from, $to);
+
+        $rows = collect($stats['managers'])
+            ->filter(fn (array $m): bool => $m['success_count'] > 0)
+            ->map(fn (array $m): array => [
+                'name' => $m['name'],
+                'shift_count' => $m['success_count'],
+                'fifth_shift_count' => $m['fifth_shift_count'],
+            ])
+            ->sortByDesc('shift_count')
+            ->values()
+            ->all();
+
+        return [
+            'pipeline_found' => $stats['pipeline_found'],
+            'pipeline_name' => $stats['pipeline_name'],
+            'manager_field_found' => $stats['manager_field_found'],
+            'manager_field_name' => self::MANAGER_FIELD_NAME,
+            'success_status_name' => $stats['success_status_name'],
+            'fifth_shift_field_found' => $stats['fifth_shift_field_found'],
+            'fifth_shift_field_name' => self::FIFTH_SHIFT_FIELD_NAME,
+            'shift_count' => (int) collect($rows)->sum('shift_count'),
+            'fifth_shift_count' => (int) collect($rows)->sum('fifth_shift_count'),
+            'rows' => $rows,
+        ];
+    }
+
+    public function managerPipelineLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, string $managerName, bool $successOnly = false, bool $fifthShiftOnly = false, int $limit = 300): array
+    {
+        [$pipelineIds, $successPairs, $managerFieldId, $fifthShiftFieldId] = $this->managerPipelineResolve($account);
+
+        $normalisedManager = mb_strtolower(trim($managerName));
+        $leads = [];
+        $total = 0;
+
+        if ($pipelineIds->isNotEmpty()) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'pipeline_id', 'status_id', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $normalisedManager, $successOnly, $fifthShiftOnly, $successPairs, $managerFieldId, $fifthShiftFieldId): void {
+                    foreach ($chunk as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $managerNames = $this->fieldValueLabels($customFields, $managerFieldId, self::MANAGER_FIELD_NAME, []);
+                        $leadManager = mb_strtolower(trim($managerNames[0] ?? 'Без менеджера'));
+
+                        if ($leadManager !== $normalisedManager) {
+                            continue;
+                        }
+
+                        $isSuccess = isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"]);
+                        if (($successOnly || $fifthShiftOnly) && !$isSuccess) {
+                            continue;
+                        }
+
+                        if ($fifthShiftOnly && (!$fifthShiftFieldId || !$this->checkboxFieldValue($customFields, $fifthShiftFieldId))) {
+                            continue;
+                        }
+
+                        $total++;
+                        if (count($leads) < $limit) {
+                            $leads[] = [
+                                'id' => $lead->external_id,
+                                'name' => $lead->name ?: 'Без названия',
+                                'created_at' => $lead->entity_created_at?->toDateString(),
+                            ];
+                        }
+                    }
+                });
+        }
 
         return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
@@ -1028,6 +1137,109 @@ class AmoTaskStatisticsService
         }
 
         return ['cabinets' => $cabinets];
+    }
+
+    /**
+     * @return array{0: \Illuminate\Support\Collection<int, int>, 1: array<string, int>, 2: int, 3: int}
+     */
+    private function managerPipelineResolve(AmoAccount $account): array
+    {
+        $pipelineIds = CrmPipelineSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereRaw('LOWER(name) LIKE ?', ['%' . mb_strtolower(self::MANAGER_PIPELINE_NAME) . '%'])
+            ->pluck('amo_pipeline_id');
+
+        $successPairs = CrmPipelineStatusSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereIn('amo_pipeline_id', $pipelineIds)
+            ->whereRaw('LOWER(name) LIKE ?', ['%встал в график%'])
+            ->get(['amo_pipeline_id', 'amo_status_id'])
+            ->map(fn ($status): string => "{$status->amo_pipeline_id}:{$status->amo_status_id}")
+            ->flip()
+            ->all();
+
+        $fieldQuery = CrmCustomFieldSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads');
+
+        $managerFieldId = (int) ($this->leadField($fieldQuery, 0, self::MANAGER_FIELD_NAME)?->amo_field_id ?? 0);
+        $fifthShiftFieldId = (int) ($this->leadField($fieldQuery, 0, self::FIFTH_SHIFT_FIELD_NAME)?->amo_field_id ?? 0);
+
+        return [$pipelineIds, $successPairs, $managerFieldId, $fifthShiftFieldId];
+    }
+
+    private function managerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    {
+        return Cache::remember(
+            $this->managerPipelineStatsCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildManagerPipelineStats($account, $from, $to),
+        );
+    }
+
+    private function buildManagerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    {
+        [$pipelineIds, $successPairs, $managerFieldId, $fifthShiftFieldId] = $this->managerPipelineResolve($account);
+
+        $pipelineFound = $pipelineIds->isNotEmpty();
+        $pipelineName = $pipelineFound
+            ? (string) CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->whereIn('amo_pipeline_id', $pipelineIds)->value('name')
+            : self::MANAGER_PIPELINE_NAME;
+
+        $managers = [];
+
+        if ($pipelineFound) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'pipeline_id', 'status_id', 'entity_created_at', 'custom_fields_values'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$managers, $managerFieldId, $fifthShiftFieldId, $successPairs): void {
+                    foreach ($leads as $lead) {
+                        $customFields = $lead->custom_fields_values ?? [];
+                        $managerNames = $this->fieldValueLabels($customFields, $managerFieldId, self::MANAGER_FIELD_NAME, []);
+                        $managerName = $managerNames[0] ?? 'Без менеджера';
+
+                        $managers[$managerName] ??= ['name' => $managerName, 'total_count' => 0, 'success_count' => 0, 'fifth_shift_count' => 0];
+                        $managers[$managerName]['total_count']++;
+
+                        $isSuccess = isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"]);
+                        if ($isSuccess) {
+                            $managers[$managerName]['success_count']++;
+                            if ($fifthShiftFieldId > 0 && $this->checkboxFieldValue($customFields, $fifthShiftFieldId)) {
+                                $managers[$managerName]['fifth_shift_count']++;
+                            }
+                        }
+                    }
+                });
+        }
+
+        return [
+            'pipeline_found' => $pipelineFound,
+            'pipeline_name' => $pipelineName,
+            'manager_field_found' => $managerFieldId > 0,
+            'success_status_name' => 'Встал в график',
+            'fifth_shift_field_found' => $fifthShiftFieldId > 0,
+            'managers' => array_values($managers),
+        ];
+    }
+
+    private function checkboxFieldValue(array $customFields, int $fieldId): bool
+    {
+        foreach ($customFields as $field) {
+            $fId = (int) ($field['field_id'] ?? $field['id'] ?? 0);
+            if ($fId !== $fieldId) {
+                continue;
+            }
+            $value = $field['values'][0]['value'] ?? null;
+
+            return $value === true || $value === 'true' || $value === 1 || $value === '1';
+        }
+
+        return false;
     }
 
     private function buildRecruiterLeadDistribution(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
@@ -1936,6 +2148,19 @@ class AmoTaskStatisticsService
 
         return implode(':', [
             'amo_avito_cabinet_breakdown',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
+    private function managerPipelineStatsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_manager_pipeline_stats',
             $account->id,
             $version,
             $from?->timestamp ?? 'null',

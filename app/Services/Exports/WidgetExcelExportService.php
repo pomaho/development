@@ -332,4 +332,26 @@ class WidgetExcelExportService
     {
         return "otchet-{$from->format('d.m.Y')}-{$to->format('d.m.Y')}.xlsx";
     }
+
+    /**
+     * @param array<int, array{title: string, columns: array<string, string>, rows: array, totals?: bool}> $flatReports
+     */
+    public function exportFlatOnly(string $filename, array $flatReports): StreamedResponse
+    {
+        $spreadsheet = new Spreadsheet();
+        $spreadsheet->removeSheetByIndex(0);
+
+        foreach ($flatReports as $report) {
+            $this->flatReportSheet($spreadsheet, $report);
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        return response()->streamDownload(function () use ($spreadsheet): void {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
 }

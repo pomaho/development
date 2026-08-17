@@ -54,6 +54,7 @@ class AmoAccountWidgetsController extends Controller
                                 'task_overdue_dashboard' => route('widgets.amo.task-overdue-dashboard.show', $installation->public_key),
                                 'task_overdue_dashboard_v2' => route('widgets.amo.task-overdue-dashboard-v2.show', $installation->public_key),
                                 'task_overdue_dashboard_v2_dev' => route('widgets.amo.task-overdue-dashboard-v2-dev.show', $installation->public_key),
+                                'manager_pipeline_dashboard' => route('widgets.amo.manager-pipeline-dashboard.show', $installation->public_key),
                                 'manager_topup_dashboard', 'product_group_dashboard', 'supplier_dashboard', 'designer_category_dashboard', 'budget_segment_dashboard', 'eurohome_client_dashboard' => $this->eurohomeDashboardUrl($amoAccount),
                                 default => null,
                             },
