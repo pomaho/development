@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:22-alpine AS assets
 
 WORKDIR /app
@@ -15,7 +16,12 @@ FROM composer:2 AS vendor
 WORKDIR /app
 
 COPY composer.json composer.lock ./
-RUN composer install \
+RUN --mount=type=secret,id=composer_github_token \
+    --mount=type=cache,target=/tmp/composer-cache,sharing=locked \
+    sh -c 'if [ -s /run/secrets/composer_github_token ]; then \
+        composer config -g github-oauth.github.com "$(cat /run/secrets/composer_github_token)"; \
+    fi' \
+    && COMPOSER_CACHE_DIR=/tmp/composer-cache composer install \
     --no-dev \
     --prefer-dist \
     --no-interaction \
