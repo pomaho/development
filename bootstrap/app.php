@@ -8,6 +8,7 @@ use App\Services\Alerts\TelegramNotifier;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Symfony\Component\Console\Exception\ExceptionInterface as ConsoleExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -30,6 +31,13 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->report(function (Throwable $e): void {
             if ($e instanceof HttpExceptionInterface && $e->getStatusCode() < 500) {
+                return;
+            }
+
+            // A mistyped artisan command (wrong name, missing argument, bad option) is
+            // operator error, not an application failure — alerting on it just spams
+            // Telegram every time anyone runs a bad command by hand.
+            if ($e instanceof ConsoleExceptionInterface) {
                 return;
             }
 

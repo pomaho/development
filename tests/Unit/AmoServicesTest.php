@@ -1773,6 +1773,26 @@ class AmoServicesTest extends TestCase
             ->value('name'));
     }
 
+    public function test_exception_reporter_ignores_mistyped_console_commands(): void
+    {
+        Http::fake();
+        config(['alerts.telegram.bot_token' => 'fake-token', 'alerts.telegram.chat_id' => 'fake-chat']);
+
+        report(new \Symfony\Component\Console\Exception\CommandNotFoundException('Command "test" is not defined.'));
+
+        Http::assertNothingSent();
+    }
+
+    public function test_exception_reporter_still_alerts_on_a_genuine_runtime_error(): void
+    {
+        Http::fake();
+        config(['alerts.telegram.bot_token' => 'fake-token', 'alerts.telegram.chat_id' => 'fake-chat']);
+
+        report(new \RuntimeException('something actually broke'));
+
+        Http::assertSent(fn ($request): bool => str_contains($request->url(), 'api.telegram.org'));
+    }
+
     public function test_oauth_refresh_saves_new_refresh_token(): void
     {
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');
