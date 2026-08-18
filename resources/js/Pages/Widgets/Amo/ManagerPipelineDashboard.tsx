@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import {
     AccentSummary, buildUrl, EmptyState, type LoadState, ReportSection,
-    SectionError, SectionSkeleton, WidgetHeader,
+    SectionError, SectionSkeleton, useApiData, WidgetHeader,
 } from './_shared/uiKit';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -100,6 +100,10 @@ type Links = {
 
 type Props = { account: Account; period: Period; links: Links };
 
+function clampPercent(value: number): number {
+    return Math.min(Math.max(value, 0), 100);
+}
+
 // ─── Leads modal (shared by both tables) ───────────────────────────────────────
 
 type LeadsFilter = {
@@ -116,16 +120,7 @@ function LeadsModal({ filter, from, to, baseDomain, onClose }: {
     baseDomain: string;
     onClose: () => void;
 }) {
-    const [state, setState] = useState<LoadState<LeadsResult>>({ status: 'loading' });
-
-    useEffect(() => {
-        setState({ status: 'loading' });
-        const url = buildUrl(filter.leadsUrl, { from, to, manager: filter.manager, ...filter.extraParams });
-        fetch(url)
-            .then((r) => r.json())
-            .then((json) => setState({ status: 'loaded', data: json.data }))
-            .catch(() => setState({ status: 'error', message: 'Ошибка загрузки' }));
-    }, [filter, from, to]);
+    const state = useApiData<LeadsResult>(filter.leadsUrl, { from, to, manager: filter.manager, ...filter.extraParams });
 
     useEffect(() => {
         const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -217,12 +212,9 @@ function CountButton({ value, tone, onClick }: { value: number; tone?: 'default'
 
 // ─── Overview section ───────────────────────────────────────────────────────
 
-function OverviewSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }: {
+function OverviewSection({ state, leadsUrl, onOpenLeads }: {
     state: LoadState<OverviewData>;
-    from: string;
-    to: string;
     leadsUrl: string;
-    baseDomain: string;
     onOpenLeads: (filter: LeadsFilter) => void;
 }) {
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
@@ -277,9 +269,9 @@ function OverviewSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }:
                                     <td className="px-4 py-3.5">
                                         <div className="flex min-w-40 items-center gap-2.5">
                                             <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                                                <div className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600" style={{ width: `${Math.min(Math.max(row.conversion_rate, 0), 100)}%` }} />
+                                                <div className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600" style={{ width: `${clampPercent(row.conversion_rate)}%` }} />
                                             </div>
-                                            <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-600">{row.conversion_rate}%</span>
+                                            <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-600">{clampPercent(row.conversion_rate)}%</span>
                                         </div>
                                     </td>
                                 </tr>
@@ -298,12 +290,9 @@ function OverviewSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }:
 
 // ─── Shift breakdown section ────────────────────────────────────────────────
 
-function ShiftSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }: {
+function ShiftSection({ state, leadsUrl, onOpenLeads }: {
     state: LoadState<ShiftData>;
-    from: string;
-    to: string;
     leadsUrl: string;
-    baseDomain: string;
     onOpenLeads: (filter: LeadsFilter) => void;
 }) {
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
@@ -368,12 +357,9 @@ function ShiftSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }: {
 
 // ─── Avito cabinet section ──────────────────────────────────────────────────
 
-function AvitoCabinetSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }: {
+function AvitoCabinetSection({ state, leadsUrl, onOpenLeads }: {
     state: LoadState<AvitoCabinetData>;
-    from: string;
-    to: string;
     leadsUrl: string;
-    baseDomain: string;
     onOpenLeads: (filter: LeadsFilter) => void;
 }) {
     if (state.status === 'loading') return <SectionSkeleton rows={2} />;
@@ -477,9 +463,9 @@ function FunnelSection({ state }: { state: LoadState<FunnelData> }) {
                                     <td className="px-4 py-3.5">
                                         <div className="flex min-w-40 items-center gap-2.5">
                                             <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
-                                                <div className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600" style={{ width: `${Math.min(Math.max(row.funnel_rate, 0), 100)}%` }} />
+                                                <div className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600" style={{ width: `${clampPercent(row.funnel_rate)}%` }} />
                                             </div>
-                                            <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-600">{row.funnel_rate}%</span>
+                                            <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-600">{clampPercent(row.funnel_rate)}%</span>
                                         </div>
                                     </td>
                                     <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">{formatDuration(row.avg_seconds_in_stage)}</td>
@@ -516,43 +502,13 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
     const [appliedFrom, setAppliedFrom] = useState(period.from);
     const [appliedTo, setAppliedTo] = useState(period.to);
 
-    const [overviewState, setOverviewState] = useState<LoadState<OverviewData>>({ status: 'loading' });
-    const [shiftState, setShiftState] = useState<LoadState<ShiftData>>({ status: 'loading' });
-    const [avitoCabinetState, setAvitoCabinetState] = useState<LoadState<AvitoCabinetData>>({ status: 'loading' });
-    const [funnelState, setFunnelState] = useState<LoadState<FunnelData>>({ status: 'loading' });
     const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
 
-    useEffect(() => {
-        setOverviewState({ status: 'loading' });
-        fetch(buildUrl(links.overview, { from: appliedFrom, to: appliedTo }))
-            .then((r) => r.json())
-            .then((json) => setOverviewState({ status: 'loaded', data: json.data }))
-            .catch((err) => setOverviewState({ status: 'error', message: String(err) }));
-    }, [links.overview, appliedFrom, appliedTo]);
-
-    useEffect(() => {
-        setShiftState({ status: 'loading' });
-        fetch(buildUrl(links.shiftBreakdown, { from: appliedFrom, to: appliedTo }))
-            .then((r) => r.json())
-            .then((json) => setShiftState({ status: 'loaded', data: json.data }))
-            .catch((err) => setShiftState({ status: 'error', message: String(err) }));
-    }, [links.shiftBreakdown, appliedFrom, appliedTo]);
-
-    useEffect(() => {
-        setAvitoCabinetState({ status: 'loading' });
-        fetch(buildUrl(links.avitoCabinetBreakdown, { from: appliedFrom, to: appliedTo }))
-            .then((r) => r.json())
-            .then((json) => setAvitoCabinetState({ status: 'loaded', data: json.data }))
-            .catch((err) => setAvitoCabinetState({ status: 'error', message: String(err) }));
-    }, [links.avitoCabinetBreakdown, appliedFrom, appliedTo]);
-
-    useEffect(() => {
-        setFunnelState({ status: 'loading' });
-        fetch(buildUrl(links.funnel, { from: appliedFrom, to: appliedTo }))
-            .then((r) => r.json())
-            .then((json) => setFunnelState({ status: 'loaded', data: json.data }))
-            .catch((err) => setFunnelState({ status: 'error', message: String(err) }));
-    }, [links.funnel, appliedFrom, appliedTo]);
+    const periodParams = { from: appliedFrom, to: appliedTo };
+    const overviewState = useApiData<OverviewData>(links.overview, periodParams);
+    const shiftState = useApiData<ShiftData>(links.shiftBreakdown, periodParams);
+    const avitoCabinetState = useApiData<AvitoCabinetData>(links.avitoCabinetBreakdown, periodParams);
+    const funnelState = useApiData<FunnelData>(links.funnel, periodParams);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -586,28 +542,19 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
 
                 <OverviewSection
                     state={overviewState}
-                    from={appliedFrom}
-                    to={appliedTo}
                     leadsUrl={links.overviewLeads}
-                    baseDomain={account.base_domain}
                     onOpenLeads={setLeadsFilter}
                 />
 
                 <ShiftSection
                     state={shiftState}
-                    from={appliedFrom}
-                    to={appliedTo}
                     leadsUrl={links.shiftLeads}
-                    baseDomain={account.base_domain}
                     onOpenLeads={setLeadsFilter}
                 />
 
                 <AvitoCabinetSection
                     state={avitoCabinetState}
-                    from={appliedFrom}
-                    to={appliedTo}
                     leadsUrl={links.avitoCabinetLeads}
-                    baseDomain={account.base_domain}
                     onOpenLeads={setLeadsFilter}
                 />
 

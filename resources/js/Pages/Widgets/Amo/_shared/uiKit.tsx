@@ -1,5 +1,5 @@
 import { CalendarDays, Inbox } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +26,32 @@ export function buildUrl(base: string, params: Record<string, string | number | 
         if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
     }
     return url.toString();
+}
+
+// ─── Data fetching ────────────────────────────────────────────────────────────
+
+async function apiFetch<T>(url: string, params: Record<string, string | number | undefined>): Promise<T> {
+    const res = await fetch(buildUrl(url, params));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    return json.data as T;
+}
+
+/** Fetches `url`'s `{ data }` JSON body whenever `url`/`params` change, ignoring a
+ * stale response that resolves after a newer request has already started. */
+export function useApiData<T>(url: string, params: Record<string, string | number | undefined>): LoadState<T> {
+    const [state, setState] = useState<LoadState<T>>({ status: 'loading' });
+    const key = url + JSON.stringify(params);
+    useEffect(() => {
+        setState({ status: 'loading' });
+        let cancelled = false;
+        apiFetch<T>(url, params)
+            .then((data) => { if (!cancelled) setState({ status: 'loaded', data }); })
+            .catch((err: unknown) => { if (!cancelled) setState({ status: 'error', message: String(err) }); });
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [key]);
+    return state;
 }
 
 // ─── Primitive UI components ──────────────────────────────────────────────────
