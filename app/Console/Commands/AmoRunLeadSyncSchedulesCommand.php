@@ -63,7 +63,16 @@ class AmoRunLeadSyncSchedulesCommand extends Command
     {
         try {
             $to = now()->endOfDay();
-            $from = $to->copy()->subDays($schedule->lookback_days - 1)->startOfDay();
+            $watermark = $schedule->account->taskStatisticsLastSuccessfulSyncAt();
+            // Resume from where the last successful sync left off (with a small
+            // overlap for safety) instead of always re-fetching a fixed rolling
+            // window — otherwise every run re-processes the same days of data,
+            // which for an active account can be large enough to exhaust the
+            // queue worker's memory limit for no benefit. lookback_days is only
+            // used to seed the very first run, before any watermark exists.
+            $from = $watermark !== null
+                ? $watermark->copy()->subMinutes(30)
+                : $to->copy()->subDays($schedule->lookback_days - 1)->startOfDay();
 
             $run = TaskStatisticsSyncRun::query()->create([
                 'amo_account_id' => $schedule->amo_account_id,

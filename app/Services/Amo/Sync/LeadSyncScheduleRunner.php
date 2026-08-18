@@ -23,14 +23,14 @@ class LeadSyncScheduleRunner
     {
         $startedAt = now();
 
-        // Leads synced by updated_at track a persistent watermark instead of a
-        // rolling "now - lookback_days" window, so a sync outage (or a period
-        // before this cursor existed) can never permanently skip updates — the
-        // next run just resumes from where coverage last left off. An explicit
-        // $lookbackDays override (e.g. a manual backfill) always uses the wider
-        // rolling window instead, ignoring the watermark for that one run.
+        // Every schedule tracks a persistent watermark instead of a rolling
+        // "now - lookback_days" window, so a sync outage (or a period before this
+        // cursor existed) can never permanently skip updates — the next run just
+        // resumes from where coverage last left off. An explicit $lookbackDays
+        // override (e.g. a manual backfill) always uses the wider rolling window
+        // instead, ignoring the watermark for that one run.
         $isCursoredLeadsSync = $schedule->entity_type === LeadSyncSchedule::ENTITY_TYPE_LEADS && $schedule->use_updated_at;
-        $useWatermark = $isCursoredLeadsSync && $lookbackDays === null && $schedule->synced_watermark_at !== null;
+        $useWatermark = $lookbackDays === null && $schedule->synced_watermark_at !== null;
 
         $from = $useWatermark
             ? $schedule->synced_watermark_at->copy()->subMinutes(self::WATERMARK_OVERLAP_MINUTES)
@@ -72,7 +72,7 @@ class LeadSyncScheduleRunner
                 'last_status' => LeadSyncSchedule::STATUS_COMPLETED,
                 'last_synced_count' => $syncedCount,
                 'last_error' => null,
-                'synced_watermark_at' => $isCursoredLeadsSync ? $startedAt : $schedule->synced_watermark_at,
+                'synced_watermark_at' => $startedAt,
             ])->save();
 
             return $syncedCount;

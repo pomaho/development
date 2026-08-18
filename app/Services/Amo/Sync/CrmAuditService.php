@@ -276,7 +276,7 @@ class CrmAuditService
             CrmEntitySnapshot::query()->updateOrCreate(
                 ['amo_account_id' => $account->id, 'entity_type' => $entityType, 'external_id' => (string) ($entity['id'] ?? md5(json_encode($entity)))],
                 [
-                    'name' => $entity['name'] ?? $entity['text'] ?? $entity['type'] ?? null,
+                    'name' => mb_substr((string) ($entity['name'] ?? $entity['text'] ?? $entity['type'] ?? ''), 0, 255) ?: null,
                     'pipeline_id' => $entity['pipeline_id'] ?? null,
                     'status_id' => $entity['status_id'] ?? null,
                     'responsible_user_id' => $entity['responsible_user_id'] ?? null,
