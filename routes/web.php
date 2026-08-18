@@ -164,6 +164,12 @@ Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/shift-breakd
 Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/shift-leads', [AmoManagerPipelineDashboardController::class, 'shiftLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-pipeline-dashboard.shift-leads');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/avito-cabinet-breakdown', [AmoManagerPipelineDashboardController::class, 'avitoCabinetBreakdown'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-breakdown');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/avito-cabinet-leads', [AmoManagerPipelineDashboardController::class, 'avitoCabinetLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-leads');
 Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/export', [AmoManagerPipelineDashboardController::class, 'export'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-pipeline-dashboard.export');

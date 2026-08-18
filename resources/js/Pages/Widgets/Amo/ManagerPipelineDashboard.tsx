@@ -49,6 +49,19 @@ type ShiftData = {
     rows: ShiftRow[];
 };
 
+type AvitoCabinetRow = {
+    name: string;
+    total_count: number;
+    success_count: number;
+};
+
+type AvitoCabinetData = {
+    pipeline_found: boolean;
+    pipeline_name: string;
+    success_status_name: string;
+    cabinets: AvitoCabinetRow[];
+};
+
 type LeadItem = { id: string | number; name: string; created_at: string | null };
 type LeadsResult = { leads: LeadItem[]; total: number; limited: boolean; limit: number };
 
@@ -58,6 +71,8 @@ type Links = {
     overviewLeads: string;
     shiftBreakdown: string;
     shiftLeads: string;
+    avitoCabinetBreakdown: string;
+    avitoCabinetLeads: string;
     export: string;
 };
 
@@ -329,6 +344,71 @@ function ShiftSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }: {
     );
 }
 
+// ─── Avito cabinet section ──────────────────────────────────────────────────
+
+function AvitoCabinetSection({ state, from, to, leadsUrl, baseDomain, onOpenLeads }: {
+    state: LoadState<AvitoCabinetData>;
+    from: string;
+    to: string;
+    leadsUrl: string;
+    baseDomain: string;
+    onOpenLeads: (filter: LeadsFilter) => void;
+}) {
+    if (state.status === 'loading') return <SectionSkeleton rows={2} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    if (!data.pipeline_found) {
+        return null;
+    }
+
+    return (
+        <ReportSection
+            eyebrow="Менеджеры подбор"
+            title="Кабинеты Авито"
+            description={`Лиды за выбранный период по каждому кабинету Авито (определяется по тегу лида) в воронке «${data.pipeline_name}» и сколько из них дошло до этапа «${data.success_status_name}». Нажмите на число — откроется список сделок.`}
+        >
+            {data.cabinets.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead>
+                            <tr className="bg-gradient-to-r from-slate-50 to-white text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                                <th className="px-5 py-3">Кабинет Авито</th>
+                                <th className="px-5 py-3 text-right">Лидов</th>
+                                <th className="px-5 py-3 text-right">Встал в график</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {data.cabinets.map((cabinet) => (
+                                <tr key={cabinet.name}>
+                                    <td className="px-5 py-3 font-semibold text-gray-900">{cabinet.name}</td>
+                                    <td className="px-5 py-3 text-right">
+                                        <CountButton
+                                            value={cabinet.total_count}
+                                            onClick={() => onOpenLeads({ leadsUrl, manager: '', extraParams: { cabinet: cabinet.name, success_only: '0' }, label: `${cabinet.name} — все лиды` })}
+                                        />
+                                    </td>
+                                    <td className="px-5 py-3 text-right">
+                                        <CountButton
+                                            value={cabinet.success_count}
+                                            tone="success"
+                                            onClick={() => onOpenLeads({ leadsUrl, manager: '', extraParams: { cabinet: cabinet.name, success_only: '1' }, label: `${cabinet.name} — встал в график` })}
+                                        />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="px-5 py-8">
+                    <EmptyState>Нет данных по кабинетам Авито за выбранный период</EmptyState>
+                </div>
+            )}
+        </ReportSection>
+    );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ManagerPipelineDashboard({ account, period, links }: Props) {
@@ -339,6 +419,7 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
 
     const [overviewState, setOverviewState] = useState<LoadState<OverviewData>>({ status: 'loading' });
     const [shiftState, setShiftState] = useState<LoadState<ShiftData>>({ status: 'loading' });
+    const [avitoCabinetState, setAvitoCabinetState] = useState<LoadState<AvitoCabinetData>>({ status: 'loading' });
     const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
 
     useEffect(() => {
@@ -356,6 +437,14 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
             .then((json) => setShiftState({ status: 'loaded', data: json.data }))
             .catch((err) => setShiftState({ status: 'error', message: String(err) }));
     }, [links.shiftBreakdown, appliedFrom, appliedTo]);
+
+    useEffect(() => {
+        setAvitoCabinetState({ status: 'loading' });
+        fetch(buildUrl(links.avitoCabinetBreakdown, { from: appliedFrom, to: appliedTo }))
+            .then((r) => r.json())
+            .then((json) => setAvitoCabinetState({ status: 'loaded', data: json.data }))
+            .catch((err) => setAvitoCabinetState({ status: 'error', message: String(err) }));
+    }, [links.avitoCabinetBreakdown, appliedFrom, appliedTo]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -401,6 +490,15 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
                     from={appliedFrom}
                     to={appliedTo}
                     leadsUrl={links.shiftLeads}
+                    baseDomain={account.base_domain}
+                    onOpenLeads={setLeadsFilter}
+                />
+
+                <AvitoCabinetSection
+                    state={avitoCabinetState}
+                    from={appliedFrom}
+                    to={appliedTo}
+                    leadsUrl={links.avitoCabinetLeads}
                     baseDomain={account.base_domain}
                     onOpenLeads={setLeadsFilter}
                 />

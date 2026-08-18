@@ -30,6 +30,7 @@ class AmoTaskStatisticsService
     private const SHIFT_DATE_PIPELINE_NAME = 'Массовый подбор';
     private const MANAGER_PIPELINE_NAME = 'Менеджеры подбор';
     private const FIFTH_SHIFT_FIELD_NAME = 'Вышел на 5 смену';
+    private const MANAGER_PIPELINE_AVITO_CABINET_TAGS = ['Вакансии здесь', 'Работа Бета'];
 
 
     /**
@@ -472,6 +473,121 @@ class AmoTaskStatisticsService
                         }
 
                         if ($fifthShiftOnly && (!$fifthShiftFieldId || !$this->checkboxFieldValue($customFields, $fifthShiftFieldId))) {
+                            continue;
+                        }
+
+                        $total++;
+                        if (count($leads) < $limit) {
+                            $leads[] = [
+                                'id' => $lead->external_id,
+                                'name' => $lead->name ?: 'Без названия',
+                                'created_at' => $lead->entity_created_at?->toDateString(),
+                            ];
+                        }
+                    }
+                });
+        }
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
+    }
+
+    public function managerPipelineAvitoCabinetBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->managerPipelineAvitoCabinetCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildManagerPipelineAvitoCabinetBreakdown($account, $from, $to),
+        );
+    }
+
+    private function buildManagerPipelineAvitoCabinetBreakdown(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    {
+        [$pipelineIds, $successPairs] = $this->managerPipelineResolve($account);
+
+        $pipelineFound = $pipelineIds->isNotEmpty();
+        $pipelineName = $pipelineFound
+            ? (string) CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->whereIn('amo_pipeline_id', $pipelineIds)->value('name')
+            : self::MANAGER_PIPELINE_NAME;
+
+        $counts = [];
+        foreach (self::MANAGER_PIPELINE_AVITO_CABINET_TAGS as $cabinetName) {
+            $counts[$cabinetName] = ['total' => 0, 'success' => 0];
+        }
+        $normalisedCabinets = collect(self::MANAGER_PIPELINE_AVITO_CABINET_TAGS)
+            ->mapWithKeys(fn (string $name): array => [mb_strtolower(trim($name)) => $name])
+            ->all();
+
+        if ($pipelineFound) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'pipeline_id', 'status_id', 'entity_created_at', 'embedded'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($leads) use (&$counts, $normalisedCabinets, $successPairs): void {
+                    foreach ($leads as $lead) {
+                        $tags = collect($lead->embedded['tags'] ?? [])->pluck('name');
+                        $isSuccess = isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"]);
+
+                        foreach ($tags as $tagName) {
+                            $cabinetName = $normalisedCabinets[mb_strtolower(trim((string) $tagName))] ?? null;
+                            if ($cabinetName === null) {
+                                continue;
+                            }
+                            $counts[$cabinetName]['total']++;
+                            if ($isSuccess) {
+                                $counts[$cabinetName]['success']++;
+                            }
+                        }
+                    }
+                });
+        }
+
+        $cabinets = [];
+        foreach (self::MANAGER_PIPELINE_AVITO_CABINET_TAGS as $cabinetName) {
+            $cabinets[] = [
+                'name' => $cabinetName,
+                'total_count' => $counts[$cabinetName]['total'],
+                'success_count' => $counts[$cabinetName]['success'],
+            ];
+        }
+
+        return [
+            'pipeline_found' => $pipelineFound,
+            'pipeline_name' => $pipelineName,
+            'success_status_name' => 'Встал в график',
+            'cabinets' => $cabinets,
+        ];
+    }
+
+    public function managerPipelineAvitoCabinetLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, string $cabinetName, bool $successOnly = false, int $limit = 300): array
+    {
+        [$pipelineIds, $successPairs] = $this->managerPipelineResolve($account);
+
+        $normalisedCabinet = mb_strtolower(trim($cabinetName));
+        $leads = [];
+        $total = 0;
+
+        if ($pipelineIds->isNotEmpty()) {
+            CrmEntitySnapshot::query()
+                ->select(['id', 'external_id', 'name', 'pipeline_id', 'status_id', 'entity_created_at', 'embedded'])
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->orderBy('id')
+                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $normalisedCabinet, $successOnly, $successPairs): void {
+                    foreach ($chunk as $lead) {
+                        $tags = collect($lead->embedded['tags'] ?? [])->pluck('name');
+                        $matchesCabinet = $tags->contains(fn ($tagName): bool => mb_strtolower(trim((string) $tagName)) === $normalisedCabinet);
+                        if (!$matchesCabinet) {
+                            continue;
+                        }
+
+                        if ($successOnly && !isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"])) {
                             continue;
                         }
 
@@ -2171,6 +2287,19 @@ class AmoTaskStatisticsService
 
         return implode(':', [
             'amo_manager_pipeline_stats',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
+    private function managerPipelineAvitoCabinetCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_manager_pipeline_avito_cabinet',
             $account->id,
             $version,
             $from?->timestamp ?? 'null',

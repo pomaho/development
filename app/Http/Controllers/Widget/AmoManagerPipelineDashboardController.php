@@ -38,6 +38,8 @@ class AmoManagerPipelineDashboardController extends Controller
                 'overviewLeads' => route('api.widgets.amo.manager-pipeline-dashboard.overview-leads', $publicKey),
                 'shiftBreakdown' => route('api.widgets.amo.manager-pipeline-dashboard.shift-breakdown', $publicKey),
                 'shiftLeads' => route('api.widgets.amo.manager-pipeline-dashboard.shift-leads', $publicKey),
+                'avitoCabinetBreakdown' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-breakdown', $publicKey),
+                'avitoCabinetLeads' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-leads', $publicKey),
                 'export' => route('api.widgets.amo.manager-pipeline-dashboard.export', $publicKey),
             ],
         ]);
@@ -96,6 +98,32 @@ class AmoManagerPipelineDashboardController extends Controller
         ]);
     }
 
+    public function avitoCabinetBreakdown(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->managerPipelineAvitoCabinetBreakdown($installation->account, $from, $to),
+        ]);
+    }
+
+    public function avitoCabinetLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->managerPipelineAvitoCabinetLeads(
+                $installation->account,
+                $from,
+                $to,
+                (string) $request->query('cabinet', ''),
+                $request->boolean('success_only'),
+            ),
+        ]);
+    }
+
     public function export(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
     {
         $installation = $this->installation($publicKey);
@@ -103,6 +131,7 @@ class AmoManagerPipelineDashboardController extends Controller
 
         $overview = $statisticsService->managerPipelineOverview($installation->account, $from, $to);
         $shift = $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to);
+        $avitoCabinets = $statisticsService->managerPipelineAvitoCabinetBreakdown($installation->account, $from, $to);
 
         return $excelExport->exportFlatOnly(WidgetExcelExportService::filename($from, $to), [
             [
@@ -124,6 +153,16 @@ class AmoManagerPipelineDashboardController extends Controller
                     'fifth_shift_count' => 'Вышло на 5 смену',
                 ],
                 'rows' => $shift['rows'],
+                'totals' => true,
+            ],
+            [
+                'title' => 'Кабинеты Авито',
+                'columns' => [
+                    'name' => 'Кабинет Авито',
+                    'total_count' => 'Лидов',
+                    'success_count' => 'Встал в график',
+                ],
+                'rows' => $avitoCabinets['cabinets'],
                 'totals' => true,
             ],
         ]);
