@@ -606,6 +606,179 @@ class AmoTaskStatisticsService
         return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
 
+    public function managerPipelineFunnel(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->managerPipelineFunnelCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildManagerPipelineFunnel($account, $from, $to),
+        );
+    }
+
+    /**
+     * Per-stage funnel analytics for the "Менеджеры подбор" pipeline, built from
+     * lead_status_changed events (see AmoAccountWidgetsController-adjacent sync
+     * fixes this session — these are only reliably captured from ~2026-08-01
+     * onward for this pipeline, so figures before that date are incomplete):
+     *
+     * - funnel_count / funnel_rate: how many of the period's leads have *ever*
+     *   reached at least this stage, approximated from each lead's *current*
+     *   status and the pipeline's status sort order (a lead currently further
+     *   along, including the two terminal statuses, is assumed to have passed
+     *   through every earlier stage — the standard funnel simplification,
+     *   ignoring backward moves). This needs no event history at all, so it's
+     *   accurate even for leads whose transition history predates our data.
+     * - avg_seconds_in_stage / transitions_observed / exit_*: built only from
+     *   *observed* consecutive pairs of lead_status_changed events per lead
+     *   (entry of event N to entry of event N+1 = one fully-closed dwell time
+     *   in the stage event N moved the lead into). A lead's current (last
+     *   observed) stage never contributes a sample, since we don't know yet
+     *   how long it'll stay — avoids biasing averages with still-open dwells.
+     */
+    private function buildManagerPipelineFunnel(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    {
+        [$pipelineIds] = $this->managerPipelineResolve($account);
+
+        $pipelineFound = $pipelineIds->isNotEmpty();
+        $pipelineName = $pipelineFound
+            ? (string) CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->whereIn('amo_pipeline_id', $pipelineIds)->value('name')
+            : self::MANAGER_PIPELINE_NAME;
+
+        if (!$pipelineFound) {
+            return ['pipeline_found' => false, 'pipeline_name' => $pipelineName, 'total_count' => 0, 'rows' => []];
+        }
+
+        $statuses = CrmPipelineStatusSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereIn('amo_pipeline_id', $pipelineIds)
+            ->orderBy('sort')
+            ->get(['amo_status_id', 'name', 'sort']);
+        $sortByStatus = $statuses->pluck('sort', 'amo_status_id')->all();
+
+        $leadCurrentStatus = [];
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'status_id'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->whereIn('pipeline_id', $pipelineIds)
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$leadCurrentStatus): void {
+                foreach ($leads as $lead) {
+                    $leadCurrentStatus[(string) $lead->external_id] = (int) $lead->status_id;
+                }
+            });
+
+        $totalLeads = count($leadCurrentStatus);
+        $funnelCounts = [];
+        foreach ($statuses as $status) {
+            // 142/143 are amoCRM's reserved terminal statuses — parallel success/failure
+            // branches, not further steps in the sort-order sequence (143's sort happens
+            // to be higher than 142's, but reaching 143 doesn't imply 142 was visited) —
+            // so they're counted by exact current status instead of "reached at least
+            // this far", unlike every other (genuinely sequential) stage in the funnel.
+            $funnelCounts[$status->amo_status_id] = in_array($status->amo_status_id, [142, 143], true)
+                ? collect($leadCurrentStatus)->filter(fn (int $sid): bool => $sid === $status->amo_status_id)->count()
+                : collect($leadCurrentStatus)->filter(fn (int $sid): bool => ($sortByStatus[$sid] ?? 0) >= $status->sort)->count();
+        }
+
+        $pipelineIdSet = $pipelineIds->all();
+        $events = CrmEntitySnapshot::query()
+            ->select(['entity_created_at', 'raw'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'events')
+            ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->get();
+
+        $eventsByLead = [];
+        foreach ($events as $event) {
+            $raw = $event->raw ?? [];
+            $entityId = (string) ($raw['entity_id'] ?? '');
+            if (!isset($leadCurrentStatus[$entityId])) {
+                continue;
+            }
+            $afterPipeline = (int) ($raw['value_after'][0]['lead_status']['pipeline_id'] ?? 0);
+            if (!in_array($afterPipeline, $pipelineIdSet, true)) {
+                continue;
+            }
+            $eventsByLead[$entityId][] = [
+                'status_id' => (int) ($raw['value_after'][0]['lead_status']['id'] ?? 0),
+                'at' => $event->entity_created_at,
+            ];
+        }
+
+        $stageDurationTotals = [];
+        $stageDurationCounts = [];
+        $stageExits = [];
+
+        foreach ($eventsByLead as $transitions) {
+            usort($transitions, fn (array $a, array $b): int => $a['at']->timestamp <=> $b['at']->timestamp);
+            $count = count($transitions);
+
+            for ($i = 0; $i < $count - 1; $i++) {
+                $fromStatus = $transitions[$i]['status_id'];
+                $toStatus = $transitions[$i + 1]['status_id'];
+                $seconds = $transitions[$i + 1]['at']->diffInSeconds($transitions[$i]['at'], true);
+
+                $stageDurationTotals[$fromStatus] = ($stageDurationTotals[$fromStatus] ?? 0) + $seconds;
+                $stageDurationCounts[$fromStatus] = ($stageDurationCounts[$fromStatus] ?? 0) + 1;
+
+                $stageExits[$fromStatus] ??= ['success' => 0, 'fail' => 0, 'other' => 0, 'total' => 0];
+                $stageExits[$fromStatus]['total']++;
+                if ($toStatus === 142) {
+                    $stageExits[$fromStatus]['success']++;
+                } elseif ($toStatus === 143) {
+                    $stageExits[$fromStatus]['fail']++;
+                } else {
+                    $stageExits[$fromStatus]['other']++;
+                }
+            }
+        }
+
+        $rows = $statuses->map(function ($status) use ($funnelCounts, $totalLeads, $stageDurationTotals, $stageDurationCounts, $stageExits): array {
+            $sid = $status->amo_status_id;
+            $exits = $stageExits[$sid] ?? ['success' => 0, 'fail' => 0, 'other' => 0, 'total' => 0];
+            $durationCount = $stageDurationCounts[$sid] ?? 0;
+
+            return [
+                'status_id' => $sid,
+                'name' => $status->name,
+                'funnel_count' => $funnelCounts[$sid] ?? 0,
+                'funnel_rate' => $totalLeads > 0 ? round(($funnelCounts[$sid] ?? 0) / $totalLeads * 100, 1) : 0.0,
+                'avg_seconds_in_stage' => $durationCount > 0 ? (int) round($stageDurationTotals[$sid] / $durationCount) : null,
+                'transitions_observed' => $exits['total'],
+                'exit_success_count' => $exits['success'],
+                'exit_fail_count' => $exits['fail'],
+                'exit_other_count' => $exits['other'],
+                'exit_success_rate' => $exits['total'] > 0 ? round($exits['success'] / $exits['total'] * 100, 1) : 0.0,
+                'exit_fail_rate' => $exits['total'] > 0 ? round($exits['fail'] / $exits['total'] * 100, 1) : 0.0,
+            ];
+        })->values()->all();
+
+        return [
+            'pipeline_found' => true,
+            'pipeline_name' => $pipelineName,
+            'total_count' => $totalLeads,
+            'rows' => $rows,
+        ];
+    }
+
+    private function managerPipelineFunnelCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_manager_pipeline_funnel',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
     public function projectCityVacancyLeads(
         AmoAccount $account,
         ?Carbon $from,

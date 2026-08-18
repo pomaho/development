@@ -40,6 +40,7 @@ class AmoManagerPipelineDashboardController extends Controller
                 'shiftLeads' => route('api.widgets.amo.manager-pipeline-dashboard.shift-leads', $publicKey),
                 'avitoCabinetBreakdown' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-breakdown', $publicKey),
                 'avitoCabinetLeads' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-leads', $publicKey),
+                'funnel' => route('api.widgets.amo.manager-pipeline-dashboard.funnel', $publicKey),
                 'export' => route('api.widgets.amo.manager-pipeline-dashboard.export', $publicKey),
             ],
         ]);
@@ -124,6 +125,16 @@ class AmoManagerPipelineDashboardController extends Controller
         ]);
     }
 
+    public function funnel(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->managerPipelineFunnel($installation->account, $from, $to),
+        ]);
+    }
+
     public function export(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
     {
         $installation = $this->installation($publicKey);
@@ -132,6 +143,7 @@ class AmoManagerPipelineDashboardController extends Controller
         $overview = $statisticsService->managerPipelineOverview($installation->account, $from, $to);
         $shift = $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to);
         $avitoCabinets = $statisticsService->managerPipelineAvitoCabinetBreakdown($installation->account, $from, $to);
+        $funnel = $statisticsService->managerPipelineFunnel($installation->account, $from, $to);
 
         return $excelExport->exportFlatOnly(WidgetExcelExportService::filename($from, $to), [
             [
@@ -164,6 +176,23 @@ class AmoManagerPipelineDashboardController extends Controller
                 ],
                 'rows' => $avitoCabinets['cabinets'],
                 'totals' => true,
+            ],
+            [
+                'title' => 'Воронка по этапам',
+                'columns' => [
+                    'name' => 'Этап',
+                    'funnel_count' => 'Дошло сделок',
+                    'funnel_rate' => 'Доля от начала, %',
+                    'avg_hours_in_stage' => 'Ср. время на этапе, ч',
+                    'exit_success_count' => 'Ушло в успех',
+                    'exit_fail_count' => 'Ушло в отказ',
+                    'exit_other_count' => 'Ушло дальше',
+                ],
+                'rows' => array_map(fn (array $row): array => [
+                    ...$row,
+                    'avg_hours_in_stage' => $row['avg_seconds_in_stage'] !== null ? round($row['avg_seconds_in_stage'] / 3600, 1) : null,
+                ], $funnel['rows']),
+                'totals' => false,
             ],
         ]);
     }

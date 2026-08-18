@@ -62,6 +62,27 @@ type AvitoCabinetData = {
     cabinets: AvitoCabinetRow[];
 };
 
+type FunnelRow = {
+    status_id: number;
+    name: string;
+    funnel_count: number;
+    funnel_rate: number;
+    avg_seconds_in_stage: number | null;
+    transitions_observed: number;
+    exit_success_count: number;
+    exit_fail_count: number;
+    exit_other_count: number;
+    exit_success_rate: number;
+    exit_fail_rate: number;
+};
+
+type FunnelData = {
+    pipeline_found: boolean;
+    pipeline_name: string;
+    total_count: number;
+    rows: FunnelRow[];
+};
+
 type LeadItem = { id: string | number; name: string; created_at: string | null };
 type LeadsResult = { leads: LeadItem[]; total: number; limited: boolean; limit: number };
 
@@ -73,6 +94,7 @@ type Links = {
     shiftLeads: string;
     avitoCabinetBreakdown: string;
     avitoCabinetLeads: string;
+    funnel: string;
     export: string;
 };
 
@@ -409,6 +431,83 @@ function AvitoCabinetSection({ state, from, to, leadsUrl, baseDomain, onOpenLead
     );
 }
 
+// ─── Funnel section ─────────────────────────────────────────────────────────
+
+function formatDuration(seconds: number | null): string {
+    if (seconds === null) return '—';
+    const hours = seconds / 3600;
+    if (hours < 1) return `${Math.round(seconds / 60)} мин`;
+    if (hours < 48) return `${Math.round(hours * 10) / 10} ч`;
+    return `${Math.round((hours / 24) * 10) / 10} дн`;
+}
+
+function FunnelSection({ state }: { state: LoadState<FunnelData> }) {
+    if (state.status === 'loading') return <SectionSkeleton rows={5} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    if (!data.pipeline_found) {
+        return null;
+    }
+
+    return (
+        <ReportSection
+            eyebrow="Менеджеры подбор"
+            title="Воронка по этапам"
+            description={`Воронка: ${data.pipeline_name}. «Дошло сделок» — сколько сделок за период когда-либо достигли этапа (по текущему статусу сделки). «Ушло со статуса» — только по наблюдаемым переходам между этапами (данные о переходах доступны примерно с 1 августа 2026, более ранние — неполные).`}
+            aside={<AccentSummary label="Всего сделок в периоде" value={data.total_count} tone="brand" />}
+        >
+            {data.rows.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                            <tr>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Этап</th>
+                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Дошло сделок</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля от старта</th>
+                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Ср. время на этапе</th>
+                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Куда уходят со статуса</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {data.rows.map((row) => (
+                                <tr key={row.status_id} className="transition-colors hover:bg-violet-50/50">
+                                    <td className="px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
+                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">{row.funnel_count}</td>
+                                    <td className="px-4 py-3.5">
+                                        <div className="flex min-w-40 items-center gap-2.5">
+                                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                                <div className="h-2 rounded-full bg-gradient-to-r from-violet-400 to-indigo-600" style={{ width: `${Math.min(Math.max(row.funnel_rate, 0), 100)}%` }} />
+                                            </div>
+                                            <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-600">{row.funnel_rate}%</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">{formatDuration(row.avg_seconds_in_stage)}</td>
+                                    <td className="px-4 py-3.5 text-right">
+                                        {row.transitions_observed > 0 ? (
+                                            <div className="flex items-center justify-end gap-1.5 text-xs">
+                                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ {row.exit_success_count}</span>
+                                                <span className="rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-700 ring-1 ring-red-200">✕ {row.exit_fail_count}</span>
+                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">→ {row.exit_other_count}</span>
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-slate-400">—</span>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="px-5 py-8">
+                    <EmptyState>Нет данных за выбранный период</EmptyState>
+                </div>
+            )}
+        </ReportSection>
+    );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ManagerPipelineDashboard({ account, period, links }: Props) {
@@ -420,6 +519,7 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
     const [overviewState, setOverviewState] = useState<LoadState<OverviewData>>({ status: 'loading' });
     const [shiftState, setShiftState] = useState<LoadState<ShiftData>>({ status: 'loading' });
     const [avitoCabinetState, setAvitoCabinetState] = useState<LoadState<AvitoCabinetData>>({ status: 'loading' });
+    const [funnelState, setFunnelState] = useState<LoadState<FunnelData>>({ status: 'loading' });
     const [leadsFilter, setLeadsFilter] = useState<LeadsFilter | null>(null);
 
     useEffect(() => {
@@ -445,6 +545,14 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
             .then((json) => setAvitoCabinetState({ status: 'loaded', data: json.data }))
             .catch((err) => setAvitoCabinetState({ status: 'error', message: String(err) }));
     }, [links.avitoCabinetBreakdown, appliedFrom, appliedTo]);
+
+    useEffect(() => {
+        setFunnelState({ status: 'loading' });
+        fetch(buildUrl(links.funnel, { from: appliedFrom, to: appliedTo }))
+            .then((r) => r.json())
+            .then((json) => setFunnelState({ status: 'loaded', data: json.data }))
+            .catch((err) => setFunnelState({ status: 'error', message: String(err) }));
+    }, [links.funnel, appliedFrom, appliedTo]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -502,6 +610,8 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
                     baseDomain={account.base_domain}
                     onOpenLeads={setLeadsFilter}
                 />
+
+                <FunnelSection state={funnelState} />
             </div>
 
             {leadsFilter !== null && (
