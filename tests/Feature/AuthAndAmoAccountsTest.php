@@ -1001,6 +1001,27 @@ class AuthAndAmoAccountsTest extends TestCase
             ->assertSuccessful();
     }
 
+    public function test_manager_pipeline_widget_overview_ignores_malformed_period_param_instead_of_500ing(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        // The seed migration already inserts this widget's catalog row.
+        $widget = DashboardWidget::query()->firstOrCreate(
+            ['code' => 'manager_pipeline_dashboard'],
+            ['name' => 'Менеджеры подбор', 'component_key' => 'Widgets/Amo/ManagerPipelineDashboard', 'sort_order' => 73, 'is_enabled' => true],
+        );
+        $installation = AmoAccountDashboardWidget::query()->create([
+            'amo_account_id' => $account->id,
+            'dashboard_widget_id' => $widget->id,
+            'public_key' => 'manager-pipeline-key',
+            'is_enabled' => true,
+        ]);
+
+        $response = $this->get("/api/widgets/amo/{$installation->public_key}/manager-pipeline-dashboard/overview?from=not-a-date");
+
+        $response->assertSuccessful();
+        $response->assertJsonPath('data.total_count', 0);
+    }
+
     public function test_public_task_overdue_widget_uses_account_installation_key(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);

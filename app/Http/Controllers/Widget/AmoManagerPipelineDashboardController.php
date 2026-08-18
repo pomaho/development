@@ -155,7 +155,9 @@ class AmoManagerPipelineDashboardController extends Controller
                     'conversion_rate' => 'Конверсия, %',
                 ],
                 'rows' => $overview['rows'],
-                'totals' => true,
+                // Summing conversion_rate percentages across rows produces a
+                // meaningless number, not a blended rate — no totals row for this sheet.
+                'totals' => false,
             ],
             [
                 'title' => 'Менеджеры — смены',
@@ -231,12 +233,18 @@ class AmoManagerPipelineDashboardController extends Controller
 
     private function dateValue(mixed $value): ?Carbon
     {
-        if ($value === null || $value === '' || $value === false || $value === 'false' || $value === 'null') {
+        if ($value === null || $value === '' || $value === false || $value === 'false' || $value === 'null' || !is_scalar($value)) {
             return null;
         }
 
-        return is_numeric($value)
-            ? Carbon::createFromTimestamp((int) $value)
-            : Carbon::parse((string) $value);
+        try {
+            return is_numeric($value)
+                ? Carbon::createFromTimestamp((int) $value)
+                : Carbon::parse((string) $value);
+        } catch (\Throwable) {
+            // Malformed from/to query value — fall back to the default period
+            // instead of a raw 500 on every endpoint that resolves it.
+            return null;
+        }
     }
 }
