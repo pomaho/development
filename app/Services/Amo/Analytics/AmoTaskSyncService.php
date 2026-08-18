@@ -9,6 +9,7 @@ use App\Services\Amo\Client\AmoFallbackHttpClient;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class AmoTaskSyncService
 {
@@ -103,12 +104,33 @@ class AmoTaskSyncService
             return;
         }
 
+        // Chunk both the read and the delete instead of a single whereNotIn($openIds) —
+        // on a busy account $openIds can run into the tens of thousands, which risks a
+        // very large SQL IN-list; comparing against a PHP set is cheap either way.
+        $openIdSet = array_flip($openIds);
+        $missingIds = [];
+
         CrmEntitySnapshot::query()
+            ->select(['id', 'external_id'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->whereRaw("JSON_EXTRACT(raw, '$.is_completed') = false")
-            ->whereNotIn('external_id', $openIds)
-            ->delete();
+            ->orderBy('id')
+            ->chunkById(500, function ($tasks) use (&$missingIds, $openIdSet): void {
+                foreach ($tasks as $task) {
+                    if (!isset($openIdSet[$task->external_id])) {
+                        $missingIds[] = $task->external_id;
+                    }
+                }
+            });
+
+        foreach (array_chunk($missingIds, 500) as $chunk) {
+            CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'tasks')
+                ->whereIn('external_id', $chunk)
+                ->delete();
+        }
     }
 
     private function syncCompletionEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, ?TaskStatisticsSyncRun $run, Carbon $syncedAt): int
@@ -235,15 +257,19 @@ class AmoTaskSyncService
         for ($attempt = 1; $attempt <= $attempts; $attempt++) {
             try {
                 return $this->http->get($account, $path, $query);
-            } catch (ConnectionException $exception) {
+            } catch (ConnectionException|RuntimeException $exception) {
+                // RuntimeException also covers AmoRateLimitException (429) and amoCRM's
+                // transient 5xx responses, not just connection-level timeouts — those are
+                // exactly the failures a long paginated sync needs to survive.
                 if ($attempt >= $attempts) {
                     throw $exception;
                 }
 
-                Log::warning('Retrying amoCRM API call after connection timeout.', [
+                Log::warning('Retrying amoCRM API call after transient error.', [
                     'amo_account_id' => $account->id,
                     'path' => $path,
                     'attempt' => $attempt,
+                    'exception' => $exception::class,
                 ]);
 
                 usleep(1_000_000 * $attempt);

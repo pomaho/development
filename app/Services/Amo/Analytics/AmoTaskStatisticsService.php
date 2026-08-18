@@ -683,14 +683,17 @@ class AmoTaskStatisticsService
                 : collect($leadCurrentStatus)->filter(fn (int $sid): bool => ($sortByStatus[$sid] ?? 0) >= $status->sort)->count();
         }
 
+        // Not date-filtered here: the leads themselves are already scoped to the period
+        // above (by entity_created_at), and this just pulls every observed transition
+        // for those specific leads via the isset() check below — a lead created near
+        // the end of the period can still transition after $to, and that transition
+        // should still count instead of being silently dropped by a redundant filter.
         $pipelineIdSet = $pipelineIds->all();
         $events = CrmEntitySnapshot::query()
             ->select(['entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'events')
             ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
-            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
-            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->get();
 
         $eventsByLead = [];
@@ -1435,7 +1438,7 @@ class AmoTaskStatisticsService
     }
 
     /**
-     * @return array{0: \Illuminate\Support\Collection<int, int>, 1: array<string, int>, 2: int, 3: int}
+     * @return array{0: \Illuminate\Support\Collection<int, int>, 1: array<string, int>, 2: int}
      */
     private function managerPipelineResolve(AmoAccount $account): array
     {

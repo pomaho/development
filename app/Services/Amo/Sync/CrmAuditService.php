@@ -9,7 +9,10 @@ use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use App\Services\Amo\Analytics\AmoTaskStatisticsService;
 use App\Services\Amo\Client\AmoFallbackHttpClient;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class CrmAuditService
 {
@@ -200,13 +203,37 @@ class CrmAuditService
             })->all();
     }
 
+    private function getWithRetry(AmoAccount $account, string $path, array $query, int $attempts = 3): array
+    {
+        for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+            try {
+                return $this->http->get($account, $path, $query);
+            } catch (ConnectionException|RuntimeException $exception) {
+                if ($attempt >= $attempts) {
+                    throw $exception;
+                }
+
+                Log::warning('Retrying amoCRM API call after transient error.', [
+                    'amo_account_id' => $account->id,
+                    'path' => $path,
+                    'attempt' => $attempt,
+                    'exception' => $exception::class,
+                ]);
+
+                usleep(1_000_000 * $attempt);
+            }
+        }
+
+        return [];
+    }
+
     private function fetchPaginated(AmoAccount $account, string $path, string $embeddedKey, array $query = []): array
     {
         $page = 1;
         $items = [];
 
         do {
-            $payload = $this->http->get($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
+            $payload = $this->getWithRetry($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
             $items = array_merge($items, $payload['_embedded'][$embeddedKey] ?? []);
 
             $currentPage = (int) ($payload['_page'] ?? $page);
@@ -273,10 +300,13 @@ class CrmAuditService
                 return;
             }
 
+            $nameValue = $entity['name'] ?? $entity['text'] ?? $entity['type'] ?? null;
+
             CrmEntitySnapshot::query()->updateOrCreate(
                 ['amo_account_id' => $account->id, 'entity_type' => $entityType, 'external_id' => (string) ($entity['id'] ?? md5(json_encode($entity)))],
                 [
-                    'name' => mb_substr((string) ($entity['name'] ?? $entity['text'] ?? $entity['type'] ?? ''), 0, 255) ?: null,
+                    // ?: would treat a legitimate "0" name/text/type as falsy and null it out.
+                    'name' => $nameValue !== null ? mb_substr((string) $nameValue, 0, 255) : null,
                     'pipeline_id' => $entity['pipeline_id'] ?? null,
                     'status_id' => $entity['status_id'] ?? null,
                     'responsible_user_id' => $entity['responsible_user_id'] ?? null,
@@ -308,7 +338,7 @@ class CrmAuditService
         $page = 1;
 
         do {
-            $payload = $this->http->get($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
+            $payload = $this->getWithRetry($account, $path, [...$query, 'page' => $page, 'limit' => 250]);
             $items = $payload['_embedded'][$embeddedKey] ?? [];
             $items = is_array($items) ? $items : [];
 

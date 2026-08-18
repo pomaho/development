@@ -1697,6 +1697,82 @@ class AmoServicesTest extends TestCase
         $this->assertSame(1, $statistics->recruiterLeadDistribution($account, $from, $to, $config)['assigned_leads_count']);
     }
 
+    public function test_crm_audit_service_retries_transient_server_errors_before_succeeding(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->with($account, '/api/v4/leads', Mockery::any())
+            ->twice()
+            ->andThrow(new \RuntimeException('amoCRM temporary API error. Status: 500'));
+        $http->shouldReceive('get')
+            ->with($account, '/api/v4/leads', Mockery::any())
+            ->once()
+            ->andReturn([
+                '_page' => 1,
+                '_embedded' => ['leads' => [[
+                    'id' => 100,
+                    'name' => 'Lead',
+                    'pipeline_id' => 10,
+                    'status_id' => 20,
+                    'updated_at' => now()->timestamp,
+                ]]],
+            ]);
+
+        $result = (new CrmAuditService($http))->syncRecentlyUpdatedLeads($account, now()->subDay(), now());
+
+        $this->assertSame(1, $result['leads']);
+        $this->assertDatabaseHas('crm_entity_snapshots', [
+            'amo_account_id' => $account->id,
+            'entity_type' => 'leads',
+            'external_id' => '100',
+        ]);
+    }
+
+    public function test_crm_audit_service_gives_up_after_exhausting_retries(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->with($account, '/api/v4/leads', Mockery::any())
+            ->times(3)
+            ->andThrow(new \RuntimeException('amoCRM temporary API error. Status: 500'));
+
+        $this->expectException(\RuntimeException::class);
+
+        (new CrmAuditService($http))->syncRecentlyUpdatedLeads($account, now()->subDay(), now());
+    }
+
+    public function test_sync_simple_entity_preserves_literal_zero_name(): void
+    {
+        $account = $this->accountWithToken($this->longLivedJwt());
+
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')
+            ->with($account, '/api/v4/leads', Mockery::any())
+            ->once()
+            ->andReturn([
+                '_page' => 1,
+                '_embedded' => ['leads' => [[
+                    'id' => 100,
+                    'name' => '0',
+                    'pipeline_id' => 10,
+                    'status_id' => 20,
+                    'updated_at' => now()->timestamp,
+                ]]],
+            ]);
+
+        (new CrmAuditService($http))->syncRecentlyUpdatedLeads($account, now()->subDay(), now());
+
+        $this->assertSame('0', CrmEntitySnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->where('external_id', '100')
+            ->value('name'));
+    }
+
     public function test_oauth_refresh_saves_new_refresh_token(): void
     {
         $this->markTestSkipped('Requires official amoCRM OAuth client network flow; covered by integration testing with real credentials.');
