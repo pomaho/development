@@ -769,6 +769,115 @@ class AmoTaskStatisticsService
         ];
     }
 
+    /**
+     * Drill-down lead list behind one funnel cell.
+     *
+     * $mode 'reached': leads that reached at least $statusId (same rule as the funnel
+     * count — exact match for the terminal 142/143 pair, "sort order at least this far"
+     * for every other stage).
+     * $mode 'success'|'fail'|'other': leads with an observed lead_status_changed
+     * transition FROM $statusId TO 142 / 143 / anything else, matching one row's
+     * exit_success_count / exit_fail_count / exit_other_count.
+     */
+    public function managerPipelineFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, string $mode, int $limit = 300): array
+    {
+        [$pipelineIds] = $this->managerPipelineResolve($account);
+
+        $leads = [];
+        $total = 0;
+
+        if ($pipelineIds->isNotEmpty()) {
+            $leadRows = CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->get(['external_id', 'name', 'status_id', 'entity_created_at']);
+
+            $leadCurrentStatus = $leadRows->mapWithKeys(fn ($lead): array => [(string) $lead->external_id => (int) $lead->status_id])->all();
+            $leadMeta = $leadRows->keyBy(fn ($lead): string => (string) $lead->external_id);
+
+            if ($mode === 'reached') {
+                $sortByStatus = CrmPipelineStatusSnapshot::query()
+                    ->where('amo_account_id', $account->id)
+                    ->whereIn('amo_pipeline_id', $pipelineIds)
+                    ->pluck('sort', 'amo_status_id')
+                    ->all();
+                $targetSort = $sortByStatus[$statusId] ?? 0;
+
+                $matchingIds = collect($leadCurrentStatus)
+                    ->filter(fn (int $sid): bool => in_array($statusId, [142, 143], true)
+                        ? $sid === $statusId
+                        : ($sortByStatus[$sid] ?? 0) >= $targetSort)
+                    ->keys();
+            } else {
+                $pipelineIdSet = $pipelineIds->all();
+                $events = CrmEntitySnapshot::query()
+                    ->select(['entity_created_at', 'raw'])
+                    ->where('amo_account_id', $account->id)
+                    ->where('entity_type', 'events')
+                    ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+                    ->get();
+
+                $eventsByLead = [];
+                foreach ($events as $event) {
+                    $raw = $event->raw ?? [];
+                    $entityId = (string) ($raw['entity_id'] ?? '');
+                    if (!isset($leadCurrentStatus[$entityId])) {
+                        continue;
+                    }
+                    $afterPipeline = (int) ($raw['value_after'][0]['lead_status']['pipeline_id'] ?? 0);
+                    if (!in_array($afterPipeline, $pipelineIdSet, true)) {
+                        continue;
+                    }
+                    $eventsByLead[$entityId][] = [
+                        'status_id' => (int) ($raw['value_after'][0]['lead_status']['id'] ?? 0),
+                        'at' => $event->entity_created_at,
+                    ];
+                }
+
+                $matchingIds = collect();
+                foreach ($eventsByLead as $entityId => $transitions) {
+                    usort($transitions, fn (array $a, array $b): int => $a['at']->timestamp <=> $b['at']->timestamp);
+                    $count = count($transitions);
+
+                    for ($i = 0; $i < $count - 1; $i++) {
+                        if ($transitions[$i]['status_id'] !== $statusId) {
+                            continue;
+                        }
+                        $toStatus = $transitions[$i + 1]['status_id'];
+                        $matches = match ($mode) {
+                            'success' => $toStatus === 142,
+                            'fail' => $toStatus === 143,
+                            'other' => $toStatus !== 142 && $toStatus !== 143,
+                            default => false,
+                        };
+                        if ($matches) {
+                            $matchingIds->push($entityId);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $total = $matchingIds->count();
+            foreach ($matchingIds->take($limit) as $id) {
+                $meta = $leadMeta->get($id);
+                if ($meta === null) {
+                    continue;
+                }
+                $leads[] = [
+                    'id' => $meta->external_id,
+                    'name' => $meta->name ?: 'Без названия',
+                    'created_at' => $meta->entity_created_at?->toDateString(),
+                ];
+            }
+        }
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
+    }
+
     private function managerPipelineFunnelCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');

@@ -95,6 +95,7 @@ type Links = {
     avitoCabinetBreakdown: string;
     avitoCabinetLeads: string;
     funnel: string;
+    funnelLeads: string;
     export: string;
 };
 
@@ -427,7 +428,11 @@ function formatDuration(seconds: number | null): string {
     return `${Math.round((hours / 24) * 10) / 10} дн`;
 }
 
-function FunnelSection({ state }: { state: LoadState<FunnelData> }) {
+function FunnelSection({ state, leadsUrl, onOpenLeads }: {
+    state: LoadState<FunnelData>;
+    leadsUrl: string;
+    onOpenLeads: (filter: LeadsFilter) => void;
+}) {
     if (state.status === 'loading') return <SectionSkeleton rows={5} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
@@ -459,7 +464,12 @@ function FunnelSection({ state }: { state: LoadState<FunnelData> }) {
                             {data.rows.map((row) => (
                                 <tr key={row.status_id} className="transition-colors hover:bg-violet-50/50">
                                     <td className="px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
-                                    <td className="px-4 py-3.5 text-right tabular-nums text-slate-700">{row.funnel_count}</td>
+                                    <td className="px-4 py-3.5 text-right">
+                                        <CountButton
+                                            value={row.funnel_count}
+                                            onClick={() => onOpenLeads({ leadsUrl, manager: '', extraParams: { status_id: String(row.status_id), mode: 'reached' }, label: `${row.name} — дошло сделок` })}
+                                        />
+                                    </td>
                                     <td className="px-4 py-3.5">
                                         <div className="flex min-w-40 items-center gap-2.5">
                                             <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
@@ -472,9 +482,27 @@ function FunnelSection({ state }: { state: LoadState<FunnelData> }) {
                                     <td className="px-4 py-3.5 text-right">
                                         {row.transitions_observed > 0 ? (
                                             <div className="flex items-center justify-end gap-1.5 text-xs">
-                                                <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 ring-1 ring-emerald-200">✓ {row.exit_success_count}</span>
-                                                <span className="rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-700 ring-1 ring-red-200">✕ {row.exit_fail_count}</span>
-                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">→ {row.exit_other_count}</span>
+                                                <button
+                                                    type="button"
+                                                    className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                                                    onClick={() => onOpenLeads({ leadsUrl, manager: '', extraParams: { status_id: String(row.status_id), mode: 'success' }, label: `${row.name} — ушло в успех` })}
+                                                >
+                                                    ✓ {row.exit_success_count}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="rounded-full bg-red-50 px-2 py-0.5 font-semibold text-red-700 ring-1 ring-red-200 hover:bg-red-100"
+                                                    onClick={() => onOpenLeads({ leadsUrl, manager: '', extraParams: { status_id: String(row.status_id), mode: 'fail' }, label: `${row.name} — ушло в отказ` })}
+                                                >
+                                                    ✕ {row.exit_fail_count}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200"
+                                                    onClick={() => onOpenLeads({ leadsUrl, manager: '', extraParams: { status_id: String(row.status_id), mode: 'other' }, label: `${row.name} — ушло дальше` })}
+                                                >
+                                                    → {row.exit_other_count}
+                                                </button>
                                             </div>
                                         ) : (
                                             <span className="text-xs text-slate-400">—</span>
@@ -558,7 +586,7 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
                     onOpenLeads={setLeadsFilter}
                 />
 
-                <FunnelSection state={funnelState} />
+                <FunnelSection state={funnelState} leadsUrl={links.funnelLeads} onOpenLeads={setLeadsFilter} />
             </div>
 
             {leadsFilter !== null && (

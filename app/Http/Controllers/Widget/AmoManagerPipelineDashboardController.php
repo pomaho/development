@@ -41,6 +41,7 @@ class AmoManagerPipelineDashboardController extends Controller
                 'avitoCabinetBreakdown' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-breakdown', $publicKey),
                 'avitoCabinetLeads' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-leads', $publicKey),
                 'funnel' => route('api.widgets.amo.manager-pipeline-dashboard.funnel', $publicKey),
+                'funnelLeads' => route('api.widgets.amo.manager-pipeline-dashboard.funnel-leads', $publicKey),
                 'export' => route('api.widgets.amo.manager-pipeline-dashboard.export', $publicKey),
             ],
         ]);
@@ -132,6 +133,22 @@ class AmoManagerPipelineDashboardController extends Controller
 
         return response()->json([
             'data' => $statisticsService->managerPipelineFunnel($installation->account, $from, $to),
+        ]);
+    }
+
+    public function funnelLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->managerPipelineFunnelLeads(
+                $installation->account,
+                $from,
+                $to,
+                (int) $request->query('status_id', 0),
+                (string) $request->query('mode', 'reached'),
+            ),
         ]);
     }
 

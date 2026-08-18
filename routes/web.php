@@ -173,6 +173,9 @@ Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/avito-cabine
 Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/funnel', [AmoManagerPipelineDashboardController::class, 'funnel'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-pipeline-dashboard.funnel');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/funnel-leads', [AmoManagerPipelineDashboardController::class, 'funnelLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.funnel-leads');
 Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/export', [AmoManagerPipelineDashboardController::class, 'export'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-pipeline-dashboard.export');
