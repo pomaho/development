@@ -467,6 +467,10 @@ class AmoTaskStatisticsService
                 ->where('amo_account_id', $account->id)
                 ->where('entity_type', 'leads')
                 ->whereIn('pipeline_id', $pipelineIds)
+                // Overview/shift reports only cover closed deals (142 "Встал в график" /
+                // 143 "Закрыто и не реализовано") — leads still in progress are excluded
+                // so totals equal success + closed-fail, not everything ever created.
+                ->whereIn('status_id', [142, 143])
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
@@ -818,6 +822,12 @@ class AmoTaskStatisticsService
 
                     return $leadManager === $normalisedManager;
                 })->values();
+            }
+
+            if ($mode === 'visited') {
+                // Matches buildManagerPipelineStats: the per-manager stage table only
+                // covers closed deals (142/143), so its drill-down must too.
+                $leadRows = $leadRows->filter(fn ($lead): bool => in_array((int) $lead->status_id, [142, 143], true))->values();
             }
 
             $leadCurrentStatus = $leadRows->mapWithKeys(fn ($lead): array => [(string) $lead->external_id => (int) $lead->status_id])->all();
@@ -1693,6 +1703,10 @@ class AmoTaskStatisticsService
                 ->where('amo_account_id', $account->id)
                 ->where('entity_type', 'leads')
                 ->whereIn('pipeline_id', $pipelineIds)
+                // Only closed deals (142 "Встал в график" / 143 "Закрыто и не реализовано") —
+                // leads still in progress are excluded, so total_count always equals
+                // success_count + the closed-fail count, not everything ever created.
+                ->whereIn('status_id', [142, 143])
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
