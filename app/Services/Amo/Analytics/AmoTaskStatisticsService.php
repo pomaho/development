@@ -29,6 +29,11 @@ class AmoTaskStatisticsService
     private const SHIFT_DATE_FIELD_NAME = 'Дата смены';
     private const SHIFT_DATE_PIPELINE_NAME = 'Массовый подбор';
     private const MANAGER_PIPELINE_NAME = 'Менеджеры подбор';
+
+    // lead_status_changed events are only reliably captured for this pipeline from
+    // this date onward — anything before it is missing transition history entirely,
+    // so "which stages did this lead actually visit" can only be trusted from here on.
+    private const MANAGER_PIPELINE_EVENTS_RELIABLE_FROM = '2026-08-01';
     private const FIFTH_SHIFT_FIELD_NAME = 'Вышел на 5 смену';
     private const MANAGER_PIPELINE_AVITO_CABINET_TAGS = ['Вакансии здесь', 'Работа Бета'];
 
@@ -831,6 +836,12 @@ class AmoTaskStatisticsService
                         ? $sid === $statusId
                         : ($sortByStatus[$sid] ?? 0) >= $targetSort)
                     ->keys();
+            } elseif ($mode === 'visited') {
+                $visitedByLead = $this->managerPipelineVisitedStatusesByLead($account, $pipelineIds);
+
+                $matchingIds = collect($leadCurrentStatus)
+                    ->filter(fn (int $sid, string $entityId): bool => $sid === $statusId || isset($visitedByLead[$entityId][$statusId]))
+                    ->keys();
             } else {
                 $pipelineIdSet = $pipelineIds->all();
                 $events = CrmEntitySnapshot::query()
@@ -1594,6 +1605,51 @@ class AmoTaskStatisticsService
         return [$pipelineIds, $successPairs, $fifthShiftFieldId];
     }
 
+    /**
+     * Per-lead set of status ids the lead has *actually* been observed at, built from
+     * value_before/value_after on every lead_status_changed event since
+     * self::MANAGER_PIPELINE_EVENTS_RELIABLE_FROM. Keyed by lead external_id (string),
+     * value is a [status_id => true] membership set. Callers should also always treat
+     * a lead's *current* status as visited — that's accurate even for leads whose
+     * transition history predates the reliable-events window.
+     *
+     * @return array<string, array<int, true>>
+     */
+    private function managerPipelineVisitedStatusesByLead(AmoAccount $account, \Illuminate\Support\Collection $pipelineIds): array
+    {
+        $pipelineIdSet = $pipelineIds->all();
+        $visited = [];
+
+        CrmEntitySnapshot::query()
+            ->select(['raw'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'events')
+            ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->where('entity_created_at', '>=', self::MANAGER_PIPELINE_EVENTS_RELIABLE_FROM)
+            ->get()
+            ->each(function ($event) use (&$visited, $pipelineIdSet): void {
+                $raw = $event->raw ?? [];
+                $entityId = (string) ($raw['entity_id'] ?? '');
+                if ($entityId === '') {
+                    return;
+                }
+
+                $beforeStatus = (int) ($raw['value_before'][0]['lead_status']['id'] ?? 0);
+                $beforePipeline = (int) ($raw['value_before'][0]['lead_status']['pipeline_id'] ?? 0);
+                if ($beforeStatus > 0 && in_array($beforePipeline, $pipelineIdSet, true)) {
+                    $visited[$entityId][$beforeStatus] = true;
+                }
+
+                $afterStatus = (int) ($raw['value_after'][0]['lead_status']['id'] ?? 0);
+                $afterPipeline = (int) ($raw['value_after'][0]['lead_status']['pipeline_id'] ?? 0);
+                if ($afterStatus > 0 && in_array($afterPipeline, $pipelineIdSet, true)) {
+                    $visited[$entityId][$afterStatus] = true;
+                }
+            });
+
+        return $visited;
+    }
+
     private function managerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
     {
         return Cache::remember(
@@ -1626,21 +1682,21 @@ class AmoTaskStatisticsService
                 ->orderBy('sort')
                 ->get(['amo_status_id', 'name', 'sort'])
             : collect();
-        $sortByStatus = $statuses->pluck('sort', 'amo_status_id')->all();
         $emptyStageCounts = $statuses->mapWithKeys(fn ($status): array => [$status->amo_status_id => 0])->all();
+        $visitedByLead = $pipelineFound ? $this->managerPipelineVisitedStatusesByLead($account, $pipelineIds) : [];
 
         $managers = [];
 
         if ($pipelineFound) {
             CrmEntitySnapshot::query()
-                ->select(['id', 'pipeline_id', 'status_id', 'responsible_user_id', 'entity_created_at', 'custom_fields_values'])
+                ->select(['id', 'external_id', 'pipeline_id', 'status_id', 'responsible_user_id', 'entity_created_at', 'custom_fields_values'])
                 ->where('amo_account_id', $account->id)
                 ->where('entity_type', 'leads')
                 ->whereIn('pipeline_id', $pipelineIds)
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$managers, $users, $fifthShiftFieldId, $successPairs, $statuses, $sortByStatus, $emptyStageCounts): void {
+                ->chunkById(500, function ($leads) use (&$managers, $users, $fifthShiftFieldId, $successPairs, $statuses, $emptyStageCounts, $visitedByLead): void {
                     foreach ($leads as $lead) {
                         $responsibleId = (int) ($lead->responsible_user_id ?? 0);
                         $managerName = $users->get($responsibleId)?->name ?? 'Без ответственного';
@@ -1663,14 +1719,14 @@ class AmoTaskStatisticsService
                             }
                         }
 
-                        $leadSort = $sortByStatus[$lead->status_id] ?? 0;
+                        // A lead's current status is always accurate, even if its transition
+                        // history predates the reliable-events window — union it in so leads
+                        // with no (or partial) event history still count at their current stage.
+                        $visited = $visitedByLead[(string) $lead->external_id] ?? [];
+                        $visited[(int) $lead->status_id] = true;
+
                         foreach ($statuses as $status) {
-                            // Same terminal-status special case as the account-wide funnel: 142/143
-                            // are parallel branches, matched exactly rather than by sort order.
-                            $reached = in_array($status->amo_status_id, [142, 143], true)
-                                ? ((int) $lead->status_id === $status->amo_status_id)
-                                : ($leadSort >= $status->sort);
-                            if ($reached) {
+                            if (isset($visited[$status->amo_status_id])) {
                                 $managers[$managerName]['stage_counts'][$status->amo_status_id]++;
                             }
                         }

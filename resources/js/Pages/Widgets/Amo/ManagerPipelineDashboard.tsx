@@ -243,7 +243,7 @@ function OverviewSection({ state, leadsUrl, funnelLeadsUrl, onOpenLeads }: {
         <ReportSection
             eyebrow="Менеджеры подбор"
             title={`Сделки по полю "${data.manager_field_name}" и конверсия в «${data.success_status_name}»`}
-            description={`Воронка: ${data.pipeline_name}. Учитываются сделки, созданные в выбранном периоде. Нажмите на число — откроется список сделок.`}
+            description={`Воронка: ${data.pipeline_name}. Учитываются сделки, созданные в выбранном периоде. Колонки по этапам — реально ли сделка была на этом статусе (по истории переходов и текущему статусу; переходы фиксируются примерно с 1 августа 2026, более ранние — только по текущему статусу). Нажмите на число — откроется список сделок.`}
             aside={<AccentSummary label="Всего сделок" value={data.total_count} note={`Встал в график: ${data.success_count}`} tone="brand" />}
         >
             {data.rows.length > 0 ? (
@@ -296,7 +296,7 @@ function OverviewSection({ state, leadsUrl, funnelLeadsUrl, onOpenLeads }: {
                                                     onClick={() => onOpenLeads({
                                                         leadsUrl: funnelLeadsUrl,
                                                         manager: row.name,
-                                                        extraParams: { status_id: String(stage.status_id), mode: 'reached' },
+                                                        extraParams: { status_id: String(stage.status_id), mode: 'visited' },
                                                         label: `${row.name} — ${stageName}`,
                                                     })}
                                                 />
