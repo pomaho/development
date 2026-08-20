@@ -148,6 +148,7 @@ class AmoManagerPipelineDashboardController extends Controller
                 $to,
                 (int) $request->query('status_id', 0),
                 (string) $request->query('mode', 'reached'),
+                (string) $request->query('manager', ''),
             ),
         ]);
     }

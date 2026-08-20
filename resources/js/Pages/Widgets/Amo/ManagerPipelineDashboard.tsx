@@ -12,12 +12,17 @@ type Account = { name: string; base_domain: string };
 
 type Period = { from: string; to: string; source: string; preset: string | null; label: string };
 
+type StageCount = { status_id: number; count: number; percent: number };
+
 type OverviewRow = {
     name: string;
     total_count: number;
     success_count: number;
     conversion_rate: number;
+    stage_counts: StageCount[];
 };
+
+type PipelineStage = { status_id: number; name: string };
 
 type OverviewData = {
     pipeline_found: boolean;
@@ -27,6 +32,7 @@ type OverviewData = {
     success_status_name: string;
     total_count: number;
     success_count: number;
+    stages: PipelineStage[];
     rows: OverviewRow[];
 };
 
@@ -213,9 +219,10 @@ function CountButton({ value, tone, onClick }: { value: number; tone?: 'default'
 
 // ─── Overview section ───────────────────────────────────────────────────────
 
-function OverviewSection({ state, leadsUrl, onOpenLeads }: {
+function OverviewSection({ state, leadsUrl, funnelLeadsUrl, onOpenLeads }: {
     state: LoadState<OverviewData>;
     leadsUrl: string;
+    funnelLeadsUrl: string;
     onOpenLeads: (filter: LeadsFilter) => void;
 }) {
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
@@ -244,16 +251,21 @@ function OverviewSection({ state, leadsUrl, onOpenLeads }: {
                     <table className="w-full text-left text-sm">
                         <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
                             <tr>
-                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Менеджер</th>
+                                <th className="sticky left-0 bg-slate-50 px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Менеджер</th>
                                 <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок за период</th>
                                 <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Встал в график</th>
                                 <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Конверсия</th>
+                                {data.stages.map((stage) => (
+                                    <th key={stage.status_id} className="whitespace-nowrap px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                        {stage.name}
+                                    </th>
+                                ))}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {data.rows.map((row) => (
                                 <tr key={row.name} className="transition-colors hover:bg-violet-50/50">
-                                    <td className="px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
+                                    <td className="sticky left-0 bg-white px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
                                     <td className="px-4 py-3.5 text-right">
                                         <CountButton
                                             value={row.total_count}
@@ -275,6 +287,23 @@ function OverviewSection({ state, leadsUrl, onOpenLeads }: {
                                             <span className="w-12 text-right text-sm font-semibold tabular-nums text-slate-600">{clampPercent(row.conversion_rate)}%</span>
                                         </div>
                                     </td>
+                                    {row.stage_counts.map((stage) => {
+                                        const stageName = data.stages.find((s) => s.status_id === stage.status_id)?.name ?? '';
+                                        return (
+                                            <td key={stage.status_id} className="whitespace-nowrap px-4 py-3.5 text-right">
+                                                <CountButton
+                                                    value={stage.count}
+                                                    onClick={() => onOpenLeads({
+                                                        leadsUrl: funnelLeadsUrl,
+                                                        manager: row.name,
+                                                        extraParams: { status_id: String(stage.status_id), mode: 'reached' },
+                                                        label: `${row.name} — ${stageName}`,
+                                                    })}
+                                                />
+                                                <span className="ml-1.5 text-xs font-medium text-slate-400">{stage.percent}%</span>
+                                            </td>
+                                        );
+                                    })}
                                 </tr>
                             ))}
                         </tbody>
@@ -571,6 +600,7 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
                 <OverviewSection
                     state={overviewState}
                     leadsUrl={links.overviewLeads}
+                    funnelLeadsUrl={links.funnelLeads}
                     onOpenLeads={setLeadsFilter}
                 />
 

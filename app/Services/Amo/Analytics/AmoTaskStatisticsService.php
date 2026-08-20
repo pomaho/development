@@ -388,6 +388,14 @@ class AmoTaskStatisticsService
                 'total_count' => $m['total_count'],
                 'success_count' => $m['success_count'],
                 'conversion_rate' => $m['total_count'] > 0 ? round($m['success_count'] / $m['total_count'] * 100, 1) : 0.0,
+                'stage_counts' => collect($m['stage_counts'])
+                    ->map(fn (int $count, int $statusId): array => [
+                        'status_id' => $statusId,
+                        'count' => $count,
+                        'percent' => $m['total_count'] > 0 ? round($count / $m['total_count'] * 100, 1) : 0.0,
+                    ])
+                    ->values()
+                    ->all(),
             ])
             ->sortByDesc('total_count')
             ->values()
@@ -401,6 +409,7 @@ class AmoTaskStatisticsService
             'success_status_name' => $stats['success_status_name'],
             'total_count' => (int) collect($rows)->sum('total_count'),
             'success_count' => (int) collect($rows)->sum('success_count'),
+            'stages' => $stats['stages'] ?? [],
             'rows' => $rows,
         ];
     }
@@ -779,7 +788,7 @@ class AmoTaskStatisticsService
      * transition FROM $statusId TO 142 / 143 / anything else, matching one row's
      * exit_success_count / exit_fail_count / exit_other_count.
      */
-    public function managerPipelineFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, string $mode, int $limit = 300): array
+    public function managerPipelineFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, string $mode, string $managerName = '', int $limit = 300): array
     {
         [$pipelineIds] = $this->managerPipelineResolve($account);
 
@@ -793,7 +802,18 @@ class AmoTaskStatisticsService
                 ->whereIn('pipeline_id', $pipelineIds)
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
-                ->get(['external_id', 'name', 'status_id', 'entity_created_at']);
+                ->get(['external_id', 'name', 'status_id', 'entity_created_at', 'responsible_user_id']);
+
+            if ($managerName !== '') {
+                $users = AmoUsersSnapshot::query()->where('amo_account_id', $account->id)->get()->keyBy('amo_user_id');
+                $normalisedManager = mb_strtolower(trim($managerName));
+                $leadRows = $leadRows->filter(function ($lead) use ($users, $normalisedManager): bool {
+                    $responsibleId = (int) ($lead->responsible_user_id ?? 0);
+                    $leadManager = mb_strtolower(trim($users->get($responsibleId)?->name ?? 'Без ответственного'));
+
+                    return $leadManager === $normalisedManager;
+                })->values();
+            }
 
             $leadCurrentStatus = $leadRows->mapWithKeys(fn ($lead): array => [(string) $lead->external_id => (int) $lead->status_id])->all();
             $leadMeta = $leadRows->keyBy(fn ($lead): string => (string) $lead->external_id);
@@ -1597,6 +1617,18 @@ class AmoTaskStatisticsService
             ->get()
             ->keyBy('amo_user_id');
 
+        // Same stage list/order used by the per-stage funnel table (buildManagerPipelineFunnel),
+        // reused here to break that funnel down per manager instead of account-wide.
+        $statuses = $pipelineFound
+            ? CrmPipelineStatusSnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->whereIn('amo_pipeline_id', $pipelineIds)
+                ->orderBy('sort')
+                ->get(['amo_status_id', 'name', 'sort'])
+            : collect();
+        $sortByStatus = $statuses->pluck('sort', 'amo_status_id')->all();
+        $emptyStageCounts = $statuses->mapWithKeys(fn ($status): array => [$status->amo_status_id => 0])->all();
+
         $managers = [];
 
         if ($pipelineFound) {
@@ -1608,12 +1640,18 @@ class AmoTaskStatisticsService
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$managers, $users, $fifthShiftFieldId, $successPairs): void {
+                ->chunkById(500, function ($leads) use (&$managers, $users, $fifthShiftFieldId, $successPairs, $statuses, $sortByStatus, $emptyStageCounts): void {
                     foreach ($leads as $lead) {
                         $responsibleId = (int) ($lead->responsible_user_id ?? 0);
                         $managerName = $users->get($responsibleId)?->name ?? 'Без ответственного';
 
-                        $managers[$managerName] ??= ['name' => $managerName, 'total_count' => 0, 'success_count' => 0, 'fifth_shift_count' => 0];
+                        $managers[$managerName] ??= [
+                            'name' => $managerName,
+                            'total_count' => 0,
+                            'success_count' => 0,
+                            'fifth_shift_count' => 0,
+                            'stage_counts' => $emptyStageCounts,
+                        ];
                         $managers[$managerName]['total_count']++;
 
                         $isSuccess = isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"]);
@@ -1622,6 +1660,18 @@ class AmoTaskStatisticsService
                             $customFields = $lead->custom_fields_values ?? [];
                             if ($fifthShiftFieldId > 0 && $this->checkboxFieldValue($customFields, $fifthShiftFieldId)) {
                                 $managers[$managerName]['fifth_shift_count']++;
+                            }
+                        }
+
+                        $leadSort = $sortByStatus[$lead->status_id] ?? 0;
+                        foreach ($statuses as $status) {
+                            // Same terminal-status special case as the account-wide funnel: 142/143
+                            // are parallel branches, matched exactly rather than by sort order.
+                            $reached = in_array($status->amo_status_id, [142, 143], true)
+                                ? ((int) $lead->status_id === $status->amo_status_id)
+                                : ($leadSort >= $status->sort);
+                            if ($reached) {
+                                $managers[$managerName]['stage_counts'][$status->amo_status_id]++;
                             }
                         }
                     }
@@ -1634,6 +1684,10 @@ class AmoTaskStatisticsService
             'manager_field_found' => true,
             'success_status_name' => 'Встал в график',
             'fifth_shift_field_found' => $fifthShiftFieldId > 0,
+            'stages' => $statuses->map(fn ($status): array => [
+                'status_id' => $status->amo_status_id,
+                'name' => $status->name,
+            ])->values()->all(),
             'managers' => array_values($managers),
         ];
     }
