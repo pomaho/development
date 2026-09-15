@@ -9,7 +9,6 @@ use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
 class AmoTaskStatisticsService
@@ -712,21 +711,13 @@ class AmoTaskStatisticsService
         // transition after $to, and that transition should still count instead of being
         // silently dropped by a redundant filter. Bounding by $from IS safe and done
         // below though — every lead in $leadCurrentStatus was created at/after $from,
-        // so none of its events can predate that either — and matters a lot now that
-        // this hydrates real payloads (see set_time_limit note above): letting MySQL use
-        // the (amo_account_id, entity_type, entity_created_at) index here instead of
-        // scanning+JSON-decoding the account's entire event history turns this from a
-        // 30s+ timeout risk into a sub-second query on typical report periods.
+        // so none of its events can predate that either.
         $pipelineIdSet = $pipelineIds->all();
         $events = CrmEntitySnapshot::query()
-            ->when(
-                $from !== null,
-                fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
-            )
             ->select(['entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'events')
-            ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->where('event_type', 'lead_status_changed')
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->get();
 
@@ -872,18 +863,11 @@ class AmoTaskStatisticsService
                     ->keys();
             } else {
                 $pipelineIdSet = $pipelineIds->all();
-                // See buildManagerPipelineFunnel()'s identical query for why $from (not
-                // $to) is a safe bound and why the index hint matters now that raw holds
-                // real payloads.
                 $events = CrmEntitySnapshot::query()
-                    ->when(
-                        $from !== null,
-                        fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
-                    )
                     ->select(['entity_created_at', 'raw'])
                     ->where('amo_account_id', $account->id)
                     ->where('entity_type', 'events')
-                    ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+                    ->where('event_type', 'lead_status_changed')
                     ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                     ->get();
 
@@ -1137,12 +1121,12 @@ class AmoTaskStatisticsService
     }
 
     /**
-     * Latest entity_created_at across every lead_status_changed event for the account —
-     * an unbounded MAX() with no usable index (~780k-row events table, ~20s either way:
-     * verified the date-range index hint used elsewhere doesn't help an unbounded scan).
-     * Cached long (a day) and keyed on the dashboard cache version so a real resync
-     * (which bumps that version — see refreshDashboardCacheVersion()) invalidates it
-     * immediately instead of waiting out the TTL.
+     * Latest entity_created_at across every lead_status_changed event for the account.
+     * Backed by the generated event_type column + ces_account_type_eventtype_created
+     * index (MySQL answers this via "Select tables optimized away" — no row scan at
+     * all), so still cheap uncached; kept cached anyway (a day, keyed on the dashboard
+     * cache version so a real resync invalidates it immediately) since there's no
+     * reason to hit the DB for a value that only changes on resync.
      */
     private function leadStatusEventsSyncedThrough(AmoAccount $account): ?string
     {
@@ -1154,7 +1138,7 @@ class AmoTaskStatisticsService
             fn (): ?string => CrmEntitySnapshot::query()
                 ->where('amo_account_id', $account->id)
                 ->where('entity_type', 'events')
-                ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+                ->where('event_type', 'lead_status_changed')
                 ->max('entity_created_at'),
         );
     }
@@ -1190,7 +1174,7 @@ class AmoTaskStatisticsService
      * shape/semantics as visitedStatusesByLead()) and, from the same rows, each lead's
      * status history ordered by time — used to count deals that moved directly from a
      * stage into 143. Kept as one query instead of two separate scans of the same
-     * (large, unindexed-by-type) events table.
+     * events table.
      *
      * @return array{0: array<string, array<int, true>>, 1: array<string, array<int, array{status_id: int, at: Carbon}>>}
      */
@@ -1201,14 +1185,10 @@ class AmoTaskStatisticsService
         $transitions = [];
 
         CrmEntitySnapshot::query()
-            ->when(
-                $from !== null,
-                fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
-            )
             ->select(['entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'events')
-            ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->where('event_type', 'lead_status_changed')
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->get()
             ->each(function ($event) use (&$visited, &$transitions, $pipelineIdSet): void {
@@ -1956,19 +1936,10 @@ class AmoTaskStatisticsService
         $visited = [];
 
         CrmEntitySnapshot::query()
-            // The optimizer picks crm_entity_unique (account+type only) over
-            // ces_account_type_created here, mis-costing the unindexable JSON_EXTRACT
-            // predicate and scanning ~780k rows instead of the handful the date range
-            // actually matches (verified via EXPLAIN — forcing the index turns a ~45s
-            // table scan into a range scan). Only helps when a date filter is present.
-            ->when(
-                $reliableFrom !== null,
-                fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
-            )
             ->select(['raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'events')
-            ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->where('event_type', 'lead_status_changed')
             ->when($reliableFrom !== null, fn ($q) => $q->where('entity_created_at', '>=', $reliableFrom))
             ->get()
             ->each(function ($event) use (&$visited, $pipelineIdSet): void {
