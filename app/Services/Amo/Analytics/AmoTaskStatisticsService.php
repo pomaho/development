@@ -9,6 +9,7 @@ use App\Models\CrmEntitySnapshot;
 use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
 class AmoTaskStatisticsService
@@ -847,7 +848,7 @@ class AmoTaskStatisticsService
                         : ($sortByStatus[$sid] ?? 0) >= $targetSort)
                     ->keys();
             } elseif ($mode === 'visited') {
-                $visitedByLead = $this->managerPipelineVisitedStatusesByLead($account, $pipelineIds);
+                $visitedByLead = $this->visitedStatusesByLead($account, $pipelineIds);
 
                 $matchingIds = collect($leadCurrentStatus)
                     ->filter(fn (int $sid, string $entityId): bool => $sid === $statusId || isset($visitedByLead[$entityId][$statusId]))
@@ -925,6 +926,207 @@ class AmoTaskStatisticsService
 
         return implode(':', [
             'amo_manager_pipeline_funnel',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
+    public function massRecruitmentFunnel(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->massRecruitmentFunnelCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildMassRecruitmentFunnel($account, $from, $to),
+        );
+    }
+
+    /**
+     * Per-stage funnel for the "Массовый подбор" pipeline: how many deals created in the
+     * period *actually visited* each stage (including both reserved terminal statuses —
+     * success and closed-not-realized), as a percentage of all deals created in the period.
+     * Built from real lead_status_changed transition history via visitedStatusesByLead(),
+     * unioned with each lead's current status (always accurate, even with no event history)
+     * — not the sort-order "reached at least this far" approximation used elsewhere.
+     *
+     * Unlike the "Менеджеры подбор" reports, no reliable-from cutoff is applied here: this
+     * pipeline's event history has no known unreliable window. It does, however, currently
+     * stop entirely on `events_synced_through` (lead_status_changed events for this account
+     * were last synced then) — deals that changed stage after that date only count at their
+     * current stage until the next full events sync.
+     */
+    private function buildMassRecruitmentFunnel(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    {
+        // The events table has no usable index for its JSON event-type field (~780k
+        // rows/account) — a cold, uncached run of the two scans below (visited statuses +
+        // events-synced-through) can take 20-30s+ each on a wide date range, well past
+        // PHP's default 30s limit. Both are cached afterward (10 min / 1 day), so this
+        // only matters for the first hit.
+        set_time_limit(120);
+
+        $pipelineIds = $this->massRecruitmentPipelineIds($account);
+
+        $pipelineFound = $pipelineIds->isNotEmpty();
+        $pipelineName = $pipelineFound
+            ? (string) CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->whereIn('amo_pipeline_id', $pipelineIds)->value('name')
+            : self::SHIFT_DATE_PIPELINE_NAME;
+
+        if (!$pipelineFound) {
+            return ['pipeline_found' => false, 'pipeline_name' => $pipelineName, 'total_count' => 0, 'events_synced_through' => null, 'rows' => []];
+        }
+
+        $statuses = CrmPipelineStatusSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereIn('amo_pipeline_id', $pipelineIds)
+            ->orderBy('sort')
+            ->get(['amo_status_id', 'name', 'sort']);
+
+        $leadCurrentStatus = [];
+        CrmEntitySnapshot::query()
+            ->select(['id', 'external_id', 'status_id'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->whereIn('pipeline_id', $pipelineIds)
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$leadCurrentStatus): void {
+                foreach ($leads as $lead) {
+                    $leadCurrentStatus[(string) $lead->external_id] = (int) $lead->status_id;
+                }
+            });
+
+        $totalLeads = count($leadCurrentStatus);
+        // Safe to bound by $from, not unfiltered: every lead in $leadCurrentStatus was
+        // created at/after $from, so none of its status-change events can predate that —
+        // this turns an unindexed full scan of the events table into one that can use the
+        // (amo_account_id, entity_type, entity_created_at) index.
+        $visitedByLead = $this->visitedStatusesByLead($account, $pipelineIds, $from?->toDateString());
+        $eventsSyncedThrough = $this->leadStatusEventsSyncedThrough($account);
+
+        $rows = $statuses->map(function ($status) use ($leadCurrentStatus, $visitedByLead, $totalLeads): array {
+            $sid = $status->amo_status_id;
+            $count = 0;
+            foreach ($leadCurrentStatus as $entityId => $currentStatusId) {
+                if ($currentStatusId === $sid || isset($visitedByLead[$entityId][$sid])) {
+                    $count++;
+                }
+            }
+
+            return [
+                'status_id' => $sid,
+                'name' => $status->name,
+                'count' => $count,
+                'percent' => $totalLeads > 0 ? round($count / $totalLeads * 100, 1) : 0.0,
+            ];
+        })->values()->all();
+
+        return [
+            'pipeline_found' => true,
+            'pipeline_name' => $pipelineName,
+            'total_count' => $totalLeads,
+            'events_synced_through' => $eventsSyncedThrough ? Carbon::parse($eventsSyncedThrough)->toDateString() : null,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Drill-down lead list behind one "Массовый подбор" funnel cell: deals that visited
+     * $statusId (current status, or an observed lead_status_changed transition through it).
+     */
+    public function massRecruitmentFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, int $limit = 300): array
+    {
+        // Same unindexed-scan cost as buildMassRecruitmentFunnel() above, and this
+        // drill-down is never cached (matches every other funnel-cell modal in this file).
+        set_time_limit(120);
+
+        $pipelineIds = $this->massRecruitmentPipelineIds($account);
+
+        $leads = [];
+        $total = 0;
+
+        if ($pipelineIds->isNotEmpty()) {
+            $leadRows = CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->get(['external_id', 'name', 'status_id', 'entity_created_at']);
+
+            $visitedByLead = $this->visitedStatusesByLead($account, $pipelineIds, $from?->toDateString());
+
+            $matching = $leadRows->filter(fn ($lead): bool => (int) $lead->status_id === $statusId
+                || isset($visitedByLead[(string) $lead->external_id][$statusId]));
+
+            $total = $matching->count();
+            foreach ($matching->take($limit) as $lead) {
+                $leads[] = [
+                    'id' => $lead->external_id,
+                    'name' => $lead->name ?: 'Без названия',
+                    'created_at' => $lead->entity_created_at?->toDateString(),
+                ];
+            }
+        }
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
+    }
+
+    /**
+     * Latest entity_created_at across every lead_status_changed event for the account —
+     * an unbounded MAX() with no usable index (~780k-row events table, ~20s either way:
+     * verified the date-range index hint used elsewhere doesn't help an unbounded scan).
+     * Cached long (a day) and keyed on the dashboard cache version so a real resync
+     * (which bumps that version — see refreshDashboardCacheVersion()) invalidates it
+     * immediately instead of waiting out the TTL.
+     */
+    private function leadStatusEventsSyncedThrough(AmoAccount $account): ?string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return Cache::remember(
+            "amo_lead_status_events_synced_through:{$account->id}:{$version}",
+            now()->addDay(),
+            fn (): ?string => CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'events')
+                ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+                ->max('entity_created_at'),
+        );
+    }
+
+    /**
+     * amoCRM account 2 (anyservice) has two pipelines named "Массовый подбор" — one
+     * live (all leads and recent activity) and one stale near-duplicate with zero
+     * leads but its own copy of every status, including the two reserved terminal
+     * ones (142/143). A plain name-LIKE match merges both, producing duplicate rows
+     * (two "Встал в график" stages, plus a batch of always-zero stages from the
+     * stale pipeline) in the funnel table — so this excludes any matched pipeline
+     * that has never had a single lead.
+     *
+     * @return \Illuminate\Support\Collection<int, int>
+     */
+    private function massRecruitmentPipelineIds(AmoAccount $account): \Illuminate\Support\Collection
+    {
+        return CrmPipelineSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower(self::SHIFT_DATE_PIPELINE_NAME).'%'])
+            ->pluck('amo_pipeline_id')
+            ->filter(fn (int $pipelineId): bool => CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->where('pipeline_id', $pipelineId)
+                ->exists())
+            ->values();
+    }
+
+    private function massRecruitmentFunnelCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_mass_recruitment_funnel',
             $account->id,
             $version,
             $from?->timestamp ?? 'null',
@@ -1617,25 +1819,38 @@ class AmoTaskStatisticsService
 
     /**
      * Per-lead set of status ids the lead has *actually* been observed at, built from
-     * value_before/value_after on every lead_status_changed event since
-     * self::MANAGER_PIPELINE_EVENTS_RELIABLE_FROM. Keyed by lead external_id (string),
-     * value is a [status_id => true] membership set. Callers should also always treat
-     * a lead's *current* status as visited — that's accurate even for leads whose
-     * transition history predates the reliable-events window.
+     * value_before/value_after on every lead_status_changed event for the given
+     * pipeline(s) (pipeline-agnostic — used for both "Менеджеры подбор" and "Массовый
+     * подбор"). Keyed by lead external_id (string), value is a [status_id => true]
+     * membership set. Callers should also always treat a lead's *current* status as
+     * visited — that's accurate even for leads with no (or partial) event history.
+     *
+     * $reliableFrom optionally drops events before a known-unreliable window (see
+     * self::MANAGER_PIPELINE_EVENTS_RELIABLE_FROM); pass null to use all available
+     * event history unfiltered.
      *
      * @return array<string, array<int, true>>
      */
-    private function managerPipelineVisitedStatusesByLead(AmoAccount $account, \Illuminate\Support\Collection $pipelineIds): array
+    private function visitedStatusesByLead(AmoAccount $account, \Illuminate\Support\Collection $pipelineIds, ?string $reliableFrom = self::MANAGER_PIPELINE_EVENTS_RELIABLE_FROM): array
     {
         $pipelineIdSet = $pipelineIds->all();
         $visited = [];
 
         CrmEntitySnapshot::query()
+            // The optimizer picks crm_entity_unique (account+type only) over
+            // ces_account_type_created here, mis-costing the unindexable JSON_EXTRACT
+            // predicate and scanning ~780k rows instead of the handful the date range
+            // actually matches (verified via EXPLAIN — forcing the index turns a ~45s
+            // table scan into a range scan). Only helps when a date filter is present.
+            ->when(
+                $reliableFrom !== null,
+                fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
+            )
             ->select(['raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'events')
             ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
-            ->where('entity_created_at', '>=', self::MANAGER_PIPELINE_EVENTS_RELIABLE_FROM)
+            ->when($reliableFrom !== null, fn ($q) => $q->where('entity_created_at', '>=', $reliableFrom))
             ->get()
             ->each(function ($event) use (&$visited, $pipelineIdSet): void {
                 $raw = $event->raw ?? [];
@@ -1693,7 +1908,7 @@ class AmoTaskStatisticsService
                 ->get(['amo_status_id', 'name', 'sort'])
             : collect();
         $emptyStageCounts = $statuses->mapWithKeys(fn ($status): array => [$status->amo_status_id => 0])->all();
-        $visitedByLead = $pipelineFound ? $this->managerPipelineVisitedStatusesByLead($account, $pipelineIds) : [];
+        $visitedByLead = $pipelineFound ? $this->visitedStatusesByLead($account, $pipelineIds) : [];
 
         $managers = [];
 

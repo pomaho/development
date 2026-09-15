@@ -100,6 +100,12 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/avito-cabinet
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/shift-date-leads', [AmoTaskOverdueDashboardController::class, 'shiftDateLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.shift-date-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/mass-recruitment-funnel', [AmoTaskOverdueDashboardController::class, 'massRecruitmentFunnel'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/mass-recruitment-funnel-leads', [AmoTaskOverdueDashboardController::class, 'massRecruitmentFunnelLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel-leads');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/export', [AmoTaskOverdueDashboardController::class, 'exportV2'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.export');
@@ -144,6 +150,12 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/avito-cab
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/shift-date-leads', [AmoTaskOverdueDashboardController::class, 'shiftDateLeadsDev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.shift-date-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/mass-recruitment-funnel', [AmoTaskOverdueDashboardController::class, 'massRecruitmentFunnelDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/mass-recruitment-funnel-leads', [AmoTaskOverdueDashboardController::class, 'massRecruitmentFunnelLeadsDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel-leads');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/export', [AmoTaskOverdueDashboardController::class, 'exportV2Dev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.export');

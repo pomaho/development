@@ -73,6 +73,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 'avitoCabinetBreakdown' => route('api.widgets.amo.task-overdue-dashboard-v2.avito-cabinet-breakdown', $publicKey),
                 'avitoCabinetLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.avito-cabinet-leads', $publicKey),
                 'shiftDateLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.shift-date-leads', $publicKey),
+                'massRecruitmentFunnel' => route('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel', $publicKey),
+                'massRecruitmentFunnelLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel-leads', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2.export', $publicKey),
             ],
         ]);
@@ -227,6 +229,31 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function massRecruitmentFunnel(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentFunnel($installation->account, $from, $to),
+        ]);
+    }
+
+    public function massRecruitmentFunnelLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentFunnelLeads(
+                $installation->account,
+                $from,
+                $to,
+                (int) $request->query('status_id', 0),
+            ),
+        ]);
+    }
+
     public function userOverdueTasks(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
@@ -291,6 +318,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 'avitoCabinetBreakdown' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.avito-cabinet-breakdown', $publicKey),
                 'avitoCabinetLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.avito-cabinet-leads', $publicKey),
                 'shiftDateLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.shift-date-leads', $publicKey),
+                'massRecruitmentFunnel' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel', $publicKey),
+                'massRecruitmentFunnelLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel-leads', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.export', $publicKey),
             ],
         ]);
@@ -428,6 +457,31 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function massRecruitmentFunnelDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentFunnel($installation->account, $from, $to),
+        ]);
+    }
+
+    public function massRecruitmentFunnelLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentFunnelLeads(
+                $installation->account,
+                $from,
+                $to,
+                (int) $request->query('status_id', 0),
+            ),
+        ]);
+    }
+
     public function avitoCabinetLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
@@ -521,6 +575,16 @@ class AmoTaskOverdueDashboardController extends Controller
                     'recruiter' => 'Рекрутер',
                 ],
                 'rows' => $statisticsService->shiftDateLeads($account, $from, $to, $config, $tz)['leads'] ?? [],
+                'totals' => false,
+            ],
+            [
+                'title' => 'Воронка Массовый подбор',
+                'columns' => [
+                    'name' => 'Этап',
+                    'count' => 'Сделок побывало',
+                    'percent' => 'Доля от всех сделок, %',
+                ],
+                'rows' => $statisticsService->massRecruitmentFunnel($account, $from, $to)['rows'] ?? [],
                 'totals' => false,
             ],
         ];
