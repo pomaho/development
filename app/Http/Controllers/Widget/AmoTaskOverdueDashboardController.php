@@ -586,7 +586,7 @@ class AmoTaskOverdueDashboardController extends Controller
                     'count' => 'Сделок побывало',
                     'percent' => 'Доля от всех сделок, %',
                     'exit_not_realized_count' => 'Ушло в "Закрыто и не реализовано"',
-                    'exit_not_realized_percent' => 'Доля от побывавших на этапе, %',
+                    'exit_not_realized_percent' => 'Доля от всех сделок, %',
                 ],
                 'rows' => $statisticsService->massRecruitmentFunnel($account, $from, $to)['rows'] ?? [],
                 'totals' => false,

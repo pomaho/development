@@ -1063,7 +1063,7 @@ class AmoTaskStatisticsService
                 'count' => $count,
                 'percent' => $totalLeads > 0 ? round($count / $totalLeads * 100, 1) : 0.0,
                 'exit_not_realized_count' => $exitCount,
-                'exit_not_realized_percent' => $count > 0 ? round($exitCount / $count * 100, 1) : 0.0,
+                'exit_not_realized_percent' => $totalLeads > 0 ? round($exitCount / $totalLeads * 100, 1) : 0.0,
             ];
         })->values()->all();
 
