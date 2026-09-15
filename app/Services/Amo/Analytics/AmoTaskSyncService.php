@@ -52,7 +52,18 @@ class AmoTaskSyncService
             'status' => TaskStatisticsSyncRun::STATUS_COMPLETED,
             'finished_at' => now(),
         ])->save();
-        $this->statisticsService->refreshDashboardCacheVersion($account);
+
+        // $open is deliberately excluded: it's the full current open-task list on every
+        // run (no date filter), not an incremental count, so it's always > 0 and would
+        // defeat this check entirely. $completed/$completionEvents/$events are each
+        // bound to the sync window, so a nonzero count here means something actually
+        // changed — bumping the version otherwise (as this used to, unconditionally)
+        // invalidates every cached report on every run, forcing a full recompute on
+        // whichever report the next visitor happens to open, however cheap the run
+        // itself was. Matters far more now that this runs hourly instead of every 6h.
+        if ($completed + $completionEvents + $events > 0) {
+            $this->statisticsService->refreshDashboardCacheVersion($account);
+        }
 
         return [
             'completed' => $completed,
