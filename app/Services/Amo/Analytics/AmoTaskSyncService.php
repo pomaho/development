@@ -13,6 +13,15 @@ use RuntimeException;
 
 class AmoTaskSyncService
 {
+    /**
+     * Event types actually consumed anywhere downstream (lead-status funnel reports,
+     * via raw->value_before/value_after) — every other event type amoCRM emits
+     * (field changes, tags, chat messages, ...) is requested and stored nowhere else
+     * in the app, so there's no reason to pull or persist it here. Extend this list
+     * if a future report needs another event type's payload.
+     */
+    private const SYNCED_EVENT_TYPES = ['lead_status_changed'];
+
     public function __construct(
         private readonly AmoFallbackHttpClient $http,
         private readonly AmoTaskStatisticsService $statisticsService,
@@ -214,11 +223,22 @@ class AmoTaskSyncService
         }
     }
 
-    private function syncEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, Carbon $syncedAt): int
+    /**
+     * Public (rather than a private step of sync() only) so a one-off backfill for a
+     * wide date range — e.g. repairing rows written with the empty-raw bug — can target
+     * just events, without re-pulling every completed/open task over that same window.
+     */
+    public function syncEvents(AmoAccount $account, ?Carbon $from, ?Carbon $to, Carbon $syncedAt): int
     {
         $page = 1;
         $total = 0;
-        $query = $this->createdAtQuery($from, $to);
+        // amoCRM rejects a PHP-array query value outright (400 "Invalid params passed
+        // to filter"), so each type needs its own indexed key rather than filter[type][].
+        $typeFilter = [];
+        foreach (self::SYNCED_EVENT_TYPES as $index => $type) {
+            $typeFilter["filter[type][{$index}]"] = $type;
+        }
+        $query = [...$this->createdAtQuery($from, $to), ...$typeFilter];
 
         do {
             $payload = $this->getWithRetry($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
@@ -330,7 +350,11 @@ class AmoTaskSyncService
                     'entity_id' => $event['entity_id'] ?? null,
                     'entity_type' => $event['entity_type'] ?? $event['entity'] ?? null,
                 ],
-                'raw' => [],
+                // Was hardcoded to [] (see git history: 24009d3, to satisfy this column's
+                // NOT NULL constraint) — but that silently discarded every event's actual
+                // payload, including value_before/value_after, which lead-status funnel
+                // reports read straight out of this column. Save the real thing instead.
+                'raw' => $event,
                 'synced_at' => $syncedAt,
             ]
         );
