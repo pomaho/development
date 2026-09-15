@@ -656,6 +656,12 @@ class AmoTaskStatisticsService
      */
     private function buildManagerPipelineFunnel(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
     {
+        // See buildMassRecruitmentFunnel()'s set_time_limit note: now that saveEvent()
+        // stores real payloads instead of the empty-raw placeholder it used to, the
+        // unscoped events query below hydrates far more data than it used to and can
+        // run past PHP's default 30s limit on a wide date range.
+        set_time_limit(120);
+
         [$pipelineIds] = $this->managerPipelineResolve($account);
 
         $pipelineFound = $pipelineIds->isNotEmpty();
@@ -702,17 +708,26 @@ class AmoTaskStatisticsService
                 : collect($leadCurrentStatus)->filter(fn (int $sid): bool => ($sortByStatus[$sid] ?? 0) >= $status->sort)->count();
         }
 
-        // Not date-filtered here: the leads themselves are already scoped to the period
-        // above (by entity_created_at), and this just pulls every observed transition
-        // for those specific leads via the isset() check below — a lead created near
-        // the end of the period can still transition after $to, and that transition
-        // should still count instead of being silently dropped by a redundant filter.
+        // Not bounded by $to: a lead created near the end of the period can still
+        // transition after $to, and that transition should still count instead of being
+        // silently dropped by a redundant filter. Bounding by $from IS safe and done
+        // below though — every lead in $leadCurrentStatus was created at/after $from,
+        // so none of its events can predate that either — and matters a lot now that
+        // this hydrates real payloads (see set_time_limit note above): letting MySQL use
+        // the (amo_account_id, entity_type, entity_created_at) index here instead of
+        // scanning+JSON-decoding the account's entire event history turns this from a
+        // 30s+ timeout risk into a sub-second query on typical report periods.
         $pipelineIdSet = $pipelineIds->all();
         $events = CrmEntitySnapshot::query()
+            ->when(
+                $from !== null,
+                fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
+            )
             ->select(['entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'events')
             ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->get();
 
         $eventsByLead = [];
@@ -800,6 +815,8 @@ class AmoTaskStatisticsService
      */
     public function managerPipelineFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, string $mode, string $managerName = '', int $limit = 300): array
     {
+        set_time_limit(120);
+
         [$pipelineIds] = $this->managerPipelineResolve($account);
 
         $leads = [];
@@ -855,11 +872,19 @@ class AmoTaskStatisticsService
                     ->keys();
             } else {
                 $pipelineIdSet = $pipelineIds->all();
+                // See buildManagerPipelineFunnel()'s identical query for why $from (not
+                // $to) is a safe bound and why the index hint matters now that raw holds
+                // real payloads.
                 $events = CrmEntitySnapshot::query()
+                    ->when(
+                        $from !== null,
+                        fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
+                    )
                     ->select(['entity_created_at', 'raw'])
                     ->where('amo_account_id', $account->id)
                     ->where('entity_type', 'events')
                     ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+                    ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                     ->get();
 
                 $eventsByLead = [];
@@ -1886,6 +1911,8 @@ class AmoTaskStatisticsService
 
     private function buildManagerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
     {
+        set_time_limit(120);
+
         [$pipelineIds, $successPairs, $fifthShiftFieldId] = $this->managerPipelineResolve($account);
 
         $pipelineFound = $pipelineIds->isNotEmpty();
