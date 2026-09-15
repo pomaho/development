@@ -952,12 +952,16 @@ class AmoTaskStatisticsService
     }
 
     /**
-     * Per-stage funnel for the "Массовый подбор" pipeline: how many deals created in the
-     * period *actually visited* each stage (including both reserved terminal statuses —
-     * success and closed-not-realized), as a percentage of all deals created in the period.
-     * Built from real lead_status_changed transition history via visitedStatusesByLead(),
-     * unioned with each lead's current status (always accurate, even with no event history)
-     * — not the sort-order "reached at least this far" approximation used elsewhere.
+     * Per-stage funnel for the "Массовый подбор" pipeline: how many deals *actually
+     * visited* each stage (including both reserved terminal statuses — success and
+     * closed-not-realized), as a percentage of the period's total. Built from real
+     * lead_status_changed transition history via massRecruitmentEventData(), unioned
+     * with each lead's current status (always accurate, even with no event history) —
+     * not the sort-order "reached at least this far" approximation used elsewhere.
+     *
+     * Only closed deals (142 "Встал в график" / 143 "Закрыто и не реализовано") count —
+     * matching managerPipelineStats()'s scoping — so total_count always equals
+     * success + closed-fail; deals still in progress aren't included at all.
      *
      * Unlike the "Менеджеры подбор" reports, no reliable-from cutoff is applied here: this
      * pipeline's event history has no known unreliable window. It does, however, currently
@@ -997,6 +1001,8 @@ class AmoTaskStatisticsService
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
             ->whereIn('pipeline_id', $pipelineIds)
+            // Only closed deals (142/143) — see class docblock above.
+            ->whereIn('status_id', [142, 143])
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
@@ -1084,6 +1090,8 @@ class AmoTaskStatisticsService
                 ->where('amo_account_id', $account->id)
                 ->where('entity_type', 'leads')
                 ->whereIn('pipeline_id', $pipelineIds)
+                // Matches buildMassRecruitmentFunnel()'s scoping to closed deals only.
+                ->whereIn('status_id', [142, 143])
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->get(['external_id', 'name', 'status_id', 'entity_created_at']);
