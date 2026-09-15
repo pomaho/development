@@ -250,6 +250,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 $from,
                 $to,
                 (int) $request->query('status_id', 0),
+                (string) $request->query('mode', 'visited'),
             ),
         ]);
     }
@@ -478,6 +479,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 $from,
                 $to,
                 (int) $request->query('status_id', 0),
+                (string) $request->query('mode', 'visited'),
             ),
         ]);
     }
@@ -583,6 +585,8 @@ class AmoTaskOverdueDashboardController extends Controller
                     'name' => 'Этап',
                     'count' => 'Сделок побывало',
                     'percent' => 'Доля от всех сделок, %',
+                    'exit_not_realized_count' => 'Ушло в "Закрыто и не реализовано"',
+                    'exit_not_realized_percent' => 'Доля от побывавших на этапе, %',
                 ],
                 'rows' => $statisticsService->massRecruitmentFunnel($account, $from, $to)['rows'] ?? [],
                 'totals' => false,

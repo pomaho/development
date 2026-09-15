@@ -1027,10 +1027,27 @@ class AmoTaskStatisticsService
         // created at/after $from, so none of its status-change events can predate that —
         // this turns an unindexed full scan of the events table into one that can use the
         // (amo_account_id, entity_type, entity_created_at) index.
-        $visitedByLead = $this->visitedStatusesByLead($account, $pipelineIds, $from?->toDateString());
+        [$visitedByLead, $transitionsByLead] = $this->massRecruitmentEventData($account, $pipelineIds, $from);
         $eventsSyncedThrough = $this->leadStatusEventsSyncedThrough($account);
 
-        $rows = $statuses->map(function ($status) use ($leadCurrentStatus, $visitedByLead, $totalLeads): array {
+        // How many deals moved directly from a stage into 143 ("Закрыто и не
+        // реализовано") — the very next observed transition after being on that stage,
+        // not just "currently at 143 after having visited it at some point".
+        $exitToNotRealized = [];
+        foreach ($transitionsByLead as $entityId => $transitions) {
+            if (!isset($leadCurrentStatus[$entityId])) {
+                continue;
+            }
+            $count = count($transitions);
+            for ($i = 0; $i < $count - 1; $i++) {
+                if ($transitions[$i + 1]['status_id'] === 143) {
+                    $fromStatus = $transitions[$i]['status_id'];
+                    $exitToNotRealized[$fromStatus] = ($exitToNotRealized[$fromStatus] ?? 0) + 1;
+                }
+            }
+        }
+
+        $rows = $statuses->map(function ($status) use ($leadCurrentStatus, $visitedByLead, $totalLeads, $exitToNotRealized): array {
             $sid = $status->amo_status_id;
             $count = 0;
             foreach ($leadCurrentStatus as $entityId => $currentStatusId) {
@@ -1038,12 +1055,15 @@ class AmoTaskStatisticsService
                     $count++;
                 }
             }
+            $exitCount = $exitToNotRealized[$sid] ?? 0;
 
             return [
                 'status_id' => $sid,
                 'name' => $status->name,
                 'count' => $count,
                 'percent' => $totalLeads > 0 ? round($count / $totalLeads * 100, 1) : 0.0,
+                'exit_not_realized_count' => $exitCount,
+                'exit_not_realized_percent' => $count > 0 ? round($exitCount / $count * 100, 1) : 0.0,
             ];
         })->values()->all();
 
@@ -1057,10 +1077,14 @@ class AmoTaskStatisticsService
     }
 
     /**
-     * Drill-down lead list behind one "Массовый подбор" funnel cell: deals that visited
-     * $statusId (current status, or an observed lead_status_changed transition through it).
+     * Drill-down lead list behind one "Массовый подбор" funnel cell.
+     *
+     * $mode 'visited' (default): deals that visited $statusId (current status, or an
+     * observed lead_status_changed transition through it).
+     * $mode 'exit_not_realized': deals whose next observed transition after $statusId
+     * was directly into 143 ("Закрыто и не реализовано") — matches exit_not_realized_count.
      */
-    public function massRecruitmentFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, int $limit = 300): array
+    public function massRecruitmentFunnelLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, int $statusId, string $mode = 'visited', int $limit = 300): array
     {
         // Same unindexed-scan cost as buildMassRecruitmentFunnel() above, and this
         // drill-down is never cached (matches every other funnel-cell modal in this file).
@@ -1080,10 +1104,24 @@ class AmoTaskStatisticsService
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->get(['external_id', 'name', 'status_id', 'entity_created_at']);
 
-            $visitedByLead = $this->visitedStatusesByLead($account, $pipelineIds, $from?->toDateString());
+            [$visitedByLead, $transitionsByLead] = $this->massRecruitmentEventData($account, $pipelineIds, $from);
 
-            $matching = $leadRows->filter(fn ($lead): bool => (int) $lead->status_id === $statusId
-                || isset($visitedByLead[(string) $lead->external_id][$statusId]));
+            if ($mode === 'exit_not_realized') {
+                $matchingIds = [];
+                foreach ($transitionsByLead as $entityId => $transitions) {
+                    $count = count($transitions);
+                    for ($i = 0; $i < $count - 1; $i++) {
+                        if ($transitions[$i]['status_id'] === $statusId && $transitions[$i + 1]['status_id'] === 143) {
+                            $matchingIds[$entityId] = true;
+                            break;
+                        }
+                    }
+                }
+                $matching = $leadRows->filter(fn ($lead): bool => isset($matchingIds[(string) $lead->external_id]));
+            } else {
+                $matching = $leadRows->filter(fn ($lead): bool => (int) $lead->status_id === $statusId
+                    || isset($visitedByLead[(string) $lead->external_id][$statusId]));
+            }
 
             $total = $matching->count();
             foreach ($matching->take($limit) as $lead) {
@@ -1144,6 +1182,62 @@ class AmoTaskStatisticsService
                 ->where('pipeline_id', $pipelineId)
                 ->exists())
             ->values();
+    }
+
+    /**
+     * Single pass over lead_status_changed events for the given "Массовый подбор"
+     * pipeline(s): builds both the per-lead visited-status membership set (same
+     * shape/semantics as visitedStatusesByLead()) and, from the same rows, each lead's
+     * status history ordered by time — used to count deals that moved directly from a
+     * stage into 143. Kept as one query instead of two separate scans of the same
+     * (large, unindexed-by-type) events table.
+     *
+     * @return array{0: array<string, array<int, true>>, 1: array<string, array<int, array{status_id: int, at: Carbon}>>}
+     */
+    private function massRecruitmentEventData(AmoAccount $account, \Illuminate\Support\Collection $pipelineIds, ?Carbon $from): array
+    {
+        $pipelineIdSet = $pipelineIds->all();
+        $visited = [];
+        $transitions = [];
+
+        CrmEntitySnapshot::query()
+            ->when(
+                $from !== null,
+                fn ($q) => $q->from(DB::raw('`crm_entity_snapshots` FORCE INDEX (ces_account_type_created)')),
+            )
+            ->select(['entity_created_at', 'raw'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'events')
+            ->whereRaw("JSON_EXTRACT(raw,'$.type')='lead_status_changed'")
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->get()
+            ->each(function ($event) use (&$visited, &$transitions, $pipelineIdSet): void {
+                $raw = $event->raw ?? [];
+                $entityId = (string) ($raw['entity_id'] ?? '');
+                if ($entityId === '') {
+                    return;
+                }
+
+                $beforeStatus = (int) ($raw['value_before'][0]['lead_status']['id'] ?? 0);
+                $beforePipeline = (int) ($raw['value_before'][0]['lead_status']['pipeline_id'] ?? 0);
+                if ($beforeStatus > 0 && in_array($beforePipeline, $pipelineIdSet, true)) {
+                    $visited[$entityId][$beforeStatus] = true;
+                }
+
+                $afterStatus = (int) ($raw['value_after'][0]['lead_status']['id'] ?? 0);
+                $afterPipeline = (int) ($raw['value_after'][0]['lead_status']['pipeline_id'] ?? 0);
+                if ($afterStatus > 0 && in_array($afterPipeline, $pipelineIdSet, true)) {
+                    $visited[$entityId][$afterStatus] = true;
+                    $transitions[$entityId][] = ['status_id' => $afterStatus, 'at' => $event->entity_created_at];
+                }
+            });
+
+        foreach ($transitions as &$leadTransitions) {
+            usort($leadTransitions, fn (array $a, array $b): int => $a['at']->timestamp <=> $b['at']->timestamp);
+        }
+        unset($leadTransitions);
+
+        return [$visited, $transitions];
     }
 
     private function massRecruitmentFunnelCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string

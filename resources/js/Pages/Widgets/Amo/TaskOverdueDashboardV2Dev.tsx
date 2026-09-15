@@ -152,6 +152,8 @@ type MassRecruitmentFunnelRow = {
     name: string;
     count: number;
     percent: number;
+    exit_not_realized_count: number;
+    exit_not_realized_percent: number;
 };
 
 type MassRecruitmentFunnelData = {
@@ -570,6 +572,7 @@ function clampPercent(value: number): number {
 
 type MassRecruitmentLeadsFilter = {
     statusId: number;
+    mode: 'visited' | 'exit_not_realized';
     label: string;
 };
 
@@ -610,6 +613,7 @@ function MassRecruitmentFunnelSection({ state, leadsUrl, periodParams, baseDomai
                                 <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Этап</th>
                                 <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Побывало сделок</th>
                                 <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля от всех сделок</th>
+                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Ушло в «Закрыто и не реализовано»</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
@@ -619,7 +623,7 @@ function MassRecruitmentFunnelSection({ state, leadsUrl, periodParams, baseDomai
                                     <td className="px-4 py-3.5 text-right">
                                         <CountButton
                                             value={row.count}
-                                            onClick={() => setLeadsFilter({ statusId: row.status_id, label: `${row.name} — сделки` })}
+                                            onClick={() => setLeadsFilter({ statusId: row.status_id, mode: 'visited', label: `${row.name} — сделки` })}
                                         />
                                     </td>
                                     <td className="px-4 py-3.5">
@@ -629,6 +633,13 @@ function MassRecruitmentFunnelSection({ state, leadsUrl, periodParams, baseDomai
                                             </div>
                                             <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-600">{clampPercent(row.percent)}%</span>
                                         </div>
+                                    </td>
+                                    <td className="px-4 py-3.5 text-right">
+                                        <CountButton
+                                            value={row.exit_not_realized_count}
+                                            onClick={() => setLeadsFilter({ statusId: row.status_id, mode: 'exit_not_realized', label: `${row.name} — ушло в «Закрыто и не реализовано»` })}
+                                        />
+                                        <span className="ml-1.5 text-xs font-medium text-slate-400">{clampPercent(row.exit_not_realized_percent)}%</span>
                                     </td>
                                 </tr>
                             ))}
@@ -661,7 +672,7 @@ function MassRecruitmentFunnelLeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, status_id: String(filter.statusId) };
+    const params = { ...periodParams, status_id: String(filter.statusId), mode: filter.mode };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {
