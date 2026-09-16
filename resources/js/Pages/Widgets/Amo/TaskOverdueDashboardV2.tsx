@@ -151,6 +151,21 @@ type MassRecruitmentFunnelData = {
     rows: MassRecruitmentFunnelRow[];
 };
 
+type MassRecruitmentLossReasonRow = {
+    reason: string | null;
+    name: string;
+    count: number;
+    percent: number;
+};
+
+type MassRecruitmentLossReasonsData = {
+    pipeline_found: boolean;
+    pipeline_name: string;
+    field_found: boolean;
+    total_count: number;
+    rows: MassRecruitmentLossReasonRow[];
+};
+
 type OverdueTask = {
     text: string | null;
     complete_till: string;
@@ -253,6 +268,8 @@ type Props = {
         shiftDateLeads: string;
         massRecruitmentFunnel: string;
         massRecruitmentFunnelLeads: string;
+        massRecruitmentLossReasons: string;
+        massRecruitmentLossReasonLeads: string;
         export: string;
     };
 };
@@ -380,6 +397,7 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
     const avitoCabinetState = useApiData<AvitoCabinetBreakdown>(links.avitoCabinetBreakdown, periodParams);
     const shiftDateLeadsState = useApiData<ShiftDateLeadsData>(links.shiftDateLeads, periodParams);
     const massRecruitmentFunnelState = useApiData<MassRecruitmentFunnelData>(links.massRecruitmentFunnel, periodParams);
+    const massRecruitmentLossReasonsState = useApiData<MassRecruitmentLossReasonsData>(links.massRecruitmentLossReasons, periodParams);
 
     useEffect(() => {
         if (!debugIframe || typeof window === 'undefined') return;
@@ -480,6 +498,8 @@ export default function TaskOverdueDashboardV2({ account, period, links }: Props
                 <ShiftDateLeadsSection state={shiftDateLeadsState} baseDomain={account.base_domain} />
 
                 <MassRecruitmentFunnelSection state={massRecruitmentFunnelState} leadsUrl={links.massRecruitmentFunnelLeads} periodParams={periodParams} baseDomain={account.base_domain} />
+
+                <MassRecruitmentLossReasonsSection state={massRecruitmentLossReasonsState} leadsUrl={links.massRecruitmentLossReasonLeads} periodParams={periodParams} baseDomain={account.base_domain} />
 
             </div>
         </div>
@@ -655,6 +675,189 @@ function MassRecruitmentFunnelLeadsModal({
     onClose: () => void;
 }) {
     const params = { ...periodParams, status_id: String(filter.statusId), mode: filter.mode };
+    const leadsState = useApiData<LeadsResult>(leadsUrl, params);
+
+    useEffect(() => {
+        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [onClose]);
+
+    return createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+            <div className="relative z-10 flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Сделки</p>
+                        <h2 className="mt-0.5 font-bold text-gray-900">{filter.label}</h2>
+                    </div>
+                    <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600" aria-label="Закрыть">
+                        <X className="size-5" />
+                    </button>
+                </div>
+                {leadsState.status === 'loading' && (
+                    <div className="flex items-center justify-center py-16 text-slate-400">
+                        <svg className="mr-2 size-5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg>
+                        Загрузка...
+                    </div>
+                )}
+                {leadsState.status === 'error' && (
+                    <div className="px-6 py-8 text-center text-sm text-red-500">Ошибка загрузки: {leadsState.message}</div>
+                )}
+                {leadsState.status === 'ok' && (
+                    <>
+                        {leadsState.data.limited && (
+                            <div className="border-b border-amber-100 bg-amber-50 px-6 py-2 text-xs text-amber-700">
+                                Показаны первые {leadsState.data.limit} из {leadsState.data.total} сделок
+                            </div>
+                        )}
+                        <div className="overflow-y-auto">
+                            {leadsState.data.leads.length === 0 ? (
+                                <div className="px-6 py-8 text-center text-sm text-slate-400">Нет сделок</div>
+                            ) : (
+                                <table className="w-full text-left text-sm">
+                                    <thead className="sticky top-0 bg-slate-50">
+                                        <tr>
+                                            <th className="px-6 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Сделка</th>
+                                            <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Дата создания</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {leadsState.data.leads.map((lead) => (
+                                            <tr key={lead.id} className="transition-colors hover:bg-violet-50/50">
+                                                <td className="px-6 py-3">
+                                                    <a
+                                                        href={`https://${baseDomain}/leads/detail/${lead.id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="font-medium text-violet-700 hover:underline"
+                                                    >
+                                                        {lead.name}
+                                                    </a>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500">{lead.created_at ?? '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            )}
+                        </div>
+                        <div className="border-t border-slate-100 px-6 py-3 text-right text-xs text-slate-400">
+                            Итого: {leadsState.data.total} сделок
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>,
+        document.body,
+    );
+}
+
+type MassRecruitmentLossReasonFilter = {
+    reason: string | null;
+    label: string;
+};
+
+function MassRecruitmentLossReasonsSection({ state, leadsUrl, periodParams, baseDomain }: {
+    state: LoadState<MassRecruitmentLossReasonsData>;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+}) {
+    const [leadsFilter, setLeadsFilter] = useState<MassRecruitmentLossReasonFilter | null>(null);
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    if (!data.pipeline_found) {
+        return (
+            <ReportSection eyebrow="Массовый подбор" title="Причины отказа">
+                <div className="px-5 py-8">
+                    <EmptyState>Воронка «Массовый подбор» не найдена. Запустите синхронизацию структуры CRM.</EmptyState>
+                </div>
+            </ReportSection>
+        );
+    }
+
+    if (!data.field_found) {
+        return (
+            <ReportSection eyebrow="Массовый подбор" title="Причины отказа">
+                <div className="px-5 py-8">
+                    <EmptyState>Поле «Причины отказа» не найдено. Запустите синхронизацию структуры CRM.</EmptyState>
+                </div>
+            </ReportSection>
+        );
+    }
+
+    return (
+        <>
+        <ReportSection
+            eyebrow="Массовый подбор"
+            title="Причины отказа"
+            description="Только закрытые сделки «Закрыто и не реализовано», созданные в выбранном периоде. Разбивка по значению поля «Причины отказа» — сделки без заполненного значения вынесены отдельной строкой «Без причины». Нажмите на число — откроется список сделок."
+            aside={<AccentSummary label="Всего отказов" value={data.total_count} note="закрыто и не реализовано" tone="warning" />}
+        >
+            {data.rows.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                            <tr>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Причина</th>
+                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {data.rows.map((row) => (
+                                <tr key={row.reason ?? '__none__'} className="transition-colors hover:bg-violet-50/50">
+                                    <td className="px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
+                                    <td className="px-4 py-3.5 text-right">
+                                        <CountButton
+                                            value={row.count}
+                                            onClick={() => setLeadsFilter({ reason: row.reason, label: row.name })}
+                                        />
+                                    </td>
+                                    <td className="px-4 py-3.5">
+                                        <div className="flex min-w-40 items-center gap-2.5">
+                                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                                <div className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-red-500" style={{ width: `${clampPercent(row.percent)}%` }} />
+                                            </div>
+                                            <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-600">{clampPercent(row.percent)}%</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="px-5 py-8">
+                    <EmptyState>Нет отказных сделок за выбранный период</EmptyState>
+                </div>
+            )}
+        </ReportSection>
+        {leadsFilter !== null && (
+            <MassRecruitmentLossReasonLeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
+        )}
+        </>
+    );
+}
+
+function MassRecruitmentLossReasonLeadsModal({
+    filter,
+    leadsUrl,
+    periodParams,
+    baseDomain,
+    onClose,
+}: {
+    filter: MassRecruitmentLossReasonFilter;
+    leadsUrl: string;
+    periodParams: Record<string, string>;
+    baseDomain: string;
+    onClose: () => void;
+}) {
+    const params = { ...periodParams, reason: filter.reason ?? '' };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {

@@ -36,6 +36,7 @@ class AmoTaskStatisticsService
     private const MANAGER_PIPELINE_EVENTS_RELIABLE_FROM = '2026-08-01';
     private const FIFTH_SHIFT_FIELD_NAME = 'Вышел на 5 смену';
     private const MANAGER_PIPELINE_AVITO_CABINET_TAGS = ['Вакансии здесь', 'Работа Бета'];
+    private const LOSS_REASON_FIELD_NAME = 'Причины отказа';
 
 
     /**
@@ -1234,6 +1235,153 @@ class AmoTaskStatisticsService
 
         return implode(':', [
             'amo_mass_recruitment_funnel',
+            $account->id,
+            $version,
+            $from?->timestamp ?? 'null',
+            $to?->timestamp ?? 'null',
+        ]);
+    }
+
+    public function massRecruitmentLossReasons(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    {
+        return Cache::remember(
+            $this->massRecruitmentLossReasonsCacheKey($account, $from, $to),
+            now()->addMinutes(10),
+            fn (): array => $this->buildMassRecruitmentLossReasons($account, $from, $to),
+        );
+    }
+
+    /**
+     * Breakdown of the "Причины отказа" custom field across "Массовый подбор" deals
+     * closed as 143 ("Закрыто и не реализовано") in the period — matches the funnel
+     * table's closed-deals scoping (142 has no rejection reason by definition, so it's
+     * excluded rather than always contributing a zero-value row). Deals with the field
+     * unset get grouped under a "Без причины" row instead of being dropped.
+     */
+    private function buildMassRecruitmentLossReasons(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    {
+        $pipelineIds = $this->massRecruitmentPipelineIds($account);
+
+        $pipelineFound = $pipelineIds->isNotEmpty();
+        $pipelineName = $pipelineFound
+            ? (string) CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->whereIn('amo_pipeline_id', $pipelineIds)->value('name')
+            : self::SHIFT_DATE_PIPELINE_NAME;
+
+        if (!$pipelineFound) {
+            return ['pipeline_found' => false, 'pipeline_name' => $pipelineName, 'field_found' => false, 'total_count' => 0, 'rows' => []];
+        }
+
+        $field = $this->leadField(
+            CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads'),
+            0,
+            self::LOSS_REASON_FIELD_NAME,
+        );
+        $fieldId = (int) ($field?->amo_field_id ?? 0);
+
+        if ($field === null) {
+            return ['pipeline_found' => true, 'pipeline_name' => $pipelineName, 'field_found' => false, 'total_count' => 0, 'rows' => []];
+        }
+
+        $enumIdsByValue = $this->enumIdsByValue($field);
+
+        $counts = [];
+        $totalCount = 0;
+        CrmEntitySnapshot::query()
+            ->select(['id', 'custom_fields_values'])
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'leads')
+            ->whereIn('pipeline_id', $pipelineIds)
+            ->where('status_id', 143)
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+            ->orderBy('id')
+            ->chunkById(500, function ($leads) use (&$counts, &$totalCount, $fieldId, $enumIdsByValue): void {
+                foreach ($leads as $lead) {
+                    $totalCount++;
+                    $values = $this->recruiterFieldValues($lead->custom_fields_values ?? [], $fieldId, self::LOSS_REASON_FIELD_NAME, $enumIdsByValue);
+                    $reason = trim((string) ($values[0]['value'] ?? ''));
+
+                    $key = $reason !== '' ? $reason : '__none__';
+                    $counts[$key] = ($counts[$key] ?? 0) + 1;
+                }
+            });
+
+        $rows = collect($counts)
+            ->map(fn (int $count, string $key): array => [
+                'reason' => $key === '__none__' ? null : $key,
+                'name' => $key === '__none__' ? 'Без причины' : $key,
+                'count' => $count,
+                'percent' => $totalCount > 0 ? round($count / $totalCount * 100, 1) : 0.0,
+            ])
+            ->sortByDesc('count')
+            ->values()
+            ->all();
+
+        return [
+            'pipeline_found' => true,
+            'pipeline_name' => $pipelineName,
+            'field_found' => true,
+            'total_count' => $totalCount,
+            'rows' => $rows,
+        ];
+    }
+
+    /**
+     * Drill-down lead list behind one "Причины отказа" row. $reason null (or '')
+     * matches the "Без причины" row — deals closed as 143 with the field unset.
+     */
+    public function massRecruitmentLossReasonLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, ?string $reason, int $limit = 300): array
+    {
+        $pipelineIds = $this->massRecruitmentPipelineIds($account);
+
+        $leads = [];
+        $total = 0;
+
+        if ($pipelineIds->isNotEmpty()) {
+            $field = $this->leadField(
+                CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads'),
+                0,
+                self::LOSS_REASON_FIELD_NAME,
+            );
+            $fieldId = (int) ($field?->amo_field_id ?? 0);
+            $enumIdsByValue = $field !== null ? $this->enumIdsByValue($field) : [];
+            $wantReason = trim((string) $reason);
+
+            $leadRows = CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereIn('pipeline_id', $pipelineIds)
+                ->where('status_id', 143)
+                ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+                ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
+                ->get(['external_id', 'name', 'entity_created_at', 'custom_fields_values']);
+
+            $matching = $leadRows->filter(function ($lead) use ($fieldId, $enumIdsByValue, $wantReason): bool {
+                $values = $this->recruiterFieldValues($lead->custom_fields_values ?? [], $fieldId, self::LOSS_REASON_FIELD_NAME, $enumIdsByValue);
+                $leadReason = trim((string) ($values[0]['value'] ?? ''));
+
+                return $wantReason === '' ? $leadReason === '' : $leadReason === $wantReason;
+            });
+
+            $total = $matching->count();
+            foreach ($matching->take($limit) as $lead) {
+                $leads[] = [
+                    'id' => $lead->external_id,
+                    'name' => $lead->name ?: 'Без названия',
+                    'created_at' => $lead->entity_created_at?->toDateString(),
+                ];
+            }
+        }
+
+        return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
+    }
+
+    private function massRecruitmentLossReasonsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    {
+        $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
+
+        return implode(':', [
+            'amo_mass_recruitment_loss_reasons',
             $account->id,
             $version,
             $from?->timestamp ?? 'null',

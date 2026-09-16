@@ -106,6 +106,12 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/mass-recruitm
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/mass-recruitment-funnel-leads', [AmoTaskOverdueDashboardController::class, 'massRecruitmentFunnelLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/mass-recruitment-loss-reasons', [AmoTaskOverdueDashboardController::class, 'massRecruitmentLossReasons'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-loss-reasons');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/mass-recruitment-loss-reason-leads', [AmoTaskOverdueDashboardController::class, 'massRecruitmentLossReasonLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-loss-reason-leads');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2/export', [AmoTaskOverdueDashboardController::class, 'exportV2'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2.export');
@@ -156,6 +162,12 @@ Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/mass-recr
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/mass-recruitment-funnel-leads', [AmoTaskOverdueDashboardController::class, 'massRecruitmentFunnelLeadsDev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel-leads');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/mass-recruitment-loss-reasons', [AmoTaskOverdueDashboardController::class, 'massRecruitmentLossReasonsDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-loss-reasons');
+Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/mass-recruitment-loss-reason-leads', [AmoTaskOverdueDashboardController::class, 'massRecruitmentLossReasonLeadsDev'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-loss-reason-leads');
 Route::get('/api/widgets/amo/{publicKey}/task-overdue-dashboard-v2-dev/export', [AmoTaskOverdueDashboardController::class, 'exportV2Dev'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.task-overdue-dashboard-v2-dev.export');

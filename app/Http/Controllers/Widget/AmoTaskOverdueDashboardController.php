@@ -75,6 +75,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 'shiftDateLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.shift-date-leads', $publicKey),
                 'massRecruitmentFunnel' => route('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel', $publicKey),
                 'massRecruitmentFunnelLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-funnel-leads', $publicKey),
+                'massRecruitmentLossReasons' => route('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-loss-reasons', $publicKey),
+                'massRecruitmentLossReasonLeads' => route('api.widgets.amo.task-overdue-dashboard-v2.mass-recruitment-loss-reason-leads', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2.export', $publicKey),
             ],
         ]);
@@ -255,6 +257,31 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function massRecruitmentLossReasons(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentLossReasons($installation->account, $from, $to),
+        ]);
+    }
+
+    public function massRecruitmentLossReasonLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentLossReasonLeads(
+                $installation->account,
+                $from,
+                $to,
+                $request->query('reason'),
+            ),
+        ]);
+    }
+
     public function userOverdueTasks(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
@@ -321,6 +348,8 @@ class AmoTaskOverdueDashboardController extends Controller
                 'shiftDateLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.shift-date-leads', $publicKey),
                 'massRecruitmentFunnel' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel', $publicKey),
                 'massRecruitmentFunnelLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-funnel-leads', $publicKey),
+                'massRecruitmentLossReasons' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-loss-reasons', $publicKey),
+                'massRecruitmentLossReasonLeads' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.mass-recruitment-loss-reason-leads', $publicKey),
                 'export' => route('api.widgets.amo.task-overdue-dashboard-v2-dev.export', $publicKey),
             ],
         ]);
@@ -484,6 +513,31 @@ class AmoTaskOverdueDashboardController extends Controller
         ]);
     }
 
+    public function massRecruitmentLossReasonsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentLossReasons($installation->account, $from, $to),
+        ]);
+    }
+
+    public function massRecruitmentLossReasonLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->massRecruitmentLossReasonLeads(
+                $installation->account,
+                $from,
+                $to,
+                $request->query('reason'),
+            ),
+        ]);
+    }
+
     public function avitoCabinetLeadsDev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
     {
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
@@ -590,6 +644,16 @@ class AmoTaskOverdueDashboardController extends Controller
                 ],
                 'rows' => $statisticsService->massRecruitmentFunnel($account, $from, $to)['rows'] ?? [],
                 'totals' => false,
+            ],
+            [
+                'title' => 'Причины отказа Массовый подбор',
+                'columns' => [
+                    'name' => 'Причина',
+                    'count' => 'Сделок',
+                    'percent' => 'Доля, %',
+                ],
+                'rows' => $statisticsService->massRecruitmentLossReasons($account, $from, $to)['rows'] ?? [],
+                'totals' => true,
             ],
         ];
     }
