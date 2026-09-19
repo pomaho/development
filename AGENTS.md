@@ -35,3 +35,9 @@ For multi-step:
 2. Step -> verify: specific check
 
 Strong criteria enable autonomy; weak ones require clarification.
+
+## 5. amoCRM Access: Library vs. Raw HTTP
+`amocrm/amocrm-api-library` (`AmoCRMApiClient`) is a dependency but is currently used only for OAuth (token exchange/refresh, long-lived tokens — see `AmoTokenManager`, `AmoOAuthTokenExchanger`, `AmoClientFactory`). Everything else talks to amoCRM through the hand-rolled `AmoFallbackHttpClient`.
+- **Writing to amoCRM** (creating/updating leads, notes, etc.) or **managing webhook subscriptions**: use the library's typed services (`Leads`, `Webhooks`, etc.) instead of hand-building HTTP payloads.
+- **Reading/syncing bulk entity data** (leads, tasks, events): keep using `AmoFallbackHttpClient`, matching the existing pattern in `CrmAuditService`/`AmoTaskSyncService`/`AmoWebhookService`. Do not migrate this to the library — its typed models normalize the response, and our schema depends on storing amoCRM's exact raw JSON (`raw` column) so reports can read arbitrary/future fields (`custom_fields_values`, `embedded.loss_reason`, event `value_before`/`value_after`) without a sync-code change. The library also doesn't auto-paginate or auto-retry rate limits, so it wouldn't simplify this path anyway.
+- Don't migrate existing working sync code to the library "for consistency" — it's live production data with no functional gain and real regression risk.
