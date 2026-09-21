@@ -14,6 +14,9 @@ use Illuminate\Support\Carbon;
 class AmoTaskStatisticsService
 {
     private const RECRUITER_FIELD_NAME = 'Рекрутер';
+    // Former employees whose "Рекрутер" enum option is still configured in amoCRM (nobody
+    // removed it there) but who shouldn't appear in the recruiter lead-distribution report.
+    private const EXCLUDED_RECRUITER_NAMES = ['Лапыга Виктория'];
     private const MANAGER_FIELD_NAME = 'Менеджер';
     private const TEAM_FIELD_NAME = 'Команда';
     private const CITY_FIELD_NAME = 'Город';
@@ -2261,8 +2264,15 @@ class AmoTaskStatisticsService
         $field = $fieldId > 0
             ? (clone $fieldQuery)->where('amo_field_id', $fieldId)->first()
             : (clone $fieldQuery)->where('name', $fieldName)->first();
+        $excludedNames = collect(self::EXCLUDED_RECRUITER_NAMES)->map(fn (string $name): string => $this->normaliseRecruiterValue($name));
+        $excludedRecruiterEnumIds = collect($field?->enums ?? [])
+            ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value'])
+                && $excludedNames->contains($this->normaliseRecruiterValue($enum['value'])))
+            ->mapWithKeys(fn (array $enum): array => [(int) $enum['id'] => true])
+            ->all();
         $enums = collect($field?->enums ?? [])
             ->filter(fn (array $enum): bool => isset($enum['id']) && isset($enum['value']))
+            ->filter(fn (array $enum): bool => !isset($excludedRecruiterEnumIds[(int) $enum['id']]))
             ->mapWithKeys(fn (array $enum): array => [(int) $enum['id'] => [
                 'enum_id' => (int) $enum['id'],
                 'name' => (string) $enum['value'],
@@ -2392,10 +2402,16 @@ class AmoTaskStatisticsService
         } // end else (use_custom_date_fields)
 
         foreach ($intakeLeadIdsByEnum as $enumId => $leadIds) {
+            if (isset($excludedRecruiterEnumIds[$enumId])) {
+                continue;
+            }
             $enums[$enumId] ??= ['enum_id' => $enumId, 'name' => "Значение {$enumId}", 'leads_count' => 0, 'transferred_to_manager_count' => 0];
             $enums[$enumId]['leads_count'] = count($leadIds);
         }
         foreach ($transferLeadIdsByEnum as $enumId => $leadIds) {
+            if (isset($excludedRecruiterEnumIds[$enumId])) {
+                continue;
+            }
             $enums[$enumId] ??= ['enum_id' => $enumId, 'name' => "Значение {$enumId}", 'leads_count' => 0, 'transferred_to_manager_count' => 0];
             $enums[$enumId]['transferred_to_manager_count'] = count($leadIds);
         }
