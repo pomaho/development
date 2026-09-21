@@ -94,44 +94,69 @@ class AmoTaskStatisticsService
             ],
         ])->all();
 
+        $processTask = function ($task) use (&$rows, $users, $from, $to, $now): void {
+            $raw = $task->raw ?? [];
+            $responsibleId = (int) ($task->responsible_user_id ?? 0);
+
+            if ($responsibleId <= 0 || ! $users->has($responsibleId)) {
+                return;
+            }
+
+            $isCompleted = (bool) ($raw['is_completed'] ?? false);
+            $completeTill = $this->timestamp($raw['complete_till'] ?? null);
+            $completedAt = $this->completionTime($raw) ?? $completeTill;
+
+            if ($isCompleted && $this->inPeriod($task->entity_created_at, $from, $to)) {
+                $rows[$responsibleId]['completed_count']++;
+                $rows[$responsibleId]['total_count']++;
+
+                if ($completeTill !== null && $completedAt !== null && $completedAt->greaterThan($completeTill)) {
+                    $rows[$responsibleId]['completed_overdue_count']++;
+                    $rows[$responsibleId]['overdue_count']++;
+                }
+            }
+
+            if (! $isCompleted) {
+                $rows[$responsibleId]['open_count']++;
+                $rows[$responsibleId]['total_count']++;
+
+                if ($completeTill !== null && $completeTill->lessThan($now)) {
+                    $rows[$responsibleId]['open_overdue_count']++;
+                    $rows[$responsibleId]['overdue_count']++;
+                }
+            }
+        };
+
+        // Split into two SQL-filtered passes instead of one unbounded scan of every task
+        // ever synced (124k+ rows on a busy account, ~27s just to hydrate/cast them all):
+        // "completed" only needs tasks created in the period (matches the inPeriod() check
+        // inside $processTask), and "open" only needs the currently-open subset — which,
+        // once completed tasks are excluded in SQL, is a small fraction of the total.
         CrmEntitySnapshot::query()
             ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
             ->forceIndex('ces_account_type_id')
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
+            ->whereRaw("JSON_EXTRACT(raw,'$.is_completed') = true")
+            ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($tasks) use (&$rows, $users, $from, $to, $now): void {
+            ->chunkById(500, function ($tasks) use ($processTask): void {
                 foreach ($tasks as $task) {
-                    $raw = $task->raw ?? [];
-                    $responsibleId = (int) ($task->responsible_user_id ?? 0);
+                    $processTask($task);
+                }
+            });
 
-                    if ($responsibleId <= 0 || ! $users->has($responsibleId)) {
-                        continue;
-                    }
-
-                    $isCompleted = (bool) ($raw['is_completed'] ?? false);
-                    $completeTill = $this->timestamp($raw['complete_till'] ?? null);
-                    $completedAt = $this->completionTime($raw) ?? $completeTill;
-
-                    if ($isCompleted && $this->inPeriod($task->entity_created_at, $from, $to)) {
-                        $rows[$responsibleId]['completed_count']++;
-                        $rows[$responsibleId]['total_count']++;
-
-                        if ($completeTill !== null && $completedAt !== null && $completedAt->greaterThan($completeTill)) {
-                            $rows[$responsibleId]['completed_overdue_count']++;
-                            $rows[$responsibleId]['overdue_count']++;
-                        }
-                    }
-
-                    if (! $isCompleted) {
-                        $rows[$responsibleId]['open_count']++;
-                        $rows[$responsibleId]['total_count']++;
-
-                        if ($completeTill !== null && $completeTill->lessThan($now)) {
-                            $rows[$responsibleId]['open_overdue_count']++;
-                            $rows[$responsibleId]['overdue_count']++;
-                        }
-                    }
+        CrmEntitySnapshot::query()
+            ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
+            ->forceIndex('ces_account_type_id')
+            ->where('amo_account_id', $account->id)
+            ->where('entity_type', 'tasks')
+            ->whereRaw("JSON_EXTRACT(raw,'$.is_completed') = false")
+            ->orderBy('id')
+            ->chunkById(500, function ($tasks) use ($processTask): void {
+                foreach ($tasks as $task) {
+                    $processTask($task);
                 }
             });
 
@@ -1953,10 +1978,17 @@ class AmoTaskStatisticsService
             ->flip()
             ->all();
 
+        // Every kept lead below must match $successPairs, whose keys are always
+        // "{pipeline from $successPipelineIds}:{status}" — so a lead from any other
+        // pipeline can never survive the isset() check further down. Restricting the
+        // scan to those pipelines up front is behavior-preserving, not an approximation:
+        // without it, this scans every lead the account has ever had (163k+ rows, ~46s)
+        // just to discard almost all of them.
         CrmEntitySnapshot::query()
             ->select(['id', 'external_id', 'name', 'pipeline_id', 'status_id', 'custom_fields_values'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'leads')
+            ->whereIn('pipeline_id', $successPipelineIds)
             ->orderBy('id')
             ->chunkById(500, function ($chunk) use (&$leads, $shiftDateFieldId, $cityFieldId, $teamFieldId, $managerFieldId, $recruiterFieldId, $fromDate, $toDate, $timezone, $successPairs): void {
                 foreach ($chunk as $lead) {

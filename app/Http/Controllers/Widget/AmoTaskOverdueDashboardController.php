@@ -568,6 +568,13 @@ class AmoTaskOverdueDashboardController extends Controller
 
     public function exportV2(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
     {
+        // This chains several heavy reports serially in one request; on a cold cache
+        // that alone can exceed PHP's default 30s limit and crash with a fatal error
+        // before the (already-slow) computation even finishes — happened in production
+        // on 2026-09-21. Each report is still Cache::remember-wrapped, so this only
+        // costs extra time on the first export after a cache reset, not every time.
+        set_time_limit(180);
+
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2');
         [$from, $to] = $this->period($request);
         $tz = $installation->account->timezone();
@@ -585,6 +592,8 @@ class AmoTaskOverdueDashboardController extends Controller
 
     public function exportV2Dev(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
     {
+        set_time_limit(180);
+
         $installation = $this->installation($publicKey, 'task_overdue_dashboard_v2_dev');
         [$from, $to] = $this->period($request);
         $tz = $installation->account->timezone();
