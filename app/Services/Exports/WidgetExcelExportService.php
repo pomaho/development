@@ -97,8 +97,10 @@ class WidgetExcelExportService
         $sheet = $spreadsheet->createSheet();
         $sheet->setTitle('Менеджеры');
 
-        $successLabel = $data['success_status_name'] ?? 'Встал в график';
-        $headers = ['Менеджер', 'Получено лидов', $successLabel, 'План', '% выполнения плана'];
+        // Matches the static "Вывел на смену" header used on the dashboard page's
+        // ManagerLeadsSection table, rather than the account's configurable
+        // success_status_name (e.g. "Договор подписан") — same metric, same label.
+        $headers = ['Менеджер', 'Получено лидов', 'Вывел на смену', 'План', '% выполнения плана'];
         $this->writeHeader($sheet, $headers, 1);
 
         $row = 2;
