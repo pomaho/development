@@ -28,6 +28,7 @@ class WidgetExcelExportService
     public function export(
         string $filename,
         array $recruiterLeads,
+        array $managerLeads,
         array $breakdown,
         array $projectCityVacancy,
         array $taskStatistics,
@@ -37,6 +38,7 @@ class WidgetExcelExportService
         $spreadsheet->removeSheetByIndex(0);
 
         $this->recruiterLeadsSheet($spreadsheet, $recruiterLeads);
+        $this->managerLeadsSheet($spreadsheet, $managerLeads);
         $this->sourceBreakdownSheet($spreadsheet, $breakdown);
         $this->teamCitySheet($spreadsheet, $breakdown);
         $this->projectCityVacancySheet($spreadsheet, $projectCityVacancy);
@@ -61,7 +63,7 @@ class WidgetExcelExportService
         $sheet = $spreadsheet->createSheet();
         $sheet->setTitle('Рекрутеры');
 
-        $headers = ['Рекрутер', 'Назначено лидов', 'Передано менеджеру'];
+        $headers = ['Рекрутер', 'Назначено лидов', 'Передано менеджеру', 'План', '% выполнения плана'];
         $this->writeHeader($sheet, $headers, 1);
 
         $row = 2;
@@ -69,6 +71,43 @@ class WidgetExcelExportService
             $sheet->setCellValue("A{$row}", $recruiter['name']);
             $sheet->setCellValue("B{$row}", $recruiter['leads_count']);
             $sheet->setCellValue("C{$row}", $recruiter['transferred_to_manager_count']);
+            $sheet->setCellValue("D{$row}", $recruiter['plan_total']);
+            $sheet->setCellValue("E{$row}", $recruiter['plan_completion_percent']);
+            if ($row % 2 === 0) {
+                $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
+            }
+            $row++;
+        }
+
+        // Plan totals are safe to sum (a count), but plan_completion_percent is a rate —
+        // summing rates across rows produces a meaningless number, not a blended rate.
+        $this->writeTotalRow($sheet, $row, [
+            'Итого',
+            $data['total_leads_count'] ?? 0,
+            $data['transferred_to_manager_count'] ?? 0,
+            collect($data['recruiters'] ?? [])->sum('plan_total'),
+            '',
+        ]);
+
+        $this->autoWidth($sheet, count($headers));
+    }
+
+    private function managerLeadsSheet(Spreadsheet $spreadsheet, array $data): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Менеджеры');
+
+        $successLabel = $data['success_status_name'] ?? 'Встал в график';
+        $headers = ['Менеджер', 'Получено лидов', $successLabel, 'План', '% выполнения плана'];
+        $this->writeHeader($sheet, $headers, 1);
+
+        $row = 2;
+        foreach ($data['managers'] ?? [] as $manager) {
+            $sheet->setCellValue("A{$row}", $manager['name']);
+            $sheet->setCellValue("B{$row}", $manager['received_count']);
+            $sheet->setCellValue("C{$row}", $manager['scheduled_count']);
+            $sheet->setCellValue("D{$row}", $manager['plan_total']);
+            $sheet->setCellValue("E{$row}", $manager['plan_completion_percent']);
             if ($row % 2 === 0) {
                 $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
             }
@@ -77,8 +116,10 @@ class WidgetExcelExportService
 
         $this->writeTotalRow($sheet, $row, [
             'Итого',
-            $data['total_leads_count'] ?? 0,
-            $data['transferred_to_manager_count'] ?? 0,
+            $data['total_received_count'] ?? 0,
+            $data['total_scheduled_count'] ?? 0,
+            collect($data['managers'] ?? [])->sum('plan_total'),
+            '',
         ]);
 
         $this->autoWidth($sheet, count($headers));

@@ -583,6 +583,7 @@ class AmoTaskOverdueDashboardController extends Controller
         return $excelExport->export(
             WidgetExcelExportService::filename($from, $to),
             $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $config, $tz),
+            $statisticsService->managerLeadDistribution($installation->account, $from, $to, $config, $tz),
             $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->statistics($installation->account, $from, $to),
@@ -602,6 +603,7 @@ class AmoTaskOverdueDashboardController extends Controller
         return $excelExport->export(
             WidgetExcelExportService::filename($from, $to),
             $statisticsService->recruiterLeadDistribution($installation->account, $from, $to, $config, $tz),
+            $statisticsService->managerLeadDistribution($installation->account, $from, $to, $config, $tz),
             $statisticsService->recruiterTeamCityBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->projectCityVacancyBreakdown($installation->account, $from, $to, $config, $tz),
             $statisticsService->statistics($installation->account, $from, $to),
