@@ -132,9 +132,12 @@ class AmoTaskStatisticsService
         // "completed" only needs tasks created in the period (matches the inPeriod() check
         // inside $processTask), and "open" only needs the currently-open subset — which,
         // once completed tasks are excluded in SQL, is a small fraction of the total.
+        // No forceIndex here (unlike the open-tasks query below): with a date range,
+        // ces_account_type_created (matches the WHERE clause) beats id-ordered scanning
+        // by roughly 5x — verified via EXPLAIN, ces_account_type_id estimated ~60k rows
+        // to reach the first chunk vs ~12k letting the optimizer pick the date index.
         CrmEntitySnapshot::query()
             ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
-            ->forceIndex('ces_account_type_id')
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->whereRaw("JSON_EXTRACT(raw,'$.is_completed') = true")
