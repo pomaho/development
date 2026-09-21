@@ -130,17 +130,15 @@ class AmoTaskStatisticsService
         // Split into two SQL-filtered passes instead of one unbounded scan of every task
         // ever synced (124k+ rows on a busy account, ~27s just to hydrate/cast them all):
         // "completed" only needs tasks created in the period (matches the inPeriod() check
-        // inside $processTask), and "open" only needs the currently-open subset — which,
-        // once completed tasks are excluded in SQL, is a small fraction of the total.
-        // No forceIndex here (unlike the open-tasks query below): with a date range,
-        // ces_account_type_created (matches the WHERE clause) beats id-ordered scanning
-        // by roughly 5x — verified via EXPLAIN, ces_account_type_id estimated ~60k rows
-        // to reach the first chunk vs ~12k letting the optimizer pick the date index.
+        // inside $processTask), and "open" only needs the currently-open subset. Both
+        // filter on the generated task_is_completed column (indexed alongside
+        // entity_created_at) instead of JSON_EXTRACT(raw,'$.is_completed') — the open
+        // query alone dropped from ~60k rows scanned to an exact ~700-row index lookup.
         CrmEntitySnapshot::query()
             ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
-            ->whereRaw("JSON_EXTRACT(raw,'$.is_completed') = true")
+            ->where('task_is_completed', true)
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
@@ -152,10 +150,9 @@ class AmoTaskStatisticsService
 
         CrmEntitySnapshot::query()
             ->select(['id', 'responsible_user_id', 'entity_created_at', 'raw'])
-            ->forceIndex('ces_account_type_id')
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
-            ->whereRaw("JSON_EXTRACT(raw,'$.is_completed') = false")
+            ->where('task_is_completed', false)
             ->orderBy('id')
             ->chunkById(500, function ($tasks) use ($processTask): void {
                 foreach ($tasks as $task) {
