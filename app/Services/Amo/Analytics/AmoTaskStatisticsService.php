@@ -38,7 +38,7 @@ class AmoTaskStatisticsService
     // so "which stages did this lead actually visit" can only be trusted from here on.
     private const MANAGER_PIPELINE_EVENTS_RELIABLE_FROM = '2026-08-01';
     private const FIFTH_SHIFT_FIELD_NAME = 'Вышел на 5 смену';
-    private const MANAGER_PIPELINE_AVITO_CABINET_TAGS = ['Вакансии здесь', 'Работа Бета'];
+    private const MANAGER_PIPELINE_AVITO_CABINET_TAGS = ['Вакансии здесь', 'Работа Бета', 'Профессионал'];
     private const LOSS_REASON_FIELD_NAME = 'Причины отказа';
 
 
