@@ -244,7 +244,7 @@ class AmoTaskStatisticsService
         $tasks = [];
 
         CrmEntitySnapshot::query()
-            ->select(['id', 'entity_created_at', 'raw', 'name', 'embedded'])
+            ->select(['id', 'entity_created_at', 'raw', 'name'])
             ->where('amo_account_id', $account->id)
             ->where('entity_type', 'tasks')
             ->where('responsible_user_id', $userId)
@@ -268,9 +268,15 @@ class AmoTaskStatisticsService
                         continue;
                     }
 
-                    $embedded = $task->embedded ?? [];
-                    $leadId = ($embedded['entity_type'] ?? null) === 'leads'
-                        ? (int) ($embedded['entity_id'] ?? 0) ?: null
+                    // entity_id/entity_type are top-level fields on the task, not
+                    // nested under _embedded — but AmoWebhookService's generic
+                    // saveEntitySnapshot() (used for real-time task updates) stores
+                    // whatever _embedded actually contains under the `embedded` column,
+                    // which for a task is unrelated data, leaving it NULL here. raw
+                    // (the full untouched API response) has them either way, regardless
+                    // of which sync path last wrote this row.
+                    $leadId = ($raw['entity_type'] ?? null) === 'leads'
+                        ? (int) ($raw['entity_id'] ?? 0) ?: null
                         : null;
 
                     $tasks[] = [
