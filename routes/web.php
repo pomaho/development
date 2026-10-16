@@ -263,7 +263,7 @@ Route::get('/widgets/amo/{publicKey}/eurohome-dashboard', [AmoClientDashboardCon
 
 Route::post('/webhooks/amo/{webhookKey}', AmoWebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
-    ->middleware('throttle:webhook')
+    ->middleware('throttle.retry:webhook')
     ->name('webhooks.amo');
 
 Route::middleware('auth')->group(function (): void {
