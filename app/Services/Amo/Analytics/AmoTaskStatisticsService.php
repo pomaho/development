@@ -1276,12 +1276,12 @@ class AmoTaskStatisticsService
         ]);
     }
 
-    public function massRecruitmentLossReasons(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function massRecruitmentLossReasons(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
         return Cache::remember(
-            $this->massRecruitmentLossReasonsCacheKey($account, $from, $to),
+            $this->massRecruitmentLossReasonsCacheKey($account, $from, $to, $config),
             now()->addMinutes(10),
-            fn (): array => $this->buildMassRecruitmentLossReasons($account, $from, $to),
+            fn (): array => $this->buildMassRecruitmentLossReasons($account, $from, $to, $config),
         );
     }
 
@@ -1292,7 +1292,7 @@ class AmoTaskStatisticsService
      * excluded rather than always contributing a zero-value row). Deals with the field
      * unset get grouped under a "Без причины" row instead of being dropped.
      */
-    private function buildMassRecruitmentLossReasons(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    private function buildMassRecruitmentLossReasons(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): array
     {
         $pipelineIds = $this->massRecruitmentPipelineIds($account);
 
@@ -1305,11 +1305,8 @@ class AmoTaskStatisticsService
             return ['pipeline_found' => false, 'pipeline_name' => $pipelineName, 'field_found' => false, 'total_count' => 0, 'rows' => []];
         }
 
-        $field = $this->leadField(
-            CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads'),
-            0,
-            self::LOSS_REASON_FIELD_NAME,
-        );
+        $fieldQuery = CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads');
+        $field = $this->leadField($fieldQuery, 0, self::LOSS_REASON_FIELD_NAME);
         $fieldId = (int) ($field?->amo_field_id ?? 0);
 
         if ($field === null) {
@@ -1317,8 +1314,11 @@ class AmoTaskStatisticsService
         }
 
         $enumIdsByValue = $this->enumIdsByValue($field);
+        $locationFields = $this->projectCityVacancyFields($fieldQuery, $config);
 
         $counts = [];
+        // Per-reason project → city → vacancy drill-down, from the same leads as the row.
+        $breakdownByKey = [];
         $totalCount = 0;
         CrmEntitySnapshot::query()
             ->select(['id', 'custom_fields_values'])
@@ -1329,14 +1329,17 @@ class AmoTaskStatisticsService
             ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
             ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
             ->orderBy('id')
-            ->chunkById(500, function ($leads) use (&$counts, &$totalCount, $fieldId, $enumIdsByValue): void {
+            ->chunkById(500, function ($leads) use (&$counts, &$breakdownByKey, &$totalCount, $fieldId, $enumIdsByValue, $locationFields): void {
                 foreach ($leads as $lead) {
                     $totalCount++;
-                    $values = $this->recruiterFieldValues($lead->custom_fields_values ?? [], $fieldId, self::LOSS_REASON_FIELD_NAME, $enumIdsByValue);
+                    $customFields = $lead->custom_fields_values ?? [];
+                    $values = $this->recruiterFieldValues($customFields, $fieldId, self::LOSS_REASON_FIELD_NAME, $enumIdsByValue);
                     $reason = trim((string) ($values[0]['value'] ?? ''));
 
                     $key = $reason !== '' ? $reason : '__none__';
                     $counts[$key] = ($counts[$key] ?? 0) + 1;
+                    $breakdownByKey[$key] ??= [];
+                    $this->addToLocationBreakdown($breakdownByKey[$key], $this->projectCityVacancyKeys($locationFields, $customFields), ['count' => 1]);
                 }
             });
 
@@ -1346,6 +1349,7 @@ class AmoTaskStatisticsService
                 'name' => $key === '__none__' ? 'Без причины' : $key,
                 'count' => $count,
                 'percent' => $totalCount > 0 ? round($count / $totalCount * 100, 1) : 0.0,
+                'projects' => $this->locationBreakdownList($breakdownByKey[$key] ?? [], 'count'),
             ])
             ->sortByDesc('count')
             ->values()
@@ -1355,6 +1359,9 @@ class AmoTaskStatisticsService
             'pipeline_found' => true,
             'pipeline_name' => $pipelineName,
             'field_found' => true,
+            'project_field_name' => $locationFields[0]['name'],
+            'city_field_name' => $locationFields[1]['name'],
+            'vacancy_field_name' => $locationFields[2]['name'],
             'total_count' => $totalCount,
             'rows' => $rows,
         ];
@@ -1364,22 +1371,29 @@ class AmoTaskStatisticsService
      * Drill-down lead list behind one "Причины отказа" row. $reason null (or '')
      * matches the "Без причины" row — deals closed as 143 with the field unset.
      */
-    public function massRecruitmentLossReasonLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, ?string $reason, int $limit = 300): array
-    {
+    public function massRecruitmentLossReasonLeads(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        ?string $reason,
+        int $limit = 300,
+        array $config = [],
+        string $project = '',
+        string $city = '',
+        string $vacancy = ''
+    ): array {
         $pipelineIds = $this->massRecruitmentPipelineIds($account);
 
         $leads = [];
         $total = 0;
 
         if ($pipelineIds->isNotEmpty()) {
-            $field = $this->leadField(
-                CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads'),
-                0,
-                self::LOSS_REASON_FIELD_NAME,
-            );
+            $fieldQuery = CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads');
+            $field = $this->leadField($fieldQuery, 0, self::LOSS_REASON_FIELD_NAME);
             $fieldId = (int) ($field?->amo_field_id ?? 0);
             $enumIdsByValue = $field !== null ? $this->enumIdsByValue($field) : [];
             $wantReason = trim((string) $reason);
+            $locationFields = $this->projectCityVacancyFields($fieldQuery, $config);
 
             $leadRows = CrmEntitySnapshot::query()
                 ->where('amo_account_id', $account->id)
@@ -1390,11 +1404,13 @@ class AmoTaskStatisticsService
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->get(['external_id', 'name', 'entity_created_at', 'custom_fields_values']);
 
-            $matching = $leadRows->filter(function ($lead) use ($fieldId, $enumIdsByValue, $wantReason): bool {
-                $values = $this->recruiterFieldValues($lead->custom_fields_values ?? [], $fieldId, self::LOSS_REASON_FIELD_NAME, $enumIdsByValue);
+            $matching = $leadRows->filter(function ($lead) use ($fieldId, $enumIdsByValue, $wantReason, $locationFields, $project, $city, $vacancy): bool {
+                $customFields = $lead->custom_fields_values ?? [];
+                $values = $this->recruiterFieldValues($customFields, $fieldId, self::LOSS_REASON_FIELD_NAME, $enumIdsByValue);
                 $leadReason = trim((string) ($values[0]['value'] ?? ''));
 
-                return $wantReason === '' ? $leadReason === '' : $leadReason === $wantReason;
+                return ($wantReason === '' ? $leadReason === '' : $leadReason === $wantReason)
+                    && $this->matchesLocation($locationFields, $customFields, $project, $city, $vacancy);
             });
 
             $total = $matching->count();
@@ -1410,7 +1426,7 @@ class AmoTaskStatisticsService
         return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
 
-    private function massRecruitmentLossReasonsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    private function massRecruitmentLossReasonsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -1420,6 +1436,9 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            data_get($config, 'project_field_id') ?: data_get($config, 'project_field_name', self::PROJECT_FIELD_NAME),
+            data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
+            data_get($config, 'vacancy_field_id') ?: data_get($config, 'vacancy_field_name', self::VACANCY_FIELD_NAME),
         ]);
     }
 
@@ -1633,19 +1652,7 @@ class AmoTaskStatisticsService
         $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
         $managerFieldIdInt = (int) $managerField->amo_field_id;
         $locationFields = $this->projectCityVacancyFields($fieldQuery, $config);
-        // Narrows the list to one row of the manager's project → city → vacancy drill-down;
-        // an empty value means "any", same as projectCityVacancyLeads().
-        $matchesLocation = function (array $customFields) use ($locationFields, $project, $city, $vacancy): bool {
-            if ($project === '' && $city === '' && $vacancy === '') {
-                return true;
-            }
-
-            [$projectKeys, $cityKeys, $vacancyKeys] = $this->projectCityVacancyKeys($locationFields, $customFields);
-
-            return ($project === '' || in_array($project, $projectKeys, true))
-                && ($city === '' || in_array($city, $cityKeys, true))
-                && ($vacancy === '' || in_array($vacancy, $vacancyKeys, true));
-        };
+        $matchesLocation = fn (array $customFields): bool => $this->matchesLocation($locationFields, $customFields, $project, $city, $vacancy);
 
         $leads = [];
         $total = 0;
@@ -2607,7 +2614,7 @@ class AmoTaskStatisticsService
                             }
 
                             $breakdownByEnum[$enumId] ??= [];
-                            $this->addToManagerBreakdown($breakdownByEnum[$enumId], $locationKeys, $isScheduled);
+                            $this->addToLocationBreakdown($breakdownByEnum[$enumId], $locationKeys, ['received_count' => 1, 'scheduled_count' => $isScheduled ? 1 : 0]);
                         }
                     }
                 });
@@ -2643,7 +2650,7 @@ class AmoTaskStatisticsService
                                 $unassignedScheduledLeadIds[$leadId] = true;
                             }
                             $breakdownByEnum[0] ??= [];
-                            $this->addToManagerBreakdown($breakdownByEnum[0], $locationKeys, $isScheduled);
+                            $this->addToLocationBreakdown($breakdownByEnum[0], $locationKeys, ['received_count' => 1, 'scheduled_count' => $isScheduled ? 1 : 0]);
                             continue;
                         }
 
@@ -2655,7 +2662,7 @@ class AmoTaskStatisticsService
                             }
 
                             $breakdownByEnum[$enumId] ??= [];
-                            $this->addToManagerBreakdown($breakdownByEnum[$enumId], $locationKeys, $isScheduled);
+                            $this->addToLocationBreakdown($breakdownByEnum[$enumId], $locationKeys, ['received_count' => 1, 'scheduled_count' => $isScheduled ? 1 : 0]);
                         }
                     }
                 });
@@ -2676,7 +2683,7 @@ class AmoTaskStatisticsService
                 'scheduled_count' => $scheduledCount,
                 'plan_total' => $planTotal,
                 'plan_completion_percent' => $planTotal > 0 ? round($scheduledCount / $planTotal * 100, 1) : null,
-                'projects' => $this->managerBreakdownList($breakdownByEnum[$enumId] ?? []),
+                'projects' => $this->locationBreakdownList($breakdownByEnum[$enumId] ?? [], 'received_count'),
             ];
         }
 
@@ -2694,7 +2701,7 @@ class AmoTaskStatisticsService
                 'scheduled_count' => count($unassignedScheduledLeadIds),
                 'plan_total' => null,
                 'plan_completion_percent' => null,
-                'projects' => $this->managerBreakdownList($breakdownByEnum[0] ?? []),
+                'projects' => $this->locationBreakdownList($breakdownByEnum[0] ?? [], 'received_count'),
             ];
         }
 
@@ -2760,33 +2767,56 @@ class AmoTaskStatisticsService
         );
     }
 
-    private function addToManagerBreakdown(array &$projects, array $locationKeys, bool $isScheduled): void
+    /**
+     * Narrows a lead list to one row of a project → city → vacancy drill-down; an empty
+     * value means "any", same as projectCityVacancyLeads().
+     */
+    private function matchesLocation(array $locationFields, array $customFields, string $project, string $city, string $vacancy): bool
+    {
+        if ($project === '' && $city === '' && $vacancy === '') {
+            return true;
+        }
+
+        [$projectKeys, $cityKeys, $vacancyKeys] = $this->projectCityVacancyKeys($locationFields, $customFields);
+
+        return ($project === '' || in_array($project, $projectKeys, true))
+            && ($city === '' || in_array($city, $cityKeys, true))
+            && ($vacancy === '' || in_array($vacancy, $vacancyKeys, true));
+    }
+
+    /**
+     * Adds one lead to a project → city → vacancy tree. $increments names the counters
+     * every node carries and how much this lead adds to each, e.g. ['count' => 1].
+     */
+    private function addToLocationBreakdown(array &$projects, array $locationKeys, array $increments): void
     {
         [$projectKeys, $cityKeys, $vacancyKeys] = $locationKeys;
-        $scheduled = $isScheduled ? 1 : 0;
+        $zero = array_fill_keys(array_keys($increments), 0);
+        $add = function (array &$node) use ($increments): void {
+            foreach ($increments as $counter => $increment) {
+                $node[$counter] += $increment;
+            }
+        };
 
         foreach ($projectKeys as $projectName) {
-            $projects[$projectName] ??= ['name' => $projectName, 'received_count' => 0, 'scheduled_count' => 0, 'cities' => []];
-            $projects[$projectName]['received_count']++;
-            $projects[$projectName]['scheduled_count'] += $scheduled;
+            $projects[$projectName] ??= ['name' => $projectName] + $zero + ['cities' => []];
+            $add($projects[$projectName]);
 
             foreach ($cityKeys as $cityName) {
-                $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName, 'received_count' => 0, 'scheduled_count' => 0, 'vacancies' => []];
-                $projects[$projectName]['cities'][$cityName]['received_count']++;
-                $projects[$projectName]['cities'][$cityName]['scheduled_count'] += $scheduled;
+                $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName] + $zero + ['vacancies' => []];
+                $add($projects[$projectName]['cities'][$cityName]);
 
                 foreach ($vacancyKeys as $vacancyName) {
-                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= ['name' => $vacancyName, 'received_count' => 0, 'scheduled_count' => 0];
-                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['received_count']++;
-                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['scheduled_count'] += $scheduled;
+                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= ['name' => $vacancyName] + $zero;
+                    $add($projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]);
                 }
             }
         }
     }
 
-    private function managerBreakdownList(array $projects): array
+    private function locationBreakdownList(array $projects, string $sortCounter): array
     {
-        $sorted = fn (array $nodes): array => collect($nodes)->sortByDesc('received_count')->values()->all();
+        $sorted = fn (array $nodes): array => collect($nodes)->sortByDesc($sortCounter)->values()->all();
 
         return $sorted(array_map(function (array $project) use ($sorted): array {
             $project['cities'] = $sorted(array_map(function (array $city) use ($sorted): array {

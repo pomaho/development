@@ -8,6 +8,7 @@ use App\Models\AmoCredential;
 use App\Models\AmoWebhookEvent;
 use App\Models\CrmCustomFieldSnapshot;
 use App\Models\CrmEntitySnapshot;
+use App\Models\CrmPipelineSnapshot;
 use App\Models\CrmPipelineStatusSnapshot;
 use App\Models\AmoRolesSnapshot;
 use App\Models\AmoUsersSnapshot;
@@ -1343,6 +1344,101 @@ class AmoServicesTest extends TestCase
 
         $unassignedLeads = $service->managerLeads($account, now()->subDays(7), now(), $customConfig, 0, false, 200, 'UTC', 'Склад', 'Москва');
         $this->assertSame(['806'], array_column($unassignedLeads['leads'], 'id'));
+    }
+
+    public function test_mass_recruitment_loss_reasons_break_each_reason_down_by_project_city_and_vacancy(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client3.amocrm.ru']);
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 10,
+            'name' => 'Массовый подбор',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
+        foreach ([
+            [790, 'Причины отказа', [['id' => 6001, 'value' => 'Не устроила оплата'], ['id' => 6002, 'value' => 'Не выходит на связь']]],
+            [781, 'Проект', [['id' => 3001, 'value' => 'Курьеры'], ['id' => 3002, 'value' => 'Склад']]],
+            [791, 'Город заявки', [['id' => 4001, 'value' => 'Москва'], ['id' => 4002, 'value' => 'Казань']]],
+            [783, 'Вакансия', [['id' => 5001, 'value' => 'Пеший курьер']]],
+        ] as [$fieldId, $name, $enums]) {
+            CrmCustomFieldSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'amo_field_id' => $fieldId,
+                'name' => $name,
+                'field_type' => 'select',
+                'enums' => $enums,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $labels = [6001 => 'Не устроила оплата', 6002 => 'Не выходит на связь', 3001 => 'Курьеры', 3002 => 'Склад', 4001 => 'Москва', 4002 => 'Казань', 5001 => 'Пеший курьер'];
+        foreach ([
+            ['id' => '901', 'reason' => 6001, 'project' => 3001, 'city' => 4001, 'vacancy' => 5001, 'status_id' => 143],
+            ['id' => '902', 'reason' => 6001, 'project' => 3001, 'city' => 4002, 'vacancy' => 5001, 'status_id' => 143],
+            ['id' => '903', 'reason' => 6001, 'project' => 3002, 'city' => 4001, 'vacancy' => null, 'status_id' => 143],
+            ['id' => '904', 'reason' => null, 'project' => null, 'city' => 4002, 'vacancy' => null, 'status_id' => 143],
+            // Not a refusal — must stay out of every row.
+            ['id' => '905', 'reason' => 6002, 'project' => 3001, 'city' => 4001, 'vacancy' => 5001, 'status_id' => 142],
+        ] as $lead) {
+            $field = fn (int $fieldId, string $name, ?int $enumId): array => [
+                'field_id' => $fieldId,
+                'field_name' => $name,
+                'values' => $enumId === null ? [] : [['enum_id' => $enumId, 'value' => $labels[$enumId]]],
+            ];
+
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => 10,
+                'status_id' => $lead['status_id'],
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => [
+                    $field(790, 'Причины отказа', $lead['reason']),
+                    $field(781, 'Проект', $lead['project']),
+                    $field(791, 'Город заявки', $lead['city']),
+                    $field(783, 'Вакансия', $lead['vacancy']),
+                ],
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        // The city field is configured by ID with a non-default name, as on the production widget.
+        $config = ['city_field_id' => 791];
+        $service = new AmoTaskStatisticsService();
+        $reasons = $service->massRecruitmentLossReasons($account, now()->subDays(7), now(), $config);
+
+        $this->assertSame('Город заявки', $reasons['city_field_name']);
+        $this->assertSame(['Не устроила оплата', 'Без причины'], array_column($reasons['rows'], 'name'));
+
+        $pay = $reasons['rows'][0];
+        $this->assertSame(3, $pay['count']);
+        $this->assertSame(['Курьеры', 'Склад'], array_column($pay['projects'], 'name'));
+        $this->assertSame(3, array_sum(array_column($pay['projects'], 'count')));
+        $this->assertSame(['Москва', 'Казань'], array_column($pay['projects'][0]['cities'], 'name'));
+        $this->assertSame([['name' => 'Пеший курьер', 'count' => 1]], $pay['projects'][0]['cities'][0]['vacancies']);
+        $this->assertSame('—', $pay['projects'][1]['cities'][0]['vacancies'][0]['name']);
+
+        $none = $reasons['rows'][1];
+        $this->assertNull($none['reason']);
+        $this->assertSame('Без проекта', $none['projects'][0]['name']);
+        $this->assertSame('Казань', $none['projects'][0]['cities'][0]['name']);
+
+        $couriers = $service->massRecruitmentLossReasonLeads($account, now()->subDays(7), now(), 'Не устроила оплата', 300, $config, 'Курьеры');
+        $this->assertSame(['901', '902'], array_column($couriers['leads'], 'id'));
+
+        $kazan = $service->massRecruitmentLossReasonLeads($account, now()->subDays(7), now(), 'Не устроила оплата', 300, $config, 'Курьеры', 'Казань', 'Пеший курьер');
+        $this->assertSame(['902'], array_column($kazan['leads'], 'id'));
+
+        $noReason = $service->massRecruitmentLossReasonLeads($account, now()->subDays(7), now(), null, 300, $config, 'Без проекта', 'Казань', '—');
+        $this->assertSame(['904'], array_column($noReason['leads'], 'id'));
     }
 
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void

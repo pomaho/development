@@ -86,19 +86,20 @@ type RecruiterScheduleBreakdown = {
     recruiters: RecruiterScheduleRow[];
 };
 
-type ManagerBreakdownVacancy = {
-    name: string;
-    received_count: number;
-    scheduled_count: number;
+// Project → city → vacancy drill-down; K names the counters every level carries.
+type LocationBreakdownVacancy<K extends string> = { name: string } & { [P in K]: number };
+
+type LocationBreakdownCity<K extends string> = LocationBreakdownVacancy<K> & {
+    vacancies: LocationBreakdownVacancy<K>[];
 };
 
-type ManagerBreakdownCity = ManagerBreakdownVacancy & {
-    vacancies: ManagerBreakdownVacancy[];
+type LocationBreakdownProject<K extends string> = LocationBreakdownVacancy<K> & {
+    cities: LocationBreakdownCity<K>[];
 };
 
-type ManagerBreakdownProject = ManagerBreakdownVacancy & {
-    cities: ManagerBreakdownCity[];
-};
+type LocationFilter = { project: string; city?: string; vacancy?: string };
+
+type LocationFieldNames = { project_field_name: string; city_field_name: string; vacancy_field_name: string };
 
 type ManagerLeadRow = {
     enum_id: number;
@@ -107,7 +108,7 @@ type ManagerLeadRow = {
     scheduled_count: number;
     plan_total: number | null;
     plan_completion_percent: number | null;
-    projects: ManagerBreakdownProject[];
+    projects: LocationBreakdownProject<'received_count' | 'scheduled_count'>[];
 };
 
 type ManagerLeadDistribution = {
@@ -174,9 +175,10 @@ type MassRecruitmentLossReasonRow = {
     name: string;
     count: number;
     percent: number;
+    projects: LocationBreakdownProject<'count'>[];
 };
 
-type MassRecruitmentLossReasonsData = {
+type MassRecruitmentLossReasonsData = LocationFieldNames & {
     pipeline_found: boolean;
     pipeline_name: string;
     field_found: boolean;
@@ -772,7 +774,7 @@ function MassRecruitmentFunnelLeadsModal({
     );
 }
 
-type MassRecruitmentLossReasonFilter = {
+type MassRecruitmentLossReasonFilter = Partial<LocationFilter> & {
     reason: string | null;
     label: string;
 };
@@ -784,6 +786,12 @@ function MassRecruitmentLossReasonsSection({ state, leadsUrl, periodParams, base
     baseDomain: string;
 }) {
     const [leadsFilter, setLeadsFilter] = useState<MassRecruitmentLossReasonFilter | null>(null);
+    const [expandedReasons, setExpandedReasons] = useState<Set<string>>(() => new Set());
+    const toggleExpanded = (key: string) => setExpandedReasons((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    });
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
@@ -827,9 +835,23 @@ function MassRecruitmentLossReasonsSection({ state, leadsUrl, periodParams, base
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {data.rows.map((row) => (
-                                <tr key={row.reason ?? '__none__'} className="transition-colors hover:bg-violet-50/50">
-                                    <td className="px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
+                            {data.rows.map((row) => {
+                                const rowKey = row.reason ?? '__none__';
+                                const isExpanded = expandedReasons.has(rowKey);
+                                return (
+                                <Fragment key={rowKey}>
+                                <tr className="transition-colors hover:bg-violet-50/50">
+                                    <td className="px-5 py-3.5 font-semibold text-gray-900">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleExpanded(rowKey)}
+                                            className="inline-flex items-center gap-1.5 text-left hover:text-violet-700"
+                                            aria-expanded={isExpanded}
+                                        >
+                                            <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                            {row.name}
+                                        </button>
+                                    </td>
                                     <td className="px-4 py-3.5 text-right">
                                         <CountButton
                                             value={row.count}
@@ -845,7 +867,21 @@ function MassRecruitmentLossReasonsSection({ state, leadsUrl, periodParams, base
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                                {isExpanded && (
+                                    <tr>
+                                        <td className="bg-slate-50/60 px-5 py-3" colSpan={3}>
+                                            <LocationBreakdownTable
+                                                projects={row.projects}
+                                                fieldNames={data}
+                                                columns={[{ key: 'count', label: 'Сделок' }]}
+                                                onOpen={(_key, location, path) => setLeadsFilter({ reason: row.reason, ...location, label: `${row.name} / ${path}` })}
+                                            />
+                                        </td>
+                                    </tr>
+                                )}
+                                </Fragment>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -875,7 +911,13 @@ function MassRecruitmentLossReasonLeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, reason: filter.reason ?? '' };
+    const params = {
+        ...periodParams,
+        reason: filter.reason ?? '',
+        project: filter.project ?? '',
+        city: filter.city ?? '',
+        vacancy: filter.vacancy ?? '',
+    };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {
@@ -1360,7 +1402,17 @@ function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { st
                                 {isExpanded && (
                                     <tr>
                                         <td className="bg-slate-50/60 px-5 py-3" colSpan={4}>
-                                            <ManagerBreakdownTable manager={manager} data={data} onOpenLeads={setLeadsFilter} />
+                                            <LocationBreakdownTable
+                                                projects={manager.projects}
+                                                fieldNames={data}
+                                                columns={[{ key: 'received_count', label: 'Обработано' }, { key: 'scheduled_count', label: 'Вывел на смену' }]}
+                                                onOpen={(key, location, path) => setLeadsFilter({
+                                                    managerEnumId: manager.enum_id,
+                                                    scheduledOnly: key === 'scheduled_count',
+                                                    ...location,
+                                                    label: `${manager.name} / ${path} — ${key === 'scheduled_count' ? 'вывел на смену' : 'обработано'}`,
+                                                })}
+                                            />
                                         </td>
                                     </tr>
                                 )}
@@ -1393,22 +1445,23 @@ function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { st
     );
 }
 
-function ManagerBreakdownTable({ manager, data, onOpenLeads }: { manager: ManagerLeadRow; data: ManagerLeadDistribution; onOpenLeads: (filter: ManagerLeadsFilter) => void }) {
-    if (manager.projects.length === 0) {
+function LocationBreakdownTable<K extends string>({ projects, fieldNames, columns, onOpen }: {
+    projects: LocationBreakdownProject<K>[];
+    fieldNames: LocationFieldNames;
+    columns: { key: K; label: string }[];
+    onOpen: (key: K, location: LocationFilter, path: string) => void;
+}) {
+    if (projects.length === 0) {
         return <p className="py-2 text-xs text-slate-400">Нет данных для детализации.</p>;
     }
 
-    const cityLabel = (name: string) => (name === '—' ? 'Без города' : name);
-    const open = (scheduledOnly: boolean, location: { project: string; city?: string; vacancy?: string }) => {
-        const path = [location.project, location.city && cityLabel(location.city), location.vacancy !== '—' ? location.vacancy : undefined]
-            .filter(Boolean)
-            .join(' / ');
-        onOpenLeads({
-            managerEnumId: manager.enum_id,
-            scheduledOnly,
-            ...location,
-            label: `${manager.name} / ${path} — ${scheduledOnly ? 'вывел на смену' : 'обработано'}`,
-        });
+    const open = (key: K, location: LocationFilter) => {
+        const path = [
+            location.project,
+            location.city === '—' ? 'Без города' : location.city,
+            location.vacancy !== '—' ? location.vacancy : undefined,
+        ].filter(Boolean).join(' / ');
+        onOpen(key, location, path);
     };
 
     return (
@@ -1416,26 +1469,26 @@ function ManagerBreakdownTable({ manager, data, onOpenLeads }: { manager: Manage
             <table className="w-full bg-white text-left text-sm">
                 <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
                     <tr>
-                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.project_field_name}</th>
-                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
-                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
-                        <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Обработано</th>
-                        <th className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Вывел на смену</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{fieldNames.project_field_name}</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{fieldNames.city_field_name}</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{fieldNames.vacancy_field_name}</th>
+                        {columns.map((column) => (
+                            <th key={column.key} className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{column.label}</th>
+                        ))}
                     </tr>
                 </thead>
                 <tbody>
-                    {manager.projects.map((project) => (
+                    {projects.map((project) => (
                         <Fragment key={project.name}>
                             <tr className="bg-slate-100">
                                 <td className="border-l-4 border-slate-300 px-5 py-2 font-semibold text-slate-700" colSpan={3}>
                                     {project.name}
                                 </td>
-                                <td className="px-4 py-2 text-right">
-                                    <CountButton value={project.received_count} onClick={() => open(false, { project: project.name })} />
-                                </td>
-                                <td className="px-4 py-2 text-right">
-                                    <CountButton value={project.scheduled_count} onClick={() => open(true, { project: project.name })} />
-                                </td>
+                                {columns.map((column) => (
+                                    <td key={column.key} className="px-4 py-2 text-right">
+                                        <CountButton value={project[column.key]} onClick={() => open(column.key, { project: project.name })} />
+                                    </td>
+                                ))}
                             </tr>
                             {project.cities.map((city) => city.vacancies.map((vacancy, vi) => {
                                 const location = { project: project.name, city: city.name, vacancy: vacancy.name };
@@ -1448,12 +1501,11 @@ function ManagerBreakdownTable({ manager, data, onOpenLeads }: { manager: Manage
                                         <td className="px-5 py-2 text-xs text-gray-500">
                                             {vacancy.name !== '—' ? vacancy.name : ''}
                                         </td>
-                                        <td className="px-4 py-2 text-right">
-                                            <CountButton value={vacancy.received_count} onClick={() => open(false, location)} />
-                                        </td>
-                                        <td className="px-4 py-2 text-right">
-                                            <CountButton value={vacancy.scheduled_count} onClick={() => open(true, location)} />
-                                        </td>
+                                        {columns.map((column) => (
+                                            <td key={column.key} className="px-4 py-2 text-right">
+                                                <CountButton value={vacancy[column.key]} onClick={() => open(column.key, location)} />
+                                            </td>
+                                        ))}
                                     </tr>
                                 );
                             }))}

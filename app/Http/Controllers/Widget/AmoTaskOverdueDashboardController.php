@@ -266,7 +266,7 @@ class AmoTaskOverdueDashboardController extends Controller
         [$from, $to] = $this->period($request);
 
         return response()->json([
-            'data' => $statisticsService->massRecruitmentLossReasons($installation->account, $from, $to),
+            'data' => $statisticsService->massRecruitmentLossReasons($installation->account, $from, $to, $installation->config ?? []),
         ]);
     }
 
@@ -281,6 +281,11 @@ class AmoTaskOverdueDashboardController extends Controller
                 $from,
                 $to,
                 $request->query('reason'),
+                300,
+                $installation->config ?? [],
+                (string) $request->query('project', ''),
+                (string) $request->query('city', ''),
+                (string) $request->query('vacancy', ''),
             ),
         ]);
     }
@@ -623,6 +628,24 @@ class AmoTaskOverdueDashboardController extends Controller
      */
     private function flatReportsForExport(AmoTaskStatisticsService $statisticsService, AmoAccount $account, Carbon $from, Carbon $to, array $config, string $tz): array
     {
+        $lossReasons = $statisticsService->massRecruitmentLossReasons($account, $from, $to, $config);
+        $lossReasonLocationRows = [];
+        foreach ($lossReasons['rows'] ?? [] as $reason) {
+            foreach ($reason['projects'] ?? [] as $project) {
+                foreach ($project['cities'] as $city) {
+                    foreach ($city['vacancies'] as $vacancy) {
+                        $lossReasonLocationRows[] = [
+                            'reason' => $reason['name'],
+                            'project' => $project['name'],
+                            'city' => $city['name'],
+                            'vacancy' => $vacancy['name'],
+                            'count' => $vacancy['count'],
+                        ];
+                    }
+                }
+            }
+        }
+
         return [
             [
                 'title' => 'Кабинеты Авито',
@@ -666,8 +689,21 @@ class AmoTaskOverdueDashboardController extends Controller
                     'count' => 'Сделок',
                     'percent' => 'Доля, %',
                 ],
-                'rows' => $statisticsService->massRecruitmentLossReasons($account, $from, $to)['rows'] ?? [],
+                'rows' => $lossReasons['rows'] ?? [],
                 'totals' => true,
+            ],
+            [
+                'title' => 'Причины отказа по проектам',
+                'columns' => [
+                    'reason' => 'Причина',
+                    'project' => $lossReasons['project_field_name'] ?? 'Проект',
+                    'city' => $lossReasons['city_field_name'] ?? 'Город',
+                    'vacancy' => $lossReasons['vacancy_field_name'] ?? 'Вакансия',
+                    'count' => 'Сделок',
+                ],
+                'rows' => $lossReasonLocationRows,
+                // A lead with several cities/vacancies sits in several rows, so a sum would overcount.
+                'totals' => false,
             ],
         ];
     }
