@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\AmoAccount;
 use App\Services\Amo\Structure\AmoUsersService;
 use Illuminate\Console\Command;
+use Throwable;
 
 class AmoSyncUsersCommand extends Command
 {
@@ -20,11 +21,19 @@ class AmoSyncUsersCommand extends Command
         }
 
         $accounts = $query->get();
+        $failed = false;
 
+        // One account failing (e.g. an expired token) must not stop the rest from
+        // syncing — this runs unattended on a schedule.
         foreach ($accounts as $account) {
-            $this->components->task("Sync {$account->base_domain}", fn () => $usersService->syncUsersAndRoles($account));
+            try {
+                $this->components->task("Sync {$account->base_domain}", fn () => $usersService->syncUsersAndRoles($account));
+            } catch (Throwable $exception) {
+                $failed = true;
+                $this->components->error("{$account->base_domain}: {$exception->getMessage()}");
+            }
         }
 
-        return self::SUCCESS;
+        return $failed ? self::FAILURE : self::SUCCESS;
     }
 }

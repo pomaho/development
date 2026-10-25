@@ -16,3 +16,7 @@ Schedule::command('amo:check-sync-health')->everyThirtyMinutes();
 // without this, a newly added amoCRM field option shows as a raw "Менеджер {id}" fallback
 // in reports until someone runs amo:crm-audit --structure-only by hand.
 Schedule::command('amo:crm-audit --structure-only')->dailyAt('04:00')->withoutOverlapping();
+
+// New amoCRM users only show up by name in reports once synced; this used to be
+// manual-only, so new managers appeared as "Без ответственного" for weeks.
+Schedule::command('amo:sync-users')->dailyAt('04:30')->withoutOverlapping();
