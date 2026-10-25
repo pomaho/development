@@ -30,15 +30,24 @@ function BreakdownCount({ value, onClick }: { value: number; onClick: () => void
     );
 }
 
-export function LocationBreakdownTable<K extends string>({ projects, fieldNames, columns, onOpen }: {
+export function LocationBreakdownTable<K extends string>({ projects, fieldNames, columns, rate, onOpen }: {
     projects: LocationBreakdownProject<K>[];
     fieldNames: LocationFieldNames;
     columns: { key: K; label: string }[];
+    // Optional trailing percentage column, numerator / denominator of two counters.
+    rate?: { label: string; numerator: K; denominator: K };
     onOpen: (key: K, location: LocationFilter, path: string) => void;
 }) {
     if (projects.length === 0) {
         return <p className="py-2 text-xs text-slate-400">Нет данных для детализации.</p>;
     }
+
+    const rateCell = (node: LocationBreakdownVacancy<K>) => {
+        if (!rate) return null;
+        const denominator = node[rate.denominator];
+        const percent = denominator > 0 ? Math.round((node[rate.numerator] / denominator) * 1000) / 10 : 0;
+        return <td className="px-4 py-2 text-right text-xs font-semibold tabular-nums text-slate-600">{percent}%</td>;
+    };
 
     const open = (key: K, location: LocationFilter) => {
         const path = [
@@ -60,6 +69,7 @@ export function LocationBreakdownTable<K extends string>({ projects, fieldNames,
                         {columns.map((column) => (
                             <th key={column.key} className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{column.label}</th>
                         ))}
+                        {rate && <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{rate.label}</th>}
                     </tr>
                 </thead>
                 <tbody>
@@ -74,6 +84,7 @@ export function LocationBreakdownTable<K extends string>({ projects, fieldNames,
                                         <BreakdownCount value={project[column.key]} onClick={() => open(column.key, { project: project.name })} />
                                     </td>
                                 ))}
+                                {rateCell(project)}
                             </tr>
                             {project.cities.map((city) => city.vacancies.map((vacancy, vi) => {
                                 const location = { project: project.name, city: city.name, vacancy: vacancy.name };
@@ -91,6 +102,7 @@ export function LocationBreakdownTable<K extends string>({ projects, fieldNames,
                                                 <BreakdownCount value={vacancy[column.key]} onClick={() => open(column.key, location)} />
                                             </td>
                                         ))}
+                                        {rateCell(vacancy)}
                                     </tr>
                                 );
                             }))}

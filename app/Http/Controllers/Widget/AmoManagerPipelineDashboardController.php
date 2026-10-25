@@ -55,7 +55,7 @@ class AmoManagerPipelineDashboardController extends Controller
         [$from, $to] = $this->period($request);
 
         return response()->json([
-            'data' => $statisticsService->managerPipelineOverview($installation->account, $from, $to),
+            'data' => $statisticsService->managerPipelineOverview($installation->account, $from, $to, $installation->config ?? []),
         ]);
     }
 
@@ -71,6 +71,12 @@ class AmoManagerPipelineDashboardController extends Controller
                 $to,
                 (string) $request->query('manager', ''),
                 $request->boolean('success_only'),
+                false,
+                300,
+                $installation->config ?? [],
+                (string) $request->query('project', ''),
+                (string) $request->query('city', ''),
+                (string) $request->query('vacancy', ''),
             ),
         ]);
     }
@@ -81,7 +87,7 @@ class AmoManagerPipelineDashboardController extends Controller
         [$from, $to] = $this->period($request);
 
         return response()->json([
-            'data' => $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to),
+            'data' => $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to, $installation->config ?? []),
         ]);
     }
 
@@ -190,8 +196,26 @@ class AmoManagerPipelineDashboardController extends Controller
         $installation = $this->installation($publicKey);
         [$from, $to] = $this->period($request);
 
-        $overview = $statisticsService->managerPipelineOverview($installation->account, $from, $to);
-        $shift = $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to);
+        $overview = $statisticsService->managerPipelineOverview($installation->account, $from, $to, $installation->config ?? []);
+        $shift = $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to, $installation->config ?? []);
+        $managerLocationRows = [];
+        foreach ($overview['rows'] as $manager) {
+            foreach ($manager['projects'] as $project) {
+                foreach ($project['cities'] as $city) {
+                    foreach ($city['vacancies'] as $vacancy) {
+                        $managerLocationRows[] = [
+                            'manager' => $manager['name'],
+                            'project' => $project['name'],
+                            'city' => $city['name'],
+                            'vacancy' => $vacancy['name'],
+                            'total_count' => $vacancy['total_count'],
+                            'success_count' => $vacancy['success_count'],
+                            'conversion_rate' => $vacancy['total_count'] > 0 ? round($vacancy['success_count'] / $vacancy['total_count'] * 100, 1) : 0.0,
+                        ];
+                    }
+                }
+            }
+        }
         $avitoCabinets = $statisticsService->managerPipelineAvitoCabinetBreakdown($installation->account, $from, $to);
         $funnel = $statisticsService->managerPipelineFunnel($installation->account, $from, $to);
         $lossReasons = $statisticsService->managerPipelineLossReasons($installation->account, $from, $to, $installation->config ?? []);
@@ -208,6 +232,21 @@ class AmoManagerPipelineDashboardController extends Controller
                 'rows' => $overview['rows'],
                 // Summing conversion_rate percentages across rows produces a
                 // meaningless number, not a blended rate — no totals row for this sheet.
+                'totals' => false,
+            ],
+            [
+                'title' => 'Менеджеры по проектам',
+                'columns' => [
+                    'manager' => 'Менеджер',
+                    'project' => $overview['project_field_name'] ?? 'Проект',
+                    'city' => $overview['city_field_name'] ?? 'Город',
+                    'vacancy' => $overview['vacancy_field_name'] ?? 'Вакансия',
+                    'total_count' => 'Сделок',
+                    'success_count' => 'Встал в график',
+                    'conversion_rate' => 'Конверсия, %',
+                ],
+                'rows' => $managerLocationRows,
+                // A lead with several cities/vacancies sits in several rows, so a sum would overcount.
                 'totals' => false,
             ],
             [

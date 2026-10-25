@@ -418,9 +418,9 @@ class AmoTaskStatisticsService
         return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
 
-    public function managerPipelineOverview(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function managerPipelineOverview(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
-        $stats = $this->managerPipelineStats($account, $from, $to);
+        $stats = $this->managerPipelineStats($account, $from, $to, $config);
 
         $rows = collect($stats['managers'])
             ->map(fn (array $m): array => [
@@ -436,6 +436,7 @@ class AmoTaskStatisticsService
                     ])
                     ->values()
                     ->all(),
+                'projects' => $m['projects'],
             ])
             ->sortByDesc('total_count')
             ->values()
@@ -446,6 +447,9 @@ class AmoTaskStatisticsService
             'pipeline_name' => $stats['pipeline_name'],
             'manager_field_found' => $stats['manager_field_found'],
             'manager_field_name' => 'Ответственный',
+            'project_field_name' => $stats['project_field_name'],
+            'city_field_name' => $stats['city_field_name'],
+            'vacancy_field_name' => $stats['vacancy_field_name'],
             'success_status_name' => $stats['success_status_name'],
             'total_count' => (int) collect($rows)->sum('total_count'),
             'success_count' => (int) collect($rows)->sum('success_count'),
@@ -454,9 +458,10 @@ class AmoTaskStatisticsService
         ];
     }
 
-    public function managerPipelineShiftBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null): array
+    public function managerPipelineShiftBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
-        $stats = $this->managerPipelineStats($account, $from, $to);
+        // Same $config as managerPipelineOverview() so both share one cached stats build.
+        $stats = $this->managerPipelineStats($account, $from, $to, $config);
 
         $rows = collect($stats['managers'])
             ->filter(fn (array $m): bool => $m['success_count'] > 0)
@@ -483,9 +488,24 @@ class AmoTaskStatisticsService
         ];
     }
 
-    public function managerPipelineLeads(AmoAccount $account, ?Carbon $from, ?Carbon $to, string $managerName, bool $successOnly = false, bool $fifthShiftOnly = false, int $limit = 300): array
-    {
+    public function managerPipelineLeads(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        string $managerName,
+        bool $successOnly = false,
+        bool $fifthShiftOnly = false,
+        int $limit = 300,
+        array $config = [],
+        string $project = '',
+        string $city = '',
+        string $vacancy = ''
+    ): array {
         [$pipelineIds, $successPairs, $fifthShiftFieldId] = $this->managerPipelineResolve($account);
+        $locationFields = $this->projectCityVacancyFields(
+            CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads'),
+            $config,
+        );
 
         $users = AmoUsersSnapshot::query()
             ->where('amo_account_id', $account->id)
@@ -509,7 +529,7 @@ class AmoTaskStatisticsService
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
-                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $normalisedManager, $successOnly, $fifthShiftOnly, $successPairs, $users, $fifthShiftFieldId): void {
+                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $normalisedManager, $successOnly, $fifthShiftOnly, $successPairs, $users, $fifthShiftFieldId, $locationFields, $project, $city, $vacancy): void {
                     foreach ($chunk as $lead) {
                         $responsibleId = (int) ($lead->responsible_user_id ?? 0);
                         $leadManager = mb_strtolower(trim($users->get($responsibleId)?->name ?? 'Без ответственного'));
@@ -526,6 +546,10 @@ class AmoTaskStatisticsService
                         }
 
                         if ($fifthShiftOnly && (!$fifthShiftFieldId || !$this->checkboxFieldValue($customFields, $fifthShiftFieldId))) {
+                            continue;
+                        }
+
+                        if (!$this->matchesLocation($locationFields, $customFields, $project, $city, $vacancy)) {
                             continue;
                         }
 
@@ -2253,16 +2277,16 @@ class AmoTaskStatisticsService
         return $visited;
     }
 
-    private function managerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    private function managerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): array
     {
         return Cache::remember(
-            $this->managerPipelineStatsCacheKey($account, $from, $to),
+            $this->managerPipelineStatsCacheKey($account, $from, $to, $config),
             now()->addMinutes(10),
-            fn (): array => $this->buildManagerPipelineStats($account, $from, $to),
+            fn (): array => $this->buildManagerPipelineStats($account, $from, $to, $config),
         );
     }
 
-    private function buildManagerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to): array
+    private function buildManagerPipelineStats(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): array
     {
         set_time_limit(120);
 
@@ -2289,6 +2313,10 @@ class AmoTaskStatisticsService
             : collect();
         $emptyStageCounts = $statuses->mapWithKeys(fn ($status): array => [$status->amo_status_id => 0])->all();
         $visitedByLead = $pipelineFound ? $this->visitedStatusesByLead($account, $pipelineIds) : [];
+        $locationFields = $this->projectCityVacancyFields(
+            CrmCustomFieldSnapshot::query()->where('amo_account_id', $account->id)->where('entity_type', 'leads'),
+            $config,
+        );
 
         $managers = [];
 
@@ -2305,7 +2333,7 @@ class AmoTaskStatisticsService
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$managers, $users, $fifthShiftFieldId, $successPairs, $statuses, $emptyStageCounts, $visitedByLead): void {
+                ->chunkById(500, function ($leads) use (&$managers, $users, $fifthShiftFieldId, $successPairs, $statuses, $emptyStageCounts, $visitedByLead, $locationFields): void {
                     foreach ($leads as $lead) {
                         $responsibleId = (int) ($lead->responsible_user_id ?? 0);
                         $managerName = $users->get($responsibleId)?->name ?? 'Без ответственного';
@@ -2316,13 +2344,20 @@ class AmoTaskStatisticsService
                             'success_count' => 0,
                             'fifth_shift_count' => 0,
                             'stage_counts' => $emptyStageCounts,
+                            // Project → city → vacancy drill-down, from the same leads as the row.
+                            'projects' => [],
                         ];
                         $managers[$managerName]['total_count']++;
 
+                        $customFields = $lead->custom_fields_values ?? [];
                         $isSuccess = isset($successPairs["{$lead->pipeline_id}:{$lead->status_id}"]);
+                        $this->addToLocationBreakdown(
+                            $managers[$managerName]['projects'],
+                            $this->projectCityVacancyKeys($locationFields, $customFields),
+                            ['total_count' => 1, 'success_count' => $isSuccess ? 1 : 0],
+                        );
                         if ($isSuccess) {
                             $managers[$managerName]['success_count']++;
-                            $customFields = $lead->custom_fields_values ?? [];
                             if ($fifthShiftFieldId > 0 && $this->checkboxFieldValue($customFields, $fifthShiftFieldId)) {
                                 $managers[$managerName]['fifth_shift_count']++;
                             }
@@ -2353,7 +2388,13 @@ class AmoTaskStatisticsService
                 'status_id' => $status->amo_status_id,
                 'name' => $status->name,
             ])->values()->all(),
-            'managers' => array_values($managers),
+            'project_field_name' => $locationFields[0]['name'],
+            'city_field_name' => $locationFields[1]['name'],
+            'vacancy_field_name' => $locationFields[2]['name'],
+            'managers' => array_map(fn (array $manager): array => [
+                ...$manager,
+                'projects' => $this->locationBreakdownList($manager['projects'], 'total_count'),
+            ], array_values($managers)),
         ];
     }
 
@@ -3417,7 +3458,7 @@ class AmoTaskStatisticsService
         ]);
     }
 
-    private function managerPipelineStatsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to): string
+    private function managerPipelineStatsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
@@ -3427,6 +3468,9 @@ class AmoTaskStatisticsService
             $version,
             $from?->timestamp ?? 'null',
             $to?->timestamp ?? 'null',
+            data_get($config, 'project_field_id') ?: data_get($config, 'project_field_name', self::PROJECT_FIELD_NAME),
+            data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
+            data_get($config, 'vacancy_field_id') ?: data_get($config, 'vacancy_field_name', self::VACANCY_FIELD_NAME),
         ]);
     }
 

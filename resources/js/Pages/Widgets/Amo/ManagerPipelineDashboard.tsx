@@ -21,11 +21,12 @@ type OverviewRow = {
     success_count: number;
     conversion_rate: number;
     stage_counts: StageCount[];
+    projects: LocationBreakdownProject<'total_count' | 'success_count'>[];
 };
 
 type PipelineStage = { status_id: number; name: string };
 
-type OverviewData = {
+type OverviewData = LocationFieldNames & {
     pipeline_found: boolean;
     pipeline_name: string;
     manager_field_found: boolean;
@@ -244,6 +245,13 @@ function OverviewSection({ state, leadsUrl, funnelLeadsUrl, onOpenLeads }: {
     funnelLeadsUrl: string;
     onOpenLeads: (filter: LeadsFilter) => void;
 }) {
+    const [expandedManagers, setExpandedManagers] = useState<Set<string>>(() => new Set());
+    const toggleExpanded = (name: string) => setExpandedManagers((prev) => {
+        const next = new Set(prev);
+        if (next.has(name)) next.delete(name); else next.add(name);
+        return next;
+    });
+
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
@@ -282,9 +290,22 @@ function OverviewSection({ state, leadsUrl, funnelLeadsUrl, onOpenLeads }: {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {data.rows.map((row) => (
-                                <tr key={row.name} className="transition-colors hover:bg-violet-50/50">
-                                    <td className="sticky left-0 bg-white px-5 py-3.5 font-semibold text-gray-900">{row.name}</td>
+                            {data.rows.map((row) => {
+                                const isExpanded = expandedManagers.has(row.name);
+                                return (
+                                <Fragment key={row.name}>
+                                <tr className="transition-colors hover:bg-violet-50/50">
+                                    <td className="sticky left-0 bg-white px-5 py-3.5 font-semibold text-gray-900">
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleExpanded(row.name)}
+                                            className="inline-flex items-center gap-1.5 whitespace-nowrap text-left hover:text-violet-700"
+                                            aria-expanded={isExpanded}
+                                        >
+                                            <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                            {row.name}
+                                        </button>
+                                    </td>
                                     <td className="px-4 py-3.5 text-right">
                                         <CountButton
                                             value={row.total_count}
@@ -324,7 +345,35 @@ function OverviewSection({ state, leadsUrl, funnelLeadsUrl, onOpenLeads }: {
                                         );
                                     })}
                                 </tr>
-                            ))}
+                                {isExpanded && (
+                                    <tr>
+                                        <td className="bg-slate-50/60 px-5 py-3" colSpan={4 + data.stages.length}>
+                                            {/* The table scrolls sideways (one column per stage); keep the drill-down pinned to the visible left part. */}
+                                            <div className="sticky left-5 max-w-5xl">
+                                                <LocationBreakdownTable
+                                                    projects={row.projects}
+                                                    fieldNames={data}
+                                                    columns={[{ key: 'total_count', label: 'Сделок' }, { key: 'success_count', label: 'Встал в график' }]}
+                                                    rate={{ label: 'Конверсия', numerator: 'success_count', denominator: 'total_count' }}
+                                                    onOpen={(key, location, path) => onOpenLeads({
+                                                        leadsUrl,
+                                                        manager: row.name,
+                                                        extraParams: {
+                                                            success_only: key === 'success_count' ? '1' : '0',
+                                                            project: location.project,
+                                                            city: location.city ?? '',
+                                                            vacancy: location.vacancy ?? '',
+                                                        },
+                                                        label: `${row.name} / ${path} — ${key === 'success_count' ? 'встал в график' : 'все сделки'}`,
+                                                    })}
+                                                />
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                                </Fragment>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

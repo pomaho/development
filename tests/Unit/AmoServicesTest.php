@@ -1526,6 +1526,70 @@ class AmoServicesTest extends TestCase
         $this->assertSame(1, $service->massRecruitmentLossReasons($account, now()->subDays(7), now())['total_count']);
     }
 
+    public function test_manager_pipeline_overview_breaks_each_responsible_down_by_project_city_and_vacancy(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client3.amocrm.ru']);
+        CrmPipelineSnapshot::query()->create(['amo_account_id' => $account->id, 'amo_pipeline_id' => 20, 'name' => 'Менеджеры подбор', 'raw' => [], 'synced_at' => now()]);
+        CrmPipelineStatusSnapshot::query()->create(['amo_account_id' => $account->id, 'amo_pipeline_id' => 20, 'amo_status_id' => 142, 'name' => 'Встал в график', 'sort' => 10000, 'raw' => [], 'synced_at' => now()]);
+        CrmPipelineStatusSnapshot::query()->create(['amo_account_id' => $account->id, 'amo_pipeline_id' => 20, 'amo_status_id' => 143, 'name' => 'Закрыто и не реализовано', 'sort' => 10001, 'raw' => [], 'synced_at' => now()]);
+        AmoUsersSnapshot::query()->create(['amo_account_id' => $account->id, 'amo_user_id' => 10, 'name' => 'Иванова Анна', 'rights' => [], 'is_admin' => false, 'is_active' => true, 'raw' => [], 'synced_at' => now()]);
+        foreach ([
+            [782, 'Проект', [['id' => 3101, 'value' => 'X5 Розница'], ['id' => 3102, 'value' => 'ВкусВилл']]],
+            [783, 'Город', [['id' => 4001, 'value' => 'Казань']]],
+        ] as [$fieldId, $name, $enums]) {
+            CrmCustomFieldSnapshot::query()->create(['amo_account_id' => $account->id, 'entity_type' => 'leads', 'amo_field_id' => $fieldId, 'name' => $name, 'field_type' => 'select', 'enums' => $enums, 'raw' => [], 'synced_at' => now()]);
+        }
+
+        $labels = [3101 => 'X5 Розница', 3102 => 'ВкусВилл', 4001 => 'Казань'];
+        foreach ([
+            ['id' => '971', 'status_id' => 142, 'project' => 3101, 'city' => 4001],
+            ['id' => '972', 'status_id' => 143, 'project' => 3101, 'city' => 4001],
+            ['id' => '973', 'status_id' => 143, 'project' => 3101, 'city' => null],
+            ['id' => '974', 'status_id' => 143, 'project' => 3102, 'city' => 4001],
+        ] as $lead) {
+            $fields = [];
+            foreach ([[782, 'Проект', $lead['project']], [783, 'Город', $lead['city']]] as [$fieldId, $name, $enumId]) {
+                $fields[] = ['field_id' => $fieldId, 'field_name' => $name, 'values' => $enumId === null ? [] : [['enum_id' => $enumId, 'value' => $labels[$enumId]]]];
+            }
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => 20,
+                'status_id' => $lead['status_id'],
+                'responsible_user_id' => 10,
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => $fields,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $config = ['project_field_id' => 782];
+        $service = new AmoTaskStatisticsService();
+        $overview = $service->managerPipelineOverview($account, now()->subDays(7), now(), $config);
+        $row = $overview['rows'][0];
+
+        $this->assertSame('Иванова Анна', $row['name']);
+        $this->assertSame([4, 1], [$row['total_count'], $row['success_count']]);
+        $this->assertSame(['X5 Розница', 'ВкусВилл'], array_column($row['projects'], 'name'));
+        $this->assertSame(4, array_sum(array_column($row['projects'], 'total_count')));
+
+        $x5 = $row['projects'][0];
+        $this->assertSame([3, 1], [$x5['total_count'], $x5['success_count']]);
+        $this->assertSame(['Казань', '—'], array_column($x5['cities'], 'name'));
+        $this->assertSame(['name' => '—', 'total_count' => 2, 'success_count' => 1], $x5['cities'][0]['vacancies'][0]);
+
+        $all = $service->managerPipelineLeads($account, now()->subDays(7), now(), 'Иванова Анна', false, false, 300, $config, 'X5 Розница', 'Казань');
+        $this->assertSame(['971', '972'], array_column($all['leads'], 'id'));
+
+        $success = $service->managerPipelineLeads($account, now()->subDays(7), now(), 'Иванова Анна', true, false, 300, $config, 'X5 Розница');
+        $this->assertSame(['971'], array_column($success['leads'], 'id'));
+    }
+
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
