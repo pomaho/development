@@ -1229,6 +1229,122 @@ class AmoServicesTest extends TestCase
         $this->assertSame(400.0, $distribution['managers'][1]['plan_completion_percent']);
     }
 
+    public function test_manager_lead_distribution_breaks_each_manager_down_by_project_city_and_vacancy(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client3.amocrm.ru']);
+        foreach ([
+            [778, 'Менеджер', [['id' => 2001, 'value' => 'Первый менеджер'], ['id' => 2002, 'value' => 'Второй менеджер']]],
+            [781, 'Проект', [['id' => 3001, 'value' => 'Курьеры'], ['id' => 3002, 'value' => 'Склад']]],
+            [782, 'Город', [['id' => 4001, 'value' => 'Москва'], ['id' => 4002, 'value' => 'Казань']]],
+            [783, 'Вакансия', [['id' => 5001, 'value' => 'Пеший курьер'], ['id' => 5002, 'value' => 'Комплектовщик']]],
+        ] as [$fieldId, $name, $enums]) {
+            CrmCustomFieldSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'amo_field_id' => $fieldId,
+                'name' => $name,
+                'field_type' => 'select',
+                'enums' => $enums,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        foreach ([
+            ['id' => '801', 'manager' => 2001, 'project' => 3001, 'city' => 4001, 'vacancy' => 5001, 'status_id' => 142],
+            ['id' => '802', 'manager' => 2001, 'project' => 3001, 'city' => 4001, 'vacancy' => 5001, 'status_id' => 111],
+            ['id' => '803', 'manager' => 2001, 'project' => 3001, 'city' => 4002, 'vacancy' => 5001, 'status_id' => 142],
+            ['id' => '804', 'manager' => 2001, 'project' => 3002, 'city' => null, 'vacancy' => null, 'status_id' => 111],
+            ['id' => '805', 'manager' => 2002, 'project' => 3002, 'city' => 4002, 'vacancy' => 5002, 'status_id' => 142],
+            // Transferred (has "Дата передачи менеджеру") but the manager was later cleared.
+            ['id' => '806', 'manager' => null, 'project' => 3002, 'city' => 4001, 'vacancy' => 5002, 'status_id' => 111, 'transferred_at' => now()->subDay()->timestamp],
+        ] as $lead) {
+            $labels = [2001 => 'Первый менеджер', 2002 => 'Второй менеджер', 3001 => 'Курьеры', 3002 => 'Склад', 4001 => 'Москва', 4002 => 'Казань', 5001 => 'Пеший курьер', 5002 => 'Комплектовщик'];
+            $field = fn (int $fieldId, string $name, ?int $enumId): array => [
+                'field_id' => $fieldId,
+                'field_name' => $name,
+                'values' => $enumId === null ? [] : [['enum_id' => $enumId, 'value' => $labels[$enumId]]],
+            ];
+
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => 10,
+                'status_id' => $lead['status_id'],
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => [
+                    $field(778, 'Менеджер', $lead['manager']),
+                    $field(781, 'Проект', $lead['project']),
+                    $field(782, 'Город', $lead['city']),
+                    $field(783, 'Вакансия', $lead['vacancy']),
+                    ['field_id' => 1435403, 'field_name' => 'Дата передачи менеджеру', 'values' => isset($lead['transferred_at']) ? [['value' => $lead['transferred_at']]] : []],
+                ],
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $config = [
+            'pipeline_id' => 10,
+            'manager_field_id' => 778,
+            'success_status_id' => 142,
+        ];
+        $service = new AmoTaskStatisticsService();
+        $distribution = $service->managerLeadDistribution($account, now()->subDays(7), now(), $config);
+
+        $this->assertSame('Проект', $distribution['project_field_name']);
+        $first = $distribution['managers'][0];
+        $this->assertSame('Первый менеджер', $first['name']);
+
+        // Project rows add up to the manager row: 4 received, 2 scheduled.
+        $this->assertSame(['Курьеры', 'Склад'], array_column($first['projects'], 'name'));
+        $this->assertSame(4, array_sum(array_column($first['projects'], 'received_count')));
+        $this->assertSame(2, array_sum(array_column($first['projects'], 'scheduled_count')));
+
+        $couriers = $first['projects'][0];
+        $this->assertSame(3, $couriers['received_count']);
+        $this->assertSame(2, $couriers['scheduled_count']);
+        $this->assertSame(['Москва', 'Казань'], array_column($couriers['cities'], 'name'));
+        $this->assertSame(
+            [['name' => 'Пеший курьер', 'received_count' => 2, 'scheduled_count' => 1]],
+            $couriers['cities'][0]['vacancies'],
+        );
+
+        // Empty city/vacancy fall back to the same placeholders as the project/city/vacancy breakdown.
+        $this->assertSame('—', $first['projects'][1]['cities'][0]['name']);
+        $this->assertSame('—', $first['projects'][1]['cities'][0]['vacancies'][0]['name']);
+
+        $this->assertSame('Склад', $distribution['managers'][1]['projects'][0]['name']);
+
+        // Clicking a drill-down count lists exactly that manager's leads for the row.
+        $moscowLeads = $service->managerLeads($account, now()->subDays(7), now(), $config, 2001, false, 200, 'UTC', 'Курьеры', 'Москва', 'Пеший курьер');
+        $this->assertSame(['801', '802'], array_column($moscowLeads['leads'], 'id'));
+
+        $scheduledCouriers = $service->managerLeads($account, now()->subDays(7), now(), $config, 2001, true, 200, 'UTC', 'Курьеры');
+        $this->assertSame(['801', '803'], array_column($scheduledCouriers['leads'], 'id'));
+
+        $noCity = $service->managerLeads($account, now()->subDays(7), now(), $config, 2001, false, 200, 'UTC', 'Склад', '—', '—');
+        $this->assertSame(['804'], array_column($noCity['leads'], 'id'));
+
+        // Production widget mode (custom date fields): same drill-down, plus the
+        // "Менеджер не указан" row gets one too.
+        $customConfig = $config + ['use_custom_date_fields' => true];
+        $custom = $service->managerLeadDistribution($account, now()->subDays(7), now(), $customConfig);
+
+        $this->assertSame($first['projects'], $custom['managers'][0]['projects']);
+        $unassigned = collect($custom['managers'])->firstWhere('enum_id', 0);
+        $this->assertSame('Склад', $unassigned['projects'][0]['name']);
+        $this->assertSame('Москва', $unassigned['projects'][0]['cities'][0]['name']);
+        $this->assertSame(1, $unassigned['projects'][0]['received_count']);
+
+        $unassignedLeads = $service->managerLeads($account, now()->subDays(7), now(), $customConfig, 0, false, 200, 'UTC', 'Склад', 'Москва');
+        $this->assertSame(['806'], array_column($unassignedLeads['leads'], 'id'));
+    }
+
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);

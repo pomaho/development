@@ -1608,7 +1608,10 @@ class AmoTaskStatisticsService
         int $managerEnumId,
         bool $scheduledOnly = false,
         int $limit = 200,
-        string $timezone = 'UTC'
+        string $timezone = 'UTC',
+        string $project = '',
+        string $city = '',
+        string $vacancy = ''
     ): array {
         $managerFieldId = (int) data_get($config, 'manager_field_id', 0);
         $managerFieldName = (string) (data_get($config, 'manager_field_name') ?: self::MANAGER_FIELD_NAME);
@@ -1629,6 +1632,20 @@ class AmoTaskStatisticsService
 
         $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
         $managerFieldIdInt = (int) $managerField->amo_field_id;
+        $locationFields = $this->projectCityVacancyFields($fieldQuery, $config);
+        // Narrows the list to one row of the manager's project → city → vacancy drill-down;
+        // an empty value means "any", same as projectCityVacancyLeads().
+        $matchesLocation = function (array $customFields) use ($locationFields, $project, $city, $vacancy): bool {
+            if ($project === '' && $city === '' && $vacancy === '') {
+                return true;
+            }
+
+            [$projectKeys, $cityKeys, $vacancyKeys] = $this->projectCityVacancyKeys($locationFields, $customFields);
+
+            return ($project === '' || in_array($project, $projectKeys, true))
+                && ($city === '' || in_array($city, $cityKeys, true))
+                && ($vacancy === '' || in_array($vacancy, $vacancyKeys, true));
+        };
 
         $leads = [];
         $total = 0;
@@ -1650,7 +1667,7 @@ class AmoTaskStatisticsService
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
-                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $managerEnumId, $scheduledOnly, $successStatusId): void {
+                ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $managerEnumId, $scheduledOnly, $successStatusId, $matchesLocation): void {
                     foreach ($chunk as $lead) {
                         $customFields = $lead->custom_fields_values ?? [];
                         $managerEnumIds = $this->recruiterEnumIds($customFields, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue);
@@ -1660,6 +1677,10 @@ class AmoTaskStatisticsService
                         }
 
                         if ($scheduledOnly && (int) $lead->status_id !== $successStatusId) {
+                            continue;
+                        }
+
+                        if (!$matchesLocation($customFields)) {
                             continue;
                         }
 
@@ -1687,7 +1708,7 @@ class AmoTaskStatisticsService
             ->where('entity_type', 'leads')
             ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
             ->orderBy('id')
-            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone, $managerEnumId, $scheduledOnly, $successStatusId): void {
+            ->chunkById(500, function ($chunk) use (&$leads, &$total, $limit, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone, $managerEnumId, $scheduledOnly, $successStatusId, $matchesLocation): void {
                 foreach ($chunk as $lead) {
                     $customFields = $lead->custom_fields_values ?? [];
                     $managerEnumIds = $this->recruiterEnumIds($customFields, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue);
@@ -1707,6 +1728,10 @@ class AmoTaskStatisticsService
                     }
 
                     if ($scheduledOnly && (int) $lead->status_id !== $successStatusId) {
+                        continue;
+                    }
+
+                    if (!$matchesLocation($customFields)) {
                         continue;
                     }
 
@@ -2535,9 +2560,13 @@ class AmoTaskStatisticsService
         $managerEnumIdsByValue = $this->enumIdsByValue($managerField);
         $managerNames = $this->enumNamesById($managerField);
         $managerFieldIdInt = (int) $managerField->amo_field_id;
+        $locationFields = $this->projectCityVacancyFields($fieldQuery, $config);
 
         $receivedLeadIdsByEnum = [];
         $scheduledLeadIdsByEnum = [];
+        // Per-manager project → city → vacancy drill-down, built from the very same leads
+        // as the manager row so the expanded rows always add up to the row's counts.
+        $breakdownByEnum = [];
         // Leads whose "Дата передачи менеджеру" is filled (so they were transferred),
         // but the "Менеджер" field is currently empty — e.g. the manager was later
         // unassigned. Tracked separately as an explicit "Менеджер не указан" row instead
@@ -2557,7 +2586,7 @@ class AmoTaskStatisticsService
                 ->when($from, fn ($q) => $q->where('entity_created_at', '>=', $from))
                 ->when($to, fn ($q) => $q->where('entity_created_at', '<=', $to))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$receivedLeadIdsByEnum, &$scheduledLeadIdsByEnum, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $successStatusId): void {
+                ->chunkById(500, function ($leads) use (&$receivedLeadIdsByEnum, &$scheduledLeadIdsByEnum, &$breakdownByEnum, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $successStatusId, $locationFields): void {
                     foreach ($leads as $lead) {
                         $customFields = $lead->custom_fields_values ?? [];
                         $leadId = (string) $lead->external_id;
@@ -2567,12 +2596,18 @@ class AmoTaskStatisticsService
                             continue;
                         }
 
+                        $isScheduled = $successStatusId > 0 && (int) $lead->status_id === $successStatusId;
+                        $locationKeys = $this->projectCityVacancyKeys($locationFields, $customFields);
+
                         foreach ($managerEnumIds as $enumId) {
                             $receivedLeadIdsByEnum[$enumId][$leadId] = true;
 
-                            if ($successStatusId > 0 && (int) $lead->status_id === $successStatusId) {
+                            if ($isScheduled) {
                                 $scheduledLeadIdsByEnum[$enumId][$leadId] = true;
                             }
+
+                            $breakdownByEnum[$enumId] ??= [];
+                            $this->addToManagerBreakdown($breakdownByEnum[$enumId], $locationKeys, $isScheduled);
                         }
                     }
                 });
@@ -2587,7 +2622,7 @@ class AmoTaskStatisticsService
                 ->where('entity_type', 'leads')
                 ->when($pipelineId > 0, fn ($q) => $q->where('pipeline_id', $pipelineId))
                 ->orderBy('id')
-                ->chunkById(500, function ($leads) use (&$receivedLeadIdsByEnum, &$scheduledLeadIdsByEnum, &$unassignedLeadIds, &$unassignedScheduledLeadIds, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone, $successStatusId): void {
+                ->chunkById(500, function ($leads) use (&$receivedLeadIdsByEnum, &$scheduledLeadIdsByEnum, &$unassignedLeadIds, &$unassignedScheduledLeadIds, &$breakdownByEnum, $managerFieldIdInt, $managerFieldName, $managerEnumIdsByValue, $transferDateFieldId, $fromDate, $toDate, $timezone, $successStatusId, $locationFields): void {
                     foreach ($leads as $lead) {
                         $customFields = $lead->custom_fields_values ?? [];
                         $leadId = (string) $lead->external_id;
@@ -2600,12 +2635,15 @@ class AmoTaskStatisticsService
                         }
 
                         $isScheduled = $successStatusId > 0 && (int) $lead->status_id === $successStatusId;
+                        $locationKeys = $this->projectCityVacancyKeys($locationFields, $customFields);
 
                         if ($managerEnumIds === []) {
                             $unassignedLeadIds[$leadId] = true;
                             if ($isScheduled) {
                                 $unassignedScheduledLeadIds[$leadId] = true;
                             }
+                            $breakdownByEnum[0] ??= [];
+                            $this->addToManagerBreakdown($breakdownByEnum[0], $locationKeys, $isScheduled);
                             continue;
                         }
 
@@ -2615,6 +2653,9 @@ class AmoTaskStatisticsService
                             if ($isScheduled) {
                                 $scheduledLeadIdsByEnum[$enumId][$leadId] = true;
                             }
+
+                            $breakdownByEnum[$enumId] ??= [];
+                            $this->addToManagerBreakdown($breakdownByEnum[$enumId], $locationKeys, $isScheduled);
                         }
                     }
                 });
@@ -2635,6 +2676,7 @@ class AmoTaskStatisticsService
                 'scheduled_count' => $scheduledCount,
                 'plan_total' => $planTotal,
                 'plan_completion_percent' => $planTotal > 0 ? round($scheduledCount / $planTotal * 100, 1) : null,
+                'projects' => $this->managerBreakdownList($breakdownByEnum[$enumId] ?? []),
             ];
         }
 
@@ -2652,6 +2694,7 @@ class AmoTaskStatisticsService
                 'scheduled_count' => count($unassignedScheduledLeadIds),
                 'plan_total' => null,
                 'plan_completion_percent' => null,
+                'projects' => $this->managerBreakdownList($breakdownByEnum[0] ?? []),
             ];
         }
 
@@ -2659,6 +2702,9 @@ class AmoTaskStatisticsService
             'manager_field_name' => $managerField->name,
             'manager_field_id' => $managerFieldIdInt,
             'manager_field_found' => true,
+            'project_field_name' => $locationFields[0]['name'],
+            'city_field_name' => $locationFields[1]['name'],
+            'vacancy_field_name' => $locationFields[2]['name'],
             'success_status_id' => $successStatusId ?: null,
             'success_status_name' => $successStatusName,
             'pipeline_id' => $pipelineId ?: null,
@@ -2676,6 +2722,81 @@ class AmoTaskStatisticsService
                 ->count(),
             'managers' => $rows,
         ];
+    }
+
+    /**
+     * Resolves the "Проект", "Город" and "Вакансия" lead fields, in that order, with the
+     * placeholders the project/city/vacancy breakdown uses for leads where they're empty.
+     *
+     * @return array<int, array{field: ?CrmCustomFieldSnapshot, name: string, enums: array<string, int>, placeholder: string}>
+     */
+    private function projectCityVacancyFields($fieldQuery, array $config): array
+    {
+        $fields = [];
+
+        foreach ([['project', self::PROJECT_FIELD_NAME, 'Без проекта'], ['city', self::CITY_FIELD_NAME, '—'], ['vacancy', self::VACANCY_FIELD_NAME, '—']] as [$key, $defaultName, $placeholder]) {
+            $field = $this->leadField($fieldQuery, (int) data_get($config, "{$key}_field_id", 0), (string) (data_get($config, "{$key}_field_name") ?: $defaultName));
+            $fields[] = [
+                'field' => $field,
+                'name' => $field?->name ?? $defaultName,
+                'enums' => $field ? $this->enumIdsByValue($field) : [],
+                'placeholder' => $placeholder,
+            ];
+        }
+
+        return $fields;
+    }
+
+    /**
+     * @return array{0: list<string>, 1: list<string>, 2: list<string>} project, city and vacancy labels
+     */
+    private function projectCityVacancyKeys(array $locationFields, array $customFields): array
+    {
+        return array_map(
+            fn (array $location): array => ($location['field']
+                ? $this->fieldValueLabels($customFields, (int) $location['field']->amo_field_id, $location['field']->name, $location['enums'])
+                : []) ?: [$location['placeholder']],
+            $locationFields,
+        );
+    }
+
+    private function addToManagerBreakdown(array &$projects, array $locationKeys, bool $isScheduled): void
+    {
+        [$projectKeys, $cityKeys, $vacancyKeys] = $locationKeys;
+        $scheduled = $isScheduled ? 1 : 0;
+
+        foreach ($projectKeys as $projectName) {
+            $projects[$projectName] ??= ['name' => $projectName, 'received_count' => 0, 'scheduled_count' => 0, 'cities' => []];
+            $projects[$projectName]['received_count']++;
+            $projects[$projectName]['scheduled_count'] += $scheduled;
+
+            foreach ($cityKeys as $cityName) {
+                $projects[$projectName]['cities'][$cityName] ??= ['name' => $cityName, 'received_count' => 0, 'scheduled_count' => 0, 'vacancies' => []];
+                $projects[$projectName]['cities'][$cityName]['received_count']++;
+                $projects[$projectName]['cities'][$cityName]['scheduled_count'] += $scheduled;
+
+                foreach ($vacancyKeys as $vacancyName) {
+                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName] ??= ['name' => $vacancyName, 'received_count' => 0, 'scheduled_count' => 0];
+                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['received_count']++;
+                    $projects[$projectName]['cities'][$cityName]['vacancies'][$vacancyName]['scheduled_count'] += $scheduled;
+                }
+            }
+        }
+    }
+
+    private function managerBreakdownList(array $projects): array
+    {
+        $sorted = fn (array $nodes): array => collect($nodes)->sortByDesc('received_count')->values()->all();
+
+        return $sorted(array_map(function (array $project) use ($sorted): array {
+            $project['cities'] = $sorted(array_map(function (array $city) use ($sorted): array {
+                $city['vacancies'] = $sorted($city['vacancies']);
+
+                return $city;
+            }, $project['cities']));
+
+            return $project;
+        }, $projects));
     }
 
     private function buildRecruiterTeamCityBreakdown(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = [], string $timezone = 'UTC'): array
@@ -3248,6 +3369,9 @@ class AmoTaskStatisticsService
             data_get($config, 'manager_field_id') ?: data_get($config, 'manager_field_name', self::MANAGER_FIELD_NAME),
             data_get($config, 'success_status_id') ?: 'none',
             data_get($config, 'manager_plan_percent') ?: self::DEFAULT_MANAGER_PLAN_PERCENT,
+            data_get($config, 'project_field_id') ?: data_get($config, 'project_field_name', self::PROJECT_FIELD_NAME),
+            data_get($config, 'city_field_id') ?: data_get($config, 'city_field_name', self::CITY_FIELD_NAME),
+            data_get($config, 'vacancy_field_id') ?: data_get($config, 'vacancy_field_name', self::VACANCY_FIELD_NAME),
             data_get($config, 'use_custom_date_fields') ? 'dev' : 'prod',
         ]);
     }

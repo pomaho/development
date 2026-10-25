@@ -189,6 +189,9 @@ class AmoTaskOverdueDashboardController extends Controller
                 $request->query('scheduled_only', '0') === '1',
                 200,
                 $tz,
+                (string) $request->query('project', ''),
+                (string) $request->query('city', ''),
+                (string) $request->query('vacancy', ''),
             ),
         ]);
     }

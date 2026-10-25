@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
     ArrowRightLeft,
     CalendarDays,
@@ -86,6 +86,20 @@ type RecruiterScheduleBreakdown = {
     recruiters: RecruiterScheduleRow[];
 };
 
+type ManagerBreakdownVacancy = {
+    name: string;
+    received_count: number;
+    scheduled_count: number;
+};
+
+type ManagerBreakdownCity = ManagerBreakdownVacancy & {
+    vacancies: ManagerBreakdownVacancy[];
+};
+
+type ManagerBreakdownProject = ManagerBreakdownVacancy & {
+    cities: ManagerBreakdownCity[];
+};
+
 type ManagerLeadRow = {
     enum_id: number;
     name: string;
@@ -93,11 +107,15 @@ type ManagerLeadRow = {
     scheduled_count: number;
     plan_total: number | null;
     plan_completion_percent: number | null;
+    projects: ManagerBreakdownProject[];
 };
 
 type ManagerLeadDistribution = {
     manager_field_name: string;
     manager_field_found: boolean;
+    project_field_name: string;
+    city_field_name: string;
+    vacancy_field_name: string;
     success_status_id: number | null;
     success_status_name: string;
     pipeline_id: number | null;
@@ -1257,11 +1275,20 @@ function RecruiterLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { 
 type ManagerLeadsFilter = {
     managerEnumId: number;
     scheduledOnly: boolean;
+    project?: string;
+    city?: string;
+    vacancy?: string;
     label: string;
 };
 
 function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { state: LoadState<ManagerLeadDistribution>; leadsUrl: string; periodParams: Record<string, string>; baseDomain: string }) {
     const [leadsFilter, setLeadsFilter] = useState<ManagerLeadsFilter | null>(null);
+    const [expandedEnumIds, setExpandedEnumIds] = useState<Set<number>>(() => new Set());
+    const toggleExpanded = (enumId: number) => setExpandedEnumIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(enumId)) next.delete(enumId); else next.add(enumId);
+        return next;
+    });
     if (state.status === 'loading') return <SectionSkeleton rows={4} />;
     if (state.status === 'error') return <SectionError message={state.message} />;
     const data = state.data;
@@ -1287,9 +1314,21 @@ function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { st
                     <tbody className="divide-y divide-slate-100">
                         {data.managers.length > 0 ? data.managers.map((manager) => {
                             const isUnassigned = manager.enum_id === 0;
+                            const isExpanded = expandedEnumIds.has(manager.enum_id);
                             return (
-                                <tr className={`transition-colors hover:bg-violet-50/50 ${isUnassigned ? 'bg-slate-50/60' : ''}`} key={manager.enum_id}>
-                                    <td className={`px-5 py-3.5 font-semibold ${isUnassigned ? 'italic text-slate-400' : 'text-gray-900'}`}>{manager.name}</td>
+                                <Fragment key={manager.enum_id}>
+                                <tr className={`transition-colors hover:bg-violet-50/50 ${isUnassigned ? 'bg-slate-50/60' : ''}`}>
+                                    <td className={`px-5 py-3.5 font-semibold ${isUnassigned ? 'italic text-slate-400' : 'text-gray-900'}`}>
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleExpanded(manager.enum_id)}
+                                            className="inline-flex items-center gap-1.5 text-left hover:text-violet-700"
+                                            aria-expanded={isExpanded}
+                                        >
+                                            <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                            {manager.name}
+                                        </button>
+                                    </td>
                                     <td className="px-4 py-3.5">
                                         <CountButton
                                             value={manager.received_count}
@@ -1318,6 +1357,14 @@ function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { st
                                         )}
                                     </td>
                                 </tr>
+                                {isExpanded && (
+                                    <tr>
+                                        <td className="bg-slate-50/60 px-5 py-3" colSpan={4}>
+                                            <ManagerBreakdownTable manager={manager} data={data} onOpenLeads={setLeadsFilter} />
+                                        </td>
+                                    </tr>
+                                )}
+                                </Fragment>
                             );
                         }) : (
                             <tr>
@@ -1346,6 +1393,78 @@ function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { st
     );
 }
 
+function ManagerBreakdownTable({ manager, data, onOpenLeads }: { manager: ManagerLeadRow; data: ManagerLeadDistribution; onOpenLeads: (filter: ManagerLeadsFilter) => void }) {
+    if (manager.projects.length === 0) {
+        return <p className="py-2 text-xs text-slate-400">Нет данных для детализации.</p>;
+    }
+
+    const cityLabel = (name: string) => (name === '—' ? 'Без города' : name);
+    const open = (scheduledOnly: boolean, location: { project: string; city?: string; vacancy?: string }) => {
+        const path = [location.project, location.city && cityLabel(location.city), location.vacancy !== '—' ? location.vacancy : undefined]
+            .filter(Boolean)
+            .join(' / ');
+        onOpenLeads({
+            managerEnumId: manager.enum_id,
+            scheduledOnly,
+            ...location,
+            label: `${manager.name} / ${path} — ${scheduledOnly ? 'вывел на смену' : 'обработано'}`,
+        });
+    };
+
+    return (
+        <div className="overflow-hidden rounded-xl ring-1 ring-slate-200">
+            <table className="w-full bg-white text-left text-sm">
+                <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                    <tr>
+                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.project_field_name}</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.city_field_name}</th>
+                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{data.vacancy_field_name}</th>
+                        <th className="w-28 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Обработано</th>
+                        <th className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Вывел на смену</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {manager.projects.map((project) => (
+                        <Fragment key={project.name}>
+                            <tr className="bg-slate-100">
+                                <td className="border-l-4 border-slate-300 px-5 py-2 font-semibold text-slate-700" colSpan={3}>
+                                    {project.name}
+                                </td>
+                                <td className="px-4 py-2 text-right">
+                                    <CountButton value={project.received_count} onClick={() => open(false, { project: project.name })} />
+                                </td>
+                                <td className="px-4 py-2 text-right">
+                                    <CountButton value={project.scheduled_count} onClick={() => open(true, { project: project.name })} />
+                                </td>
+                            </tr>
+                            {project.cities.map((city) => city.vacancies.map((vacancy, vi) => {
+                                const location = { project: project.name, city: city.name, vacancy: vacancy.name };
+                                return (
+                                    <tr key={`${city.name}-${vacancy.name}`} className="border-t border-slate-100 transition-colors hover:bg-violet-50/40">
+                                        <td className="py-2 pl-9 pr-3" />
+                                        <td className="px-5 py-2 text-xs text-slate-600">
+                                            {vi === 0 ? (city.name === '—' ? <span className="italic text-slate-400">Без города</span> : city.name) : ''}
+                                        </td>
+                                        <td className="px-5 py-2 text-xs text-gray-500">
+                                            {vacancy.name !== '—' ? vacancy.name : ''}
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                            <CountButton value={vacancy.received_count} onClick={() => open(false, location)} />
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                            <CountButton value={vacancy.scheduled_count} onClick={() => open(true, location)} />
+                                        </td>
+                                    </tr>
+                                );
+                            }))}
+                        </Fragment>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function ManagerLeadsModal({
     filter,
     leadsUrl,
@@ -1359,7 +1478,14 @@ function ManagerLeadsModal({
     baseDomain: string;
     onClose: () => void;
 }) {
-    const params = { ...periodParams, manager_enum_id: String(filter.managerEnumId), scheduled_only: filter.scheduledOnly ? '1' : '0' };
+    const params = {
+        ...periodParams,
+        manager_enum_id: String(filter.managerEnumId),
+        scheduled_only: filter.scheduledOnly ? '1' : '0',
+        project: filter.project ?? '',
+        city: filter.city ?? '',
+        vacancy: filter.vacancy ?? '',
+    };
     const leadsState = useApiData<LeadsResult>(leadsUrl, params);
 
     useEffect(() => {

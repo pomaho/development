@@ -39,6 +39,7 @@ class WidgetExcelExportService
 
         $this->recruiterLeadsSheet($spreadsheet, $recruiterLeads);
         $this->managerLeadsSheet($spreadsheet, $managerLeads);
+        $this->managerProjectCityVacancySheet($spreadsheet, $managerLeads);
         $this->sourceBreakdownSheet($spreadsheet, $breakdown);
         $this->teamCitySheet($spreadsheet, $breakdown);
         $this->projectCityVacancySheet($spreadsheet, $projectCityVacancy);
@@ -123,6 +124,44 @@ class WidgetExcelExportService
             collect($data['managers'] ?? [])->sum('plan_total'),
             '',
         ]);
+
+        $this->autoWidth($sheet, count($headers));
+    }
+
+    private function managerProjectCityVacancySheet(Spreadsheet $spreadsheet, array $data): void
+    {
+        $sheet = $spreadsheet->createSheet();
+        $sheet->setTitle('Менеджеры по проектам');
+
+        $headers = [
+            'Менеджер',
+            $data['project_field_name'] ?? 'Проект',
+            $data['city_field_name'] ?? 'Город',
+            $data['vacancy_field_name'] ?? 'Вакансия',
+            'Обработано',
+            'Вывел на смену',
+        ];
+        $this->writeHeader($sheet, $headers, 1);
+
+        $row = 2;
+        foreach ($data['managers'] ?? [] as $manager) {
+            foreach ($manager['projects'] ?? [] as $project) {
+                foreach ($project['cities'] ?? [] as $city) {
+                    foreach ($city['vacancies'] ?? [] as $vacancy) {
+                        $sheet->setCellValue("A{$row}", $manager['name']);
+                        $sheet->setCellValue("B{$row}", $project['name']);
+                        $sheet->setCellValue("C{$row}", $city['name']);
+                        $sheet->setCellValue("D{$row}", $vacancy['name']);
+                        $sheet->setCellValue("E{$row}", $vacancy['received_count']);
+                        $sheet->setCellValue("F{$row}", $vacancy['scheduled_count']);
+                        if ($row % 2 === 0) {
+                            $this->fillRow($sheet, $row, count($headers), self::ALT_BG);
+                        }
+                        $row++;
+                    }
+                }
+            }
+        }
 
         $this->autoWidth($sheet, count($headers));
     }
