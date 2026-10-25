@@ -629,22 +629,6 @@ class AmoTaskOverdueDashboardController extends Controller
     private function flatReportsForExport(AmoTaskStatisticsService $statisticsService, AmoAccount $account, Carbon $from, Carbon $to, array $config, string $tz): array
     {
         $lossReasons = $statisticsService->massRecruitmentLossReasons($account, $from, $to, $config);
-        $lossReasonLocationRows = [];
-        foreach ($lossReasons['rows'] ?? [] as $reason) {
-            foreach ($reason['projects'] ?? [] as $project) {
-                foreach ($project['cities'] as $city) {
-                    foreach ($city['vacancies'] as $vacancy) {
-                        $lossReasonLocationRows[] = [
-                            'reason' => $reason['name'],
-                            'project' => $project['name'],
-                            'city' => $city['name'],
-                            'vacancy' => $vacancy['name'],
-                            'count' => $vacancy['count'],
-                        ];
-                    }
-                }
-            }
-        }
 
         return [
             [
@@ -682,29 +666,7 @@ class AmoTaskOverdueDashboardController extends Controller
                 'rows' => $statisticsService->massRecruitmentFunnel($account, $from, $to)['rows'] ?? [],
                 'totals' => false,
             ],
-            [
-                'title' => 'Причины отказа Массовый подбор',
-                'columns' => [
-                    'name' => 'Причина',
-                    'count' => 'Сделок',
-                    'percent' => 'Доля, %',
-                ],
-                'rows' => $lossReasons['rows'] ?? [],
-                'totals' => true,
-            ],
-            [
-                'title' => 'Причины отказа по проектам',
-                'columns' => [
-                    'reason' => 'Причина',
-                    'project' => $lossReasons['project_field_name'] ?? 'Проект',
-                    'city' => $lossReasons['city_field_name'] ?? 'Город',
-                    'vacancy' => $lossReasons['vacancy_field_name'] ?? 'Вакансия',
-                    'count' => 'Сделок',
-                ],
-                'rows' => $lossReasonLocationRows,
-                // A lead with several cities/vacancies sits in several rows, so a sum would overcount.
-                'totals' => false,
-            ],
+            ...WidgetExcelExportService::lossReasonSheets($lossReasons, 'Причины отказа Массовый подбор'),
         ];
     }
 

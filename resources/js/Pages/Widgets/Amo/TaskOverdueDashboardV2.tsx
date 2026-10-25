@@ -9,6 +9,12 @@ import {
     Inbox,
     X,
 } from 'lucide-react';
+import {
+    LocationBreakdownTable,
+    type LocationBreakdownProject,
+    type LocationFieldNames,
+    type LocationFilter,
+} from './_shared/LocationBreakdownTable';
 
 type Account = {
     name: string;
@@ -85,21 +91,6 @@ type RecruiterScheduleBreakdown = {
     total_count: number;
     recruiters: RecruiterScheduleRow[];
 };
-
-// Project → city → vacancy drill-down; K names the counters every level carries.
-type LocationBreakdownVacancy<K extends string> = { name: string } & { [P in K]: number };
-
-type LocationBreakdownCity<K extends string> = LocationBreakdownVacancy<K> & {
-    vacancies: LocationBreakdownVacancy<K>[];
-};
-
-type LocationBreakdownProject<K extends string> = LocationBreakdownVacancy<K> & {
-    cities: LocationBreakdownCity<K>[];
-};
-
-type LocationFilter = { project: string; city?: string; vacancy?: string };
-
-type LocationFieldNames = { project_field_name: string; city_field_name: string; vacancy_field_name: string };
 
 type ManagerLeadRow = {
     enum_id: number;
@@ -1442,78 +1433,6 @@ function ManagerLeadsSection({ state, leadsUrl, periodParams, baseDomain }: { st
             <ManagerLeadsModal filter={leadsFilter} leadsUrl={leadsUrl} periodParams={periodParams} baseDomain={baseDomain} onClose={() => setLeadsFilter(null)} />
         )}
         </>
-    );
-}
-
-function LocationBreakdownTable<K extends string>({ projects, fieldNames, columns, onOpen }: {
-    projects: LocationBreakdownProject<K>[];
-    fieldNames: LocationFieldNames;
-    columns: { key: K; label: string }[];
-    onOpen: (key: K, location: LocationFilter, path: string) => void;
-}) {
-    if (projects.length === 0) {
-        return <p className="py-2 text-xs text-slate-400">Нет данных для детализации.</p>;
-    }
-
-    const open = (key: K, location: LocationFilter) => {
-        const path = [
-            location.project,
-            location.city === '—' ? 'Без города' : location.city,
-            location.vacancy !== '—' ? location.vacancy : undefined,
-        ].filter(Boolean).join(' / ');
-        onOpen(key, location, path);
-    };
-
-    return (
-        <div className="overflow-hidden rounded-xl ring-1 ring-slate-200">
-            <table className="w-full bg-white text-left text-sm">
-                <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
-                    <tr>
-                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{fieldNames.project_field_name}</th>
-                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{fieldNames.city_field_name}</th>
-                        <th className="px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">{fieldNames.vacancy_field_name}</th>
-                        {columns.map((column) => (
-                            <th key={column.key} className="w-32 px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">{column.label}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {projects.map((project) => (
-                        <Fragment key={project.name}>
-                            <tr className="bg-slate-100">
-                                <td className="border-l-4 border-slate-300 px-5 py-2 font-semibold text-slate-700" colSpan={3}>
-                                    {project.name}
-                                </td>
-                                {columns.map((column) => (
-                                    <td key={column.key} className="px-4 py-2 text-right">
-                                        <CountButton value={project[column.key]} onClick={() => open(column.key, { project: project.name })} />
-                                    </td>
-                                ))}
-                            </tr>
-                            {project.cities.map((city) => city.vacancies.map((vacancy, vi) => {
-                                const location = { project: project.name, city: city.name, vacancy: vacancy.name };
-                                return (
-                                    <tr key={`${city.name}-${vacancy.name}`} className="border-t border-slate-100 transition-colors hover:bg-violet-50/40">
-                                        <td className="py-2 pl-9 pr-3" />
-                                        <td className="px-5 py-2 text-xs text-slate-600">
-                                            {vi === 0 ? (city.name === '—' ? <span className="italic text-slate-400">Без города</span> : city.name) : ''}
-                                        </td>
-                                        <td className="px-5 py-2 text-xs text-gray-500">
-                                            {vacancy.name !== '—' ? vacancy.name : ''}
-                                        </td>
-                                        {columns.map((column) => (
-                                            <td key={column.key} className="px-4 py-2 text-right">
-                                                <CountButton value={vacancy[column.key]} onClick={() => open(column.key, location)} />
-                                            </td>
-                                        ))}
-                                    </tr>
-                                );
-                            }))}
-                        </Fragment>
-                    ))}
-                </tbody>
-            </table>
-        </div>
     );
 }
 

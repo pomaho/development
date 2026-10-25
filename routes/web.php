@@ -200,6 +200,12 @@ Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/funnel', [Am
 Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/funnel-leads', [AmoManagerPipelineDashboardController::class, 'funnelLeads'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-pipeline-dashboard.funnel-leads');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/loss-reasons', [AmoManagerPipelineDashboardController::class, 'lossReasons'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.loss-reasons');
+Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/loss-reason-leads', [AmoManagerPipelineDashboardController::class, 'lossReasonLeads'])
+    ->middleware('amo-widget-frame-policy')
+    ->name('api.widgets.amo.manager-pipeline-dashboard.loss-reason-leads');
 Route::get('/api/widgets/amo/{publicKey}/manager-pipeline-dashboard/export', [AmoManagerPipelineDashboardController::class, 'export'])
     ->middleware('amo-widget-frame-policy')
     ->name('api.widgets.amo.manager-pipeline-dashboard.export');

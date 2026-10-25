@@ -410,6 +410,58 @@ class WidgetExcelExportService
         return $letter;
     }
 
+    /**
+     * The two "Причины отказа" sheets (per reason, and per reason → project → city →
+     * vacancy) as flat reports, shared by the task-overdue and manager-pipeline exports.
+     *
+     * @return array<int, array{title: string, columns: array<string, string>, rows: array, totals: bool}>
+     */
+    public static function lossReasonSheets(array $lossReasons, string $title = 'Причины отказа'): array
+    {
+        $locationRows = [];
+        foreach ($lossReasons['rows'] ?? [] as $reason) {
+            foreach ($reason['projects'] ?? [] as $project) {
+                foreach ($project['cities'] as $city) {
+                    foreach ($city['vacancies'] as $vacancy) {
+                        $locationRows[] = [
+                            'reason' => $reason['name'],
+                            'project' => $project['name'],
+                            'city' => $city['name'],
+                            'vacancy' => $vacancy['name'],
+                            'count' => $vacancy['count'],
+                        ];
+                    }
+                }
+            }
+        }
+
+        return [
+            [
+                'title' => $title,
+                'columns' => [
+                    'name' => 'Причина',
+                    'count' => 'Сделок',
+                    'percent' => 'Доля, %',
+                ],
+                'rows' => $lossReasons['rows'] ?? [],
+                'totals' => true,
+            ],
+            [
+                'title' => 'Причины отказа по проектам',
+                'columns' => [
+                    'reason' => 'Причина',
+                    'project' => $lossReasons['project_field_name'] ?? 'Проект',
+                    'city' => $lossReasons['city_field_name'] ?? 'Город',
+                    'vacancy' => $lossReasons['vacancy_field_name'] ?? 'Вакансия',
+                    'count' => 'Сделок',
+                ],
+                'rows' => $locationRows,
+                // A lead with several cities/vacancies sits in several rows, so a sum would overcount.
+                'totals' => false,
+            ],
+        ];
+    }
+
     public static function filename(Carbon $from, Carbon $to): string
     {
         return "otchet-{$from->format('d.m.Y')}-{$to->format('d.m.Y')}.xlsx";

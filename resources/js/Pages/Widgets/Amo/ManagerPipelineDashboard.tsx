@@ -1,10 +1,11 @@
 import { createPortal } from 'react-dom';
-import { useEffect, useState } from 'react';
-import { Download, X } from 'lucide-react';
+import { Fragment, useEffect, useState } from 'react';
+import { ChevronDown, Download, X } from 'lucide-react';
 import {
     AccentSummary, buildUrl, EmptyState, type LoadState, ReportSection,
     SectionError, SectionSkeleton, useApiData, WidgetHeader,
 } from './_shared/uiKit';
+import { LocationBreakdownTable, type LocationBreakdownProject, type LocationFieldNames } from './_shared/LocationBreakdownTable';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,22 @@ type FunnelData = {
     rows: FunnelRow[];
 };
 
+type LossReasonRow = {
+    reason: string | null;
+    name: string;
+    count: number;
+    percent: number;
+    projects: LocationBreakdownProject<'count'>[];
+};
+
+type LossReasonsData = LocationFieldNames & {
+    pipeline_found: boolean;
+    pipeline_name: string;
+    field_found: boolean;
+    total_count: number;
+    rows: LossReasonRow[];
+};
+
 type LeadItem = { id: string | number; name: string; created_at: string | null };
 type LeadsResult = { leads: LeadItem[]; total: number; limited: boolean; limit: number };
 
@@ -102,6 +119,8 @@ type Links = {
     avitoCabinetLeads: string;
     funnel: string;
     funnelLeads: string;
+    lossReasons: string;
+    lossReasonLeads: string;
     export: string;
 };
 
@@ -551,6 +570,123 @@ function FunnelSection({ state, leadsUrl, onOpenLeads }: {
     );
 }
 
+// ─── Loss reasons section ───────────────────────────────────────────────────
+
+function LossReasonsSection({ state, leadsUrl, onOpenLeads }: {
+    state: LoadState<LossReasonsData>;
+    leadsUrl: string;
+    onOpenLeads: (filter: LeadsFilter) => void;
+}) {
+    const [expandedReasons, setExpandedReasons] = useState<Set<string>>(() => new Set());
+    const toggleExpanded = (key: string) => setExpandedReasons((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+    });
+
+    if (state.status === 'loading') return <SectionSkeleton rows={4} />;
+    if (state.status === 'error') return <SectionError message={state.message} />;
+    const data = state.data;
+
+    if (!data.pipeline_found) {
+        return null;
+    }
+
+    if (!data.field_found) {
+        return (
+            <ReportSection eyebrow="Менеджеры подбор" title="Причины отказа">
+                <div className="px-5 py-8">
+                    <EmptyState>Поле «Причины отказа» не найдено. Запустите синхронизацию структуры CRM.</EmptyState>
+                </div>
+            </ReportSection>
+        );
+    }
+
+    const openLeads = (row: LossReasonRow, params: Record<string, string>, label: string) => onOpenLeads({
+        leadsUrl,
+        manager: '',
+        extraParams: { reason: row.reason ?? '', ...params },
+        label,
+    });
+
+    return (
+        <ReportSection
+            eyebrow="Менеджеры подбор"
+            title="Причины отказа"
+            description={`Воронка: ${data.pipeline_name}. Только закрытые сделки «Закрыто и не реализовано», созданные в выбранном периоде. Разбивка по значению поля «Причины отказа» — сделки без заполненного значения вынесены отдельной строкой «Без причины». Нажмите на причину — откроется разбивка по проектам, городам и вакансиям; на число — список сделок.`}
+            aside={<AccentSummary label="Всего отказов" value={data.total_count} note="закрыто и не реализовано" tone="warning" />}
+        >
+            {data.rows.length > 0 ? (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-gradient-to-r from-slate-50 to-slate-100/50">
+                            <tr>
+                                <th className="px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Причина</th>
+                                <th className="px-4 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Сделок</th>
+                                <th className="px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-500">Доля</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {data.rows.map((row) => {
+                                const rowKey = row.reason ?? '__none__';
+                                const isExpanded = expandedReasons.has(rowKey);
+                                return (
+                                    <Fragment key={rowKey}>
+                                        <tr className="transition-colors hover:bg-violet-50/50">
+                                            <td className="px-5 py-3.5 font-semibold text-gray-900">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleExpanded(rowKey)}
+                                                    className="inline-flex items-center gap-1.5 text-left hover:text-violet-700"
+                                                    aria-expanded={isExpanded}
+                                                >
+                                                    <ChevronDown className={`size-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
+                                                    {row.name}
+                                                </button>
+                                            </td>
+                                            <td className="px-4 py-3.5 text-right">
+                                                <CountButton value={row.count} onClick={() => openLeads(row, {}, row.name)} />
+                                            </td>
+                                            <td className="px-4 py-3.5">
+                                                <div className="flex min-w-40 items-center gap-2.5">
+                                                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                                        <div className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-red-500" style={{ width: `${clampPercent(row.percent)}%` }} />
+                                                    </div>
+                                                    <span className="w-14 text-right text-sm font-semibold tabular-nums text-slate-600">{clampPercent(row.percent)}%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {isExpanded && (
+                                            <tr>
+                                                <td className="bg-slate-50/60 px-5 py-3" colSpan={3}>
+                                                    <LocationBreakdownTable
+                                                        projects={row.projects}
+                                                        fieldNames={data}
+                                                        columns={[{ key: 'count', label: 'Сделок' }]}
+                                                        onOpen={(_key, location, path) => openLeads(
+                                                            row,
+                                                            { project: location.project, city: location.city ?? '', vacancy: location.vacancy ?? '' },
+                                                            `${row.name} / ${path}`,
+                                                        )}
+                                                    />
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </Fragment>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            ) : (
+                <div className="px-5 py-8">
+                    <EmptyState>Нет отказных сделок за выбранный период</EmptyState>
+                </div>
+            )}
+        </ReportSection>
+    );
+}
+
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 export default function ManagerPipelineDashboard({ account, period, links }: Props) {
@@ -566,6 +702,7 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
     const shiftState = useApiData<ShiftData>(links.shiftBreakdown, periodParams);
     const avitoCabinetState = useApiData<AvitoCabinetData>(links.avitoCabinetBreakdown, periodParams);
     const funnelState = useApiData<FunnelData>(links.funnel, periodParams);
+    const lossReasonsState = useApiData<LossReasonsData>(links.lossReasons, periodParams);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -617,6 +754,8 @@ export default function ManagerPipelineDashboard({ account, period, links }: Pro
                 />
 
                 <FunnelSection state={funnelState} leadsUrl={links.funnelLeads} onOpenLeads={setLeadsFilter} />
+
+                <LossReasonsSection state={lossReasonsState} leadsUrl={links.lossReasonLeads} onOpenLeads={setLeadsFilter} />
             </div>
 
             {leadsFilter !== null && (

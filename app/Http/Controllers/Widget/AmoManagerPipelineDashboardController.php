@@ -42,6 +42,8 @@ class AmoManagerPipelineDashboardController extends Controller
                 'avitoCabinetLeads' => route('api.widgets.amo.manager-pipeline-dashboard.avito-cabinet-leads', $publicKey),
                 'funnel' => route('api.widgets.amo.manager-pipeline-dashboard.funnel', $publicKey),
                 'funnelLeads' => route('api.widgets.amo.manager-pipeline-dashboard.funnel-leads', $publicKey),
+                'lossReasons' => route('api.widgets.amo.manager-pipeline-dashboard.loss-reasons', $publicKey),
+                'lossReasonLeads' => route('api.widgets.amo.manager-pipeline-dashboard.loss-reason-leads', $publicKey),
                 'export' => route('api.widgets.amo.manager-pipeline-dashboard.export', $publicKey),
             ],
         ]);
@@ -153,6 +155,36 @@ class AmoManagerPipelineDashboardController extends Controller
         ]);
     }
 
+    public function lossReasons(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->managerPipelineLossReasons($installation->account, $from, $to, $installation->config ?? []),
+        ]);
+    }
+
+    public function lossReasonLeads(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService): JsonResponse
+    {
+        $installation = $this->installation($publicKey);
+        [$from, $to] = $this->period($request);
+
+        return response()->json([
+            'data' => $statisticsService->managerPipelineLossReasonLeads(
+                $installation->account,
+                $from,
+                $to,
+                $request->query('reason'),
+                300,
+                $installation->config ?? [],
+                (string) $request->query('project', ''),
+                (string) $request->query('city', ''),
+                (string) $request->query('vacancy', ''),
+            ),
+        ]);
+    }
+
     public function export(Request $request, string $publicKey, AmoTaskStatisticsService $statisticsService, WidgetExcelExportService $excelExport): StreamedResponse
     {
         $installation = $this->installation($publicKey);
@@ -162,6 +194,7 @@ class AmoManagerPipelineDashboardController extends Controller
         $shift = $statisticsService->managerPipelineShiftBreakdown($installation->account, $from, $to);
         $avitoCabinets = $statisticsService->managerPipelineAvitoCabinetBreakdown($installation->account, $from, $to);
         $funnel = $statisticsService->managerPipelineFunnel($installation->account, $from, $to);
+        $lossReasons = $statisticsService->managerPipelineLossReasons($installation->account, $from, $to, $installation->config ?? []);
 
         return $excelExport->exportFlatOnly(WidgetExcelExportService::filename($from, $to), [
             [
@@ -214,6 +247,7 @@ class AmoManagerPipelineDashboardController extends Controller
                 ], $funnel['rows']),
                 'totals' => false,
             ],
+            ...WidgetExcelExportService::lossReasonSheets($lossReasons),
         ]);
     }
 

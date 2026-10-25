@@ -1452,6 +1452,80 @@ class AmoServicesTest extends TestCase
         $this->assertSame(['904'], array_column($noReason['leads'], 'id'));
     }
 
+    public function test_manager_pipeline_loss_reasons_use_manager_pipeline_and_configured_project_field(): void
+    {
+        Cache::flush();
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client3.amocrm.ru']);
+        foreach ([[10, 'Массовый подбор'], [20, 'Менеджеры подбор']] as [$pipelineId, $name]) {
+            CrmPipelineSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'amo_pipeline_id' => $pipelineId,
+                'name' => $name,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+        // Two fields share the name "Проект"; this pipeline fills the second one.
+        foreach ([
+            [790, 'Причины отказа', [['id' => 6001, 'value' => 'Не отвечает']]],
+            [781, 'Проект', [['id' => 3001, 'value' => 'Курьеры']]],
+            [782, 'Проект', [['id' => 3101, 'value' => 'X5 Розница']]],
+        ] as [$fieldId, $name, $enums]) {
+            CrmCustomFieldSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'amo_field_id' => $fieldId,
+                'name' => $name,
+                'field_type' => 'select',
+                'enums' => $enums,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        foreach ([
+            ['id' => '951', 'pipeline_id' => 20, 'status_id' => 143, 'project' => [782, 3101, 'X5 Розница']],
+            ['id' => '952', 'pipeline_id' => 20, 'status_id' => 143, 'project' => null],
+            // Other pipeline / not a refusal — must not be counted.
+            ['id' => '953', 'pipeline_id' => 10, 'status_id' => 143, 'project' => [781, 3001, 'Курьеры']],
+            ['id' => '954', 'pipeline_id' => 20, 'status_id' => 142, 'project' => [782, 3101, 'X5 Розница']],
+        ] as $lead) {
+            $fields = [['field_id' => 790, 'field_name' => 'Причины отказа', 'values' => [['enum_id' => 6001, 'value' => 'Не отвечает']]]];
+            if ($lead['project'] !== null) {
+                [$fieldId, $enumId, $value] = $lead['project'];
+                $fields[] = ['field_id' => $fieldId, 'field_name' => 'Проект', 'values' => [['enum_id' => $enumId, 'value' => $value]]];
+            }
+
+            CrmEntitySnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'entity_type' => 'leads',
+                'external_id' => $lead['id'],
+                'name' => 'Lead '.$lead['id'],
+                'pipeline_id' => $lead['pipeline_id'],
+                'status_id' => $lead['status_id'],
+                'entity_created_at' => now()->subDay(),
+                'custom_fields_values' => $fields,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $config = ['project_field_id' => 782];
+        $service = new AmoTaskStatisticsService();
+        $reasons = $service->managerPipelineLossReasons($account, now()->subDays(7), now(), $config);
+
+        $this->assertSame('Менеджеры подбор', $reasons['pipeline_name']);
+        $this->assertSame(2, $reasons['total_count']);
+        $this->assertSame(['X5 Розница', 'Без проекта'], array_column($reasons['rows'][0]['projects'], 'name'));
+
+        $leads = $service->managerPipelineLossReasonLeads($account, now()->subDays(7), now(), 'Не отвечает', 300, $config, 'X5 Розница');
+        $this->assertSame(['951'], array_column($leads['leads'], 'id'));
+
+        // The Массовый подбор report is unaffected and still sees only its own pipeline.
+        $this->assertSame(1, $service->massRecruitmentLossReasons($account, now()->subDays(7), now())['total_count']);
+    }
+
     public function test_recruiter_lead_distribution_diagnostics_explains_local_data_match(): void
     {
         $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);

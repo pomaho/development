@@ -1300,27 +1300,38 @@ class AmoTaskStatisticsService
     public function massRecruitmentLossReasons(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
     {
         return Cache::remember(
-            $this->massRecruitmentLossReasonsCacheKey($account, $from, $to, $config),
+            $this->lossReasonsCacheKey('amo_mass_recruitment_loss_reasons', $account, $from, $to, $config),
             now()->addMinutes(10),
-            fn (): array => $this->buildMassRecruitmentLossReasons($account, $from, $to, $config),
+            fn (): array => $this->buildLossReasons($account, $this->massRecruitmentPipelineIds($account), self::SHIFT_DATE_PIPELINE_NAME, $from, $to, $config),
         );
     }
 
     /**
-     * Breakdown of the "Причины отказа" custom field across "Массовый подбор" deals
+     * Same "Причины отказа" report as massRecruitmentLossReasons(), for the
+     * "Менеджеры подбор" pipeline (manager pipeline dashboard).
+     */
+    public function managerPipelineLossReasons(AmoAccount $account, ?Carbon $from = null, ?Carbon $to = null, array $config = []): array
+    {
+        return Cache::remember(
+            $this->lossReasonsCacheKey('amo_manager_pipeline_loss_reasons', $account, $from, $to, $config),
+            now()->addMinutes(10),
+            fn (): array => $this->buildLossReasons($account, $this->managerPipelineResolve($account)[0], self::MANAGER_PIPELINE_NAME, $from, $to, $config),
+        );
+    }
+
+    /**
+     * Breakdown of the "Причины отказа" custom field across the given pipelines' deals
      * closed as 143 ("Закрыто и не реализовано") in the period — matches the funnel
      * table's closed-deals scoping (142 has no rejection reason by definition, so it's
      * excluded rather than always contributing a zero-value row). Deals with the field
      * unset get grouped under a "Без причины" row instead of being dropped.
      */
-    private function buildMassRecruitmentLossReasons(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): array
+    private function buildLossReasons(AmoAccount $account, \Illuminate\Support\Collection $pipelineIds, string $fallbackPipelineName, ?Carbon $from, ?Carbon $to, array $config = []): array
     {
-        $pipelineIds = $this->massRecruitmentPipelineIds($account);
-
         $pipelineFound = $pipelineIds->isNotEmpty();
         $pipelineName = $pipelineFound
             ? (string) CrmPipelineSnapshot::query()->where('amo_account_id', $account->id)->whereIn('amo_pipeline_id', $pipelineIds)->value('name')
-            : self::SHIFT_DATE_PIPELINE_NAME;
+            : $fallbackPipelineName;
 
         if (!$pipelineFound) {
             return ['pipeline_found' => false, 'pipeline_name' => $pipelineName, 'field_found' => false, 'total_count' => 0, 'rows' => []];
@@ -1403,8 +1414,35 @@ class AmoTaskStatisticsService
         string $city = '',
         string $vacancy = ''
     ): array {
-        $pipelineIds = $this->massRecruitmentPipelineIds($account);
+        return $this->lossReasonLeads($account, $this->massRecruitmentPipelineIds($account), $from, $to, $reason, $limit, $config, $project, $city, $vacancy);
+    }
 
+    public function managerPipelineLossReasonLeads(
+        AmoAccount $account,
+        ?Carbon $from,
+        ?Carbon $to,
+        ?string $reason,
+        int $limit = 300,
+        array $config = [],
+        string $project = '',
+        string $city = '',
+        string $vacancy = ''
+    ): array {
+        return $this->lossReasonLeads($account, $this->managerPipelineResolve($account)[0], $from, $to, $reason, $limit, $config, $project, $city, $vacancy);
+    }
+
+    private function lossReasonLeads(
+        AmoAccount $account,
+        \Illuminate\Support\Collection $pipelineIds,
+        ?Carbon $from,
+        ?Carbon $to,
+        ?string $reason,
+        int $limit,
+        array $config,
+        string $project,
+        string $city,
+        string $vacancy
+    ): array {
         $leads = [];
         $total = 0;
 
@@ -1447,12 +1485,12 @@ class AmoTaskStatisticsService
         return ['leads' => $leads, 'total' => $total, 'limited' => $total > $limit, 'limit' => $limit];
     }
 
-    private function massRecruitmentLossReasonsCacheKey(AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): string
+    private function lossReasonsCacheKey(string $prefix, AmoAccount $account, ?Carbon $from, ?Carbon $to, array $config = []): string
     {
         $version = Cache::get($this->dashboardCacheVersionKey($account), 'initial');
 
         return implode(':', [
-            'amo_mass_recruitment_loss_reasons',
+            $prefix,
             $account->id,
             $version,
             $from?->timestamp ?? 'null',
