@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Models\AmoAccount;
+use App\Models\CrmEntitySnapshot;
 use App\Models\LeadSyncSchedule;
 use App\Models\TaskStatisticsSyncRun;
 use App\Services\Alerts\TelegramNotifier;
@@ -24,6 +25,8 @@ class AmoCheckSyncHealthCommand extends Command
     {
         $this->reportFailedRuns($notifier);
         $this->reportStaleSchedules($notifier);
+        $this->reportFutureSyncWatermarks($notifier);
+        $this->reportMissingLeadStatusEvents($notifier);
         $this->reportDisabledWebhooks($notifier, $webhooksService);
 
         return self::SUCCESS;
@@ -87,6 +90,88 @@ class AmoCheckSyncHealthCommand extends Command
                 "Тип: {$schedule->entity_type} (schedule #{$schedule->id})\n".
                 "Ожидаемый интервал: {$expectedEvery} мин\n".
                 "Последний успешный запуск: {$sinceText}",
+                minutes: 360,
+            );
+        }
+    }
+
+    /**
+     * The incremental task/event sync resumes from this watermark, so one in the future
+     * makes every run query a window nothing has happened in yet while still reporting
+     * success — how lead-status events went missing 2026-09-16..2026-10-25.
+     */
+    private function reportFutureSyncWatermarks(TelegramNotifier $notifier): void
+    {
+        foreach (AmoAccount::query()->active()->get() as $account) {
+            $watermark = $account->taskStatisticsLastSuccessfulSyncAt();
+
+            if ($watermark === null || $watermark->lte(now()->addMinutes(5))) {
+                continue;
+            }
+
+            $domain = $account->base_domain ?? "id {$account->id}";
+            $notifier->sendThrottled(
+                "sync_watermark_future:{$account->id}",
+                "🔴 Курсор синхронизации задач/событий в будущем\n\n".
+                "Аккаунт: {$domain}\n".
+                "Курсор: {$watermark->toDateTimeString()}\n".
+                'Инкрементальная синхронизация ничего не загружает, хотя запуски числятся успешными.',
+                minutes: 360,
+            );
+        }
+    }
+
+    /**
+     * Data-level check, independent of any run/schedule bookkeeping: if leads are being
+     * actively updated but almost no lead_status_changed events arrive, the events sync is
+     * silently broken. On healthy days there are ~0.7-2 such events per updated lead; during
+     * the 2026-09-16..2026-10-25 outage it was under 0.1 while every other check stayed green.
+     * The window ends 2h ago so the hourly sync has had time to catch up.
+     */
+    private function reportMissingLeadStatusEvents(TelegramNotifier $notifier): void
+    {
+        $minUpdatedLeads = 30;
+        $minEventsPerUpdatedLead = 0.2;
+        $to = now()->subHours(2);
+        $from = $to->copy()->subDay();
+
+        $accounts = AmoAccount::query()
+            ->active()
+            ->whereIn('id', LeadSyncSchedule::query()
+                ->where('is_enabled', true)
+                ->whereIn('entity_type', [LeadSyncSchedule::ENTITY_TYPE_TASKS, LeadSyncSchedule::ENTITY_TYPE_EVENTS])
+                ->select('amo_account_id'))
+            ->get();
+
+        foreach ($accounts as $account) {
+            $updatedLeads = CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'leads')
+                ->whereBetween('entity_updated_at', [$from, $to])
+                ->count();
+
+            if ($updatedLeads < $minUpdatedLeads) {
+                continue;
+            }
+
+            $events = CrmEntitySnapshot::query()
+                ->where('amo_account_id', $account->id)
+                ->where('entity_type', 'events')
+                ->where('event_type', 'lead_status_changed')
+                ->whereBetween('entity_created_at', [$from, $to])
+                ->count();
+
+            if ($events >= $updatedLeads * $minEventsPerUpdatedLead) {
+                continue;
+            }
+
+            $domain = $account->base_domain ?? "id {$account->id}";
+            $notifier->sendThrottled(
+                "lead_status_events_missing:{$account->id}",
+                "🔴 Не приходят события смены этапа сделок\n\n".
+                "Аккаунт: {$domain}\n".
+                "За сутки до {$to->toDateTimeString()}: обновлено сделок {$updatedLeads}, событий смены этапа {$events}.\n".
+                'Воронки по этапам и отчёты по менеджерам будут занижены.',
                 minutes: 360,
             );
         }

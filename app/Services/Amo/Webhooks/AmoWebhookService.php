@@ -243,7 +243,10 @@ class AmoWebhookService
         $completionStats = null;
 
         do {
+            // Only task_completed is ever read (completion stats below); storing every other
+            // task event type (text/deadline changes, etc.) was ~70% of the events table.
             $payload = $this->http->get($account, '/api/v4/events', [
+                'filter[type][]' => 'task_completed',
                 'filter[entity][]' => 'task',
                 'filter[entity_id]' => $taskId,
                 'page' => $page,

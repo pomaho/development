@@ -33,10 +33,19 @@ class SyncAmoTaskStatisticsJob implements ShouldQueue
         $run = TaskStatisticsSyncRun::query()->findOrFail($this->runId);
         $account = AmoAccount::query()->findOrFail($run->amo_account_id);
 
+        $startedAt = now();
         $syncService->sync($account, $run->period_from, $run->period_to, $run);
 
-        if ($run->period_to !== null && $run->period_to->gt($account->taskStatisticsLastSuccessfulSyncAt() ?? now()->subYears(20))) {
-            $account->markTaskStatisticsSyncedUntil($run->period_to);
+        // period_to is usually end-of-day (schedules, manual runs), so it must never become
+        // the watermark as-is: a watermark in the future makes every later incremental run
+        // query a window nothing has happened in yet, silently dropping every event/task
+        // change since — which is exactly what went unnoticed 2026-09-16..2026-10-25.
+        // A watermark already in the future (left by that bug) is treated as invalid.
+        $syncedUntil = $run->period_to?->copy()->min($startedAt);
+        $watermark = $account->taskStatisticsLastSuccessfulSyncAt();
+
+        if ($syncedUntil !== null && ($watermark === null || $watermark->isFuture() || $syncedUntil->gt($watermark))) {
+            $account->markTaskStatisticsSyncedUntil($syncedUntil);
         }
     }
 

@@ -1187,6 +1187,27 @@ class AmoTaskStatisticsService
     }
 
     /**
+     * Pipelines whose lead_status_changed events some report reads: "Массовый подбор"
+     * (stage funnel) and "Менеджеры подбор" (manager pipeline reports), matched by name
+     * the same way those reports do. The events sync keeps only status changes that
+     * touch one of these, so every other pipeline's stage moves aren't stored at all.
+     *
+     * @return list<int>
+     */
+    public function leadStatusEventPipelineIds(AmoAccount $account): array
+    {
+        return CrmPipelineSnapshot::query()
+            ->where('amo_account_id', $account->id)
+            ->where(fn ($query) => $query
+                ->whereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower(self::SHIFT_DATE_PIPELINE_NAME).'%'])
+                ->orWhereRaw('LOWER(name) LIKE ?', ['%'.mb_strtolower(self::MANAGER_PIPELINE_NAME).'%']))
+            ->pluck('amo_pipeline_id')
+            ->map(fn ($pipelineId): int => (int) $pipelineId)
+            ->values()
+            ->all();
+    }
+
+    /**
      * amoCRM account 2 (anyservice) has two pipelines named "Массовый подбор" — one
      * live (all leads and recent activity) and one stale near-duplicate with zero
      * leads but its own copy of every status, including the two reserved terminal

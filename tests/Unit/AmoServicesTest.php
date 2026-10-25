@@ -26,6 +26,7 @@ use App\Services\Amo\Structure\AmoUsersService;
 use App\Services\Amo\Webhooks\AmoWebhookService;
 use App\Services\Amo\Sync\CrmAuditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Mockery;
@@ -870,8 +871,18 @@ class AmoServicesTest extends TestCase
                     'type' => 'lead_status_changed',
                     'created_by' => 10,
                     'created_at' => now()->subDay()->timestamp,
+                    'value_before' => [['lead_status' => ['id' => 1, 'pipeline_id' => 77]]],
+                    'value_after' => [['lead_status' => ['id' => 2, 'pipeline_id' => 77]]],
                 ]]],
             ]);
+        // Only status changes in a pipeline some report reads are stored.
+        CrmPipelineSnapshot::query()->create([
+            'amo_account_id' => $account->id,
+            'amo_pipeline_id' => 77,
+            'name' => 'Массовый подбор',
+            'raw' => [],
+            'synced_at' => now(),
+        ]);
 
         $run = TaskStatisticsSyncRun::query()->create([
             'amo_account_id' => $account->id,
@@ -1606,6 +1617,73 @@ class AmoServicesTest extends TestCase
         $this->assertSame($run->period_to->toIso8601String(), $account->refresh()->taskStatisticsLastSuccessfulSyncAt()?->toIso8601String());
     }
 
+    public function test_lead_status_event_sync_keeps_only_pipelines_reports_read(): void
+    {
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        foreach ([[10, 'Массовый подбор'], [20, 'Менеджеры подбор'], [30, 'Интеграция авито']] as [$pipelineId, $name]) {
+            CrmPipelineSnapshot::query()->create([
+                'amo_account_id' => $account->id,
+                'amo_pipeline_id' => $pipelineId,
+                'name' => $name,
+                'raw' => [],
+                'synced_at' => now(),
+            ]);
+        }
+
+        $event = fn (string $id, int $before, int $after): array => [
+            'id' => $id,
+            'type' => 'lead_status_changed',
+            'entity_id' => 500,
+            'created_at' => now()->subHour()->timestamp,
+            'value_before' => [['lead_status' => ['id' => 1, 'pipeline_id' => $before]]],
+            'value_after' => [['lead_status' => ['id' => 2, 'pipeline_id' => $after]]],
+        ];
+        $http = Mockery::mock(AmoFallbackHttpClient::class);
+        $http->shouldReceive('get')->once()->with($account, '/api/v4/events', Mockery::any())->andReturn([
+            '_page' => 1,
+            '_page_count' => 1,
+            '_embedded' => ['events' => [
+                $event('e-mass', 10, 10),
+                $event('e-managers', 20, 20),
+                $event('e-avito', 30, 30),
+                // Moved out of / into a report pipeline — still part of that pipeline's history.
+                $event('e-into-mass', 30, 10),
+                $event('e-out-of-managers', 20, 30),
+            ]],
+        ]);
+
+        $saved = (new AmoTaskSyncService($http, new AmoTaskStatisticsService()))
+            ->syncEvents($account, now()->subDay(), now(), now());
+
+        $this->assertSame(4, $saved);
+        $this->assertSame(
+            ['e-into-mass', 'e-managers', 'e-mass', 'e-out-of-managers'],
+            CrmEntitySnapshot::query()->where('entity_type', 'events')->orderBy('external_id')->pluck('external_id')->all(),
+        );
+    }
+
+    public function test_task_statistics_job_never_moves_cursor_into_the_future(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-25 14:00:00'));
+
+        $account = AmoAccount::query()->create(['name' => 'Client', 'base_domain' => 'client.amocrm.ru']);
+        // Left behind by the old behaviour: cursor already set to the end of today.
+        $account->markTaskStatisticsSyncedUntil(now()->endOfDay());
+        $run = TaskStatisticsSyncRun::query()->create([
+            'amo_account_id' => $account->id,
+            'period_from' => now()->subHour(),
+            'period_to' => now()->endOfDay(),
+        ]);
+        $syncService = Mockery::mock(AmoTaskSyncService::class);
+        $syncService->shouldReceive('sync')->once()->andReturn([]);
+
+        (new SyncAmoTaskStatisticsJob($run->id))->handle($syncService);
+
+        // The cursor is the moment the sync started, not the end of the day, so the next
+        // incremental run still picks up everything that happens later today.
+        $this->assertSame(now()->toIso8601String(), $account->refresh()->taskStatisticsLastSuccessfulSyncAt()?->toIso8601String());
+    }
+
     public function test_crm_audit_service_can_sync_selected_pipeline(): void
     {
         $account = $this->accountWithToken('abcdef123456');
@@ -1758,6 +1836,7 @@ class AmoServicesTest extends TestCase
                 Mockery::on(fn (AmoAccount $passedAccount): bool => $passedAccount->id === $account->id),
                 '/api/v4/events',
                 [
+                    'filter[type][]' => 'task_completed',
                     'filter[entity][]' => 'task',
                     'filter[entity_id]' => '200',
                     'page' => 1,

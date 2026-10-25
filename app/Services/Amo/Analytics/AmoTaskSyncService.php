@@ -250,6 +250,10 @@ class AmoTaskSyncService
             $typeFilter["filter[type][{$index}]"] = $type;
         }
         $query = [...$this->createdAtQuery($from, $to), ...$typeFilter];
+        // Filtered here rather than in the request: amoCRM's pipeline filter for these
+        // events needs explicit pipeline+status pairs, so a stage added later would be
+        // dropped silently. The volume itself is small (~270 events/day on anyservice).
+        $pipelineIds = array_flip($this->statisticsService->leadStatusEventPipelineIds($account));
 
         do {
             $payload = $this->getWithRetry($account, '/api/v4/events', [...$query, 'page' => $page, 'limit' => 250]);
@@ -257,11 +261,16 @@ class AmoTaskSyncService
             $events = is_array($events) ? $events : [];
 
             foreach ($events as $event) {
-                $this->saveEvent($account, $event, $syncedAt);
-            }
+                $beforePipeline = (int) ($event['value_before'][0]['lead_status']['pipeline_id'] ?? 0);
+                $afterPipeline = (int) ($event['value_after'][0]['lead_status']['pipeline_id'] ?? 0);
 
-            $count = count($events);
-            $total += $count;
+                if (!isset($pipelineIds[$beforePipeline]) && !isset($pipelineIds[$afterPipeline])) {
+                    continue;
+                }
+
+                $this->saveEvent($account, $event, $syncedAt);
+                $total++;
+            }
 
             $currentPage = (int) ($payload['_page'] ?? $page);
             $pageCount = (int) ($payload['_page_count'] ?? 0);
